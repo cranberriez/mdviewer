@@ -517,6 +517,9 @@ function blockAutoFormatBeforeInput(editor: HTMLElement, data: string) {
       const checkbox = document.createElement("input");
       const text = document.createTextNode(fullText.slice(5));
 
+      list.className = "contains-task-list";
+      item.className = "task-list-item";
+      checkbox.className = "task-list-item-checkbox";
       checkbox.type = "checkbox";
       checkbox.checked = beforeCaret === "- [x]";
       item.append(checkbox, " ", text);
@@ -671,11 +674,14 @@ function insertChecklist(range: Range) {
   const list = document.createElement("ul");
   let selectedNode: Node | undefined;
 
+  list.className = "contains-task-list";
   for (const line of lines) {
     const item = document.createElement("li");
     const checkbox = document.createElement("input");
     const text = document.createTextNode(line);
 
+    item.className = "task-list-item";
+    checkbox.className = "task-list-item-checkbox";
     checkbox.type = "checkbox";
     item.append(checkbox, " ", text);
     list.append(item);

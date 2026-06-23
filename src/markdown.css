@@ -101,14 +101,22 @@
 .md li.task-list-item {
   list-style: none;
   margin-left: -1.2em;
-  display: flex;
-  gap: 0.5em;
-  align-items: flex-start;
+  position: relative;
+  padding-left: 1.45em;
 }
 .md li.task input,
 .md li.task-list-item input {
-  margin-top: 0.35em;
+  position: absolute;
+  top: 0.35em;
+  left: 0;
+  margin: 0;
   accent-color: #6b6b72;
+}
+.md li.task > ul,
+.md li.task > ol,
+.md li.task-list-item > ul,
+.md li.task-list-item > ol {
+  margin-top: 0.35em;
 }
 .md blockquote {
   margin: 0.8em 0;
