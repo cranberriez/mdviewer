@@ -20,6 +20,8 @@ export interface AppConfigurationState {
   pinnedLocations?: Entry[];
   /** Paths of default locations (e.g. Documents) the user has unpinned. */
   removedDefaultPaths?: string[];
+  /** Custom icon name per saved-location path. Home icon is never stored here. */
+  locationIcons?: Record<string, string>;
 }
 
 export interface AppSessionState {
@@ -82,6 +84,20 @@ function readStringArray(value: unknown) {
 
 function readNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readStringRecord(value: unknown): Record<string, string> {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  const result: Record<string, string> = {};
+  for (const [key, val] of Object.entries(value)) {
+    if (typeof val === "string" && val.length > 0) {
+      result[key] = val;
+    }
+  }
+  return result;
 }
 
 function readEntry(value: unknown): Entry | null {
@@ -163,6 +179,7 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
     windowFrame: readWindowFrame(record.windowFrame),
     pinnedLocations: readEntryArray(record.pinnedLocations),
     removedDefaultPaths: readStringArray(record.removedDefaultPaths),
+    locationIcons: readStringRecord(record.locationIcons),
   };
 }
 

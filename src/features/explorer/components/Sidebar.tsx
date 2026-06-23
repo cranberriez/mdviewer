@@ -4,6 +4,7 @@ import type { Entry } from "../../../shared/types/files";
 import { EmptySidebar } from "./EmptySidebar";
 import { TreeNode } from "./TreeNode";
 import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
+import { getIconComponent } from "./IconPickerMenu";
 
 interface SidebarProps {
   width: number;
@@ -32,6 +33,10 @@ interface SidebarProps {
   onToggleRootPin: () => void;
   onDraftSubmit: (value: string) => void;
   onDraftCancel: () => void;
+  /** Custom icon name per saved-location path. */
+  locationIcons?: Record<string, string>;
+  /** Path of Home (first default location) — its icon is always Home and can't be changed. */
+  homePath?: string;
 }
 
 export function Sidebar({
@@ -59,6 +64,8 @@ export function Sidebar({
   onToggleRootPin,
   onDraftSubmit,
   onDraftCancel,
+  locationIcons,
+  homePath,
 }: SidebarProps) {
   const rootDraft =
     draft?.mode === "create" && activeRoot && draft.parentPath === activeRoot.path
@@ -102,18 +109,23 @@ export function Sidebar({
           </div>
         </div>
         <div className="saved-list">
-          {locations.map((location) => (
-            <button
-              type="button"
-              className={`saved-row ${selectedFolderPath === location.path ? "active" : ""}`}
-              key={location.path}
-              onClick={() => void onSelectLocation(location)}
-              onContextMenu={(event) => onSavedContextMenu(location, event)}
-            >
-              <Home size={15} />
-              <span>{location.name}</span>
-            </button>
-          ))}
+          {locations.map((location) => {
+            const isHome = homePath ? location.path === homePath : false;
+            const iconName = isHome ? "Home" : (locationIcons?.[location.path] ?? "Folder");
+            const LocationIcon = getIconComponent(iconName);
+            return (
+              <button
+                type="button"
+                className={`saved-row ${selectedFolderPath === location.path ? "active" : ""}`}
+                key={location.path}
+                onClick={() => void onSelectLocation(location)}
+                onContextMenu={(event) => onSavedContextMenu(location, event)}
+              >
+                <LocationIcon size={15} />
+                <span>{location.name}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 

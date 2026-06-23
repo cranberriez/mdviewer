@@ -6,6 +6,7 @@ import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { Sidebar } from "./features/explorer/components/Sidebar";
 import { ContextMenu, type ContextMenuAction, type ContextMenuTarget } from "./features/explorer/components/ContextMenu";
 import { SavedContextMenu, type SavedMenuAction } from "./features/explorer/components/SavedContextMenu";
+import { IconPickerMenu } from "./features/explorer/components/IconPickerMenu";
 import type { InlineDraft } from "./features/explorer/components/TreeInlineInput";
 import { SidebarResizeHandle } from "./features/explorer/components/SidebarResizeHandle";
 import { FileActionBar } from "./features/file-actions/components/FileActionBar";
@@ -86,6 +87,14 @@ function App() {
     x: number;
     y: number;
   } | null>(null);
+  const [iconPicker, setIconPicker] = useState<{
+    location: Entry;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [locationIcons, setLocationIcons] = useState<Record<string, string>>(
+    () => initialConfiguration.locationIcons ?? {},
+  );
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
   const [draft, setDraft] = useState<InlineDraft | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
@@ -102,6 +111,7 @@ function App() {
     windowFrame,
     pinnedLocations,
     removedDefaultPaths,
+    locationIcons,
   });
 
   // Home is the first default location and can never be unpinned.
@@ -189,11 +199,12 @@ function App() {
       windowFrame,
       pinnedLocations,
       removedDefaultPaths,
+      locationIcons,
     };
 
     configurationRef.current = nextConfiguration;
     saveAppConfiguration(nextConfiguration);
-  }, [barMerged, explorerHidden, mode, sidebarWidth, windowFrame, pinnedLocations, removedDefaultPaths]);
+  }, [barMerged, explorerHidden, mode, sidebarWidth, windowFrame, pinnedLocations, removedDefaultPaths, locationIcons]);
 
   useEffect(() => {
     if (!sessionHydrated) {
@@ -698,6 +709,16 @@ function App() {
   }
 
   async function handleSavedAction(action: SavedMenuAction, location: Entry) {
+    if (action === "change-icon") {
+      // Keep the saved menu position to anchor the picker near it.
+      const menu = savedMenu;
+      setSavedMenu(null);
+      if (menu) {
+        setIconPicker({ location, x: menu.x + 240, y: menu.y });
+      }
+      return;
+    }
+
     setSavedMenu(null);
 
     try {
@@ -720,6 +741,10 @@ function App() {
     } catch (cause) {
       setError(`${String(cause)}`);
     }
+  }
+
+  function applyLocationIcon(location: Entry, iconName: string) {
+    setLocationIcons((current) => ({ ...current, [location.path]: iconName }));
   }
 
   // Ensure a folder is expanded and its children are loaded so a new draft row
@@ -1100,6 +1125,8 @@ function App() {
           onToggleRootPin={toggleRootPin}
           onDraftSubmit={submitDraft}
           onDraftCancel={cancelDraft}
+          locationIcons={locationIcons}
+          homePath={homePath}
         />
 
         <SidebarResizeHandle onPointerDown={startSidebarResize} />
@@ -1156,6 +1183,16 @@ function App() {
           canUnpin={isUnpinnable(savedMenu.location)}
           onAction={(action, location) => void handleSavedAction(action, location)}
           onClose={() => setSavedMenu(null)}
+        />
+      ) : null}
+
+      {iconPicker ? (
+        <IconPickerMenu
+          x={iconPicker.x}
+          y={iconPicker.y}
+          currentIcon={locationIcons[iconPicker.location.path]}
+          onSelect={(iconName) => applyLocationIcon(iconPicker.location, iconName)}
+          onClose={() => setIconPicker(null)}
         />
       ) : null}
     </div>

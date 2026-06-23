@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CornerUpLeft, Link2, PinOff } from "lucide-react";
+import { CornerUpLeft, Link2, Palette, PinOff } from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
 
 export type SavedMenuAction =
   | "reveal"
   | "copy-path"
   | "copy-relative-path"
+  | "change-icon"
   | "unpin";
 
 interface SavedContextMenuProps {
@@ -83,7 +84,10 @@ export function SavedContextMenu({
 
   const dispatch = (action: SavedMenuAction) => {
     onAction(action, location);
-    onClose();
+    // "change-icon" lets the parent close the menu after positioning the picker.
+    if (action !== "change-icon") {
+      onClose();
+    }
   };
 
   return createPortal(
@@ -127,6 +131,23 @@ export function SavedContextMenu({
           <Link2 size={15} />
         </span>
         <span className="ci-label">Copy Relative Path</span>
+      </button>
+
+      <button
+        type="button"
+        role="menuitem"
+        className="ctx-item"
+        disabled={!canUnpin}
+        title={canUnpin ? undefined : "Home icon cannot be changed"}
+        onClick={() => {
+          if (!canUnpin) return;
+          dispatch("change-icon");
+        }}
+      >
+        <span className="ci-ico">
+          <Palette size={15} />
+        </span>
+        <span className="ci-label">Change Icon</span>
       </button>
 
       <div className="ctx-sep" />
