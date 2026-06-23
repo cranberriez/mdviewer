@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
 import { createFile, createFolder, defaultLocations, deletePath, pickFolder, readFile, readFolder, renamePath, resolveLinkPath, revealInExplorer, searchFiles, writeFile } from "./features/files/api/filesApi";
+import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { Sidebar, type SidebarMode } from "./features/explorer/components/Sidebar";
 import { ContextMenu, type ContextMenuAction, type ContextMenuTarget } from "./features/explorer/components/ContextMenu";
@@ -54,13 +55,26 @@ function findContainingLocation(locations: Entry[], path?: string) {
   return locations.filter((location) => containsPath(location.path, path)).sort((left, right) => comparablePath(right.path).length - comparablePath(left.path).length)[0] ?? null;
 }
 
+function pathIsDeletedTarget(target: ContextMenuTarget, path?: string | null) {
+  if (!path) {
+    return false;
+  }
+
+  return target.kind === "folder"
+    ? containsPath(target.path, path)
+    : comparablePath(path) === comparablePath(target.path);
+}
+
 function confirmDeleteTarget(target: ContextMenuTarget) {
   const description =
     target.kind === "folder"
       ? `folder "${target.name}" and its contents`
       : `file "${target.name}"`;
 
-  return window.confirm(`Move ${description} to the Recycle Bin?`);
+  return confirmDialog(`Move ${description} to the Recycle Bin?`, {
+    title: "Move to Recycle Bin",
+    kind: "warning",
+  });
 }
 
 function App() {
@@ -516,6 +530,9 @@ function App() {
       }
       find.close();
     } catch (cause) {
+      setOpenFile(null);
+      setOpenFilePath(null);
+      setDirty(false);
       setError(`Unable to read file: ${String(cause)}`);
     }
   }
@@ -1017,17 +1034,49 @@ function App() {
           await navigator.clipboard?.writeText(activeRoot ? relativePath(activeRoot.path, target.path) : target.path);
           break;
         case "delete": {
-          const confirmed = confirmDeleteTarget(target);
+          const confirmed = await confirmDeleteTarget(target);
           if (!confirmed) {
             break;
           }
+
           await deletePath(target.path);
-          if (openFilePath === target.path) {
+
+          if (pathIsDeletedTarget(target, openFilePath)) {
             setOpenFile(null);
             setOpenFilePath(null);
+            setDirty(false);
           }
-          setFocusedEntry((current) => (current?.path === target.path ? null : current));
-          await refreshFolder(parentPath(target.path));
+          setSelectedFolderPath((current) => (pathIsDeletedTarget(target, current) ? parentPath(target.path) : current));
+          setFocusedEntry((current) => (pathIsDeletedTarget(target, current?.path) ? null : current));
+          setExpanded((current) => {
+            const next = new Set<string>();
+            current.forEach((path) => {
+              if (!pathIsDeletedTarget(target, path)) {
+                next.add(path);
+              }
+            });
+            return next;
+          });
+          setChildrenCache((current) => {
+            const next: Record<string, Entry[]> = {};
+            Object.entries(current).forEach(([path, entries]) => {
+              if (!pathIsDeletedTarget(target, path)) {
+                next[path] = entries;
+              }
+            });
+            return next;
+          });
+
+          if (pathIsDeletedTarget(target, activeRoot?.path)) {
+            const fallbackRoot = locations.find((location) => !pathIsDeletedTarget(target, location.path)) ?? null;
+            setActiveRoot(fallbackRoot);
+            setSelectedFolderPath(fallbackRoot?.path ?? null);
+            if (fallbackRoot) {
+              await loadFolder(fallbackRoot.path, { force: true });
+            }
+          } else {
+            await refreshFolder(parentPath(target.path));
+          }
           break;
         }
         default:

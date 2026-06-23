@@ -656,6 +656,10 @@
   color: #e7d1d1;
 }
 
+body.theme-light .notice.error {
+  color: #4a0509;
+}
+
 .view-mode-toggle {
   display: flex;
   flex: 0 0 auto;
