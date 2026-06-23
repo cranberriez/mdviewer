@@ -8,6 +8,7 @@
 @theme {
   --color-bg-desktop: #050506;
   --color-bg-window: #0e0e10;
+  --color-bg-sidebar: #141416;
   --color-bg-card: #161618;
   --color-bg-menu: #1a1a1d;
   --color-bg-hover: #202024;
@@ -43,7 +44,12 @@ body {
   font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.5;
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 /* The window shell — apply to the top-level app container */
