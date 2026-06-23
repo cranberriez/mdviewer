@@ -3,10 +3,13 @@ import {
   ArrowUpToLine,
   Code2,
   Eye,
+  Moon,
   Pencil,
   Save,
   Search,
+  Sun,
 } from "lucide-react";
+import type { AppTheme } from "../../../shared/state/persistence";
 import { IconActionButton } from "./IconActionButton";
 
 export type FileViewMode = "edit" | "preview" | "code";
@@ -16,10 +19,12 @@ interface FileActionControlsProps {
   findOpen: boolean;
   merged: boolean;
   mode: FileViewMode;
+  theme: AppTheme;
   onModeChange: (mode: FileViewMode) => void;
   onSave: () => void;
   onToggleFind: () => void;
   onToggleMerged: () => void;
+  onToggleTheme: () => void;
   saving: boolean;
 }
 
@@ -28,10 +33,12 @@ export function FileActionControls({
   findOpen,
   merged,
   mode,
+  theme,
   onModeChange,
   onSave,
   onToggleFind,
   onToggleMerged,
+  onToggleTheme,
   saving,
 }: FileActionControlsProps) {
   return (
@@ -62,6 +69,13 @@ export function FileActionControls({
       </div>
 
       <div className="flex items-center gap-0.5">
+        <IconActionButton
+          tooltip={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+          onClick={onToggleTheme}
+        >
+          {theme === "light" ? <Moon size={15} /> : <Sun size={15} />}
+        </IconActionButton>
+
         <IconActionButton
           tooltip={merged ? "Move bar down" : "Move bar to top"}
           onClick={onToggleMerged}

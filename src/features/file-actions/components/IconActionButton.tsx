@@ -20,7 +20,7 @@ export function IconActionButton({
     "relative flex h-7 min-w-7 items-center justify-center gap-1.5 rounded-ctl border-0 bg-transparent px-[7px] text-xs text-text-secondary transition-colors duration-100",
     "hover:bg-bg-hover hover:text-text-primary active:bg-bg-active",
     "disabled:pointer-events-none disabled:opacity-40",
-    active ? "bg-bg-active text-white" : "",
+    active ? "bg-bg-active text-[var(--color-text-on-active)]" : "",
     tooltipClasses,
     className,
   ]

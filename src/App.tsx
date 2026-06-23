@@ -21,7 +21,7 @@ import { PreviewPanel } from "./features/preview/components/PreviewPanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
 import type { Entry, OpenFile } from "./shared/types/files";
 import { fileExtension, fileKindFromPath, fileName, isVisibleFileName, joinPath, parentName, parentPath, relativePath } from "./shared/utils/path";
-import { loadAppConfiguration, loadAppSession, saveAppConfiguration, saveAppSession, type AppConfigurationState, type StoredWindowFrame } from "./shared/state/persistence";
+import { loadAppConfiguration, loadAppSession, saveAppConfiguration, saveAppSession, type AppConfigurationState, type AppTheme, type StoredWindowFrame } from "./shared/state/persistence";
 import "./App.css";
 
 const DEFAULT_SIDEBAR_WIDTH = 280;
@@ -77,6 +77,7 @@ function App() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [barMerged, setBarMerged] = useState(() => initialConfiguration.barMerged ?? false);
+  const [theme, setTheme] = useState<AppTheme>(() => initialConfiguration.theme ?? "dark");
   const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(
     () => initialSession.selectedFolderPath ?? (initialSession.openFilePath ? parentPath(initialSession.openFilePath) : null),
   );
@@ -108,6 +109,7 @@ function App() {
     sidebarWidth,
     barMerged,
     viewMode: mode,
+    theme,
     windowFrame,
     pinnedLocations,
     removedDefaultPaths,
@@ -196,6 +198,7 @@ function App() {
       sidebarWidth,
       barMerged,
       viewMode: mode,
+      theme,
       windowFrame,
       pinnedLocations,
       removedDefaultPaths,
@@ -204,7 +207,7 @@ function App() {
 
     configurationRef.current = nextConfiguration;
     saveAppConfiguration(nextConfiguration);
-  }, [barMerged, explorerHidden, mode, sidebarWidth, windowFrame, pinnedLocations, removedDefaultPaths, locationIcons]);
+  }, [barMerged, explorerHidden, mode, theme, sidebarWidth, windowFrame, pinnedLocations, removedDefaultPaths, locationIcons]);
 
   useEffect(() => {
     if (!sessionHydrated) {
@@ -385,7 +388,11 @@ function App() {
           restorable.find((location) => location.path === initialSession.selectedFolderPath) ??
           findContainingLocation(restorable, initialSession.openFilePath) ??
           findContainingLocation(restorable, initialSession.selectedFolderPath) ??
-          null;
+          // Fall back to reconstructing the root from the saved path if it isn't
+          // a pinned/default location (e.g. a folder opened via the native picker).
+          (initialSession.activeRootPath
+            ? { name: fileName(initialSession.activeRootPath), path: initialSession.activeRootPath, is_dir: true, kind: "folder" as const }
+            : null);
         const first = restoredRoot ?? defaults[0] ?? null;
         const restoredSelectedFolder = initialSession.selectedFolderPath ?? (initialSession.openFilePath ? parentPath(initialSession.openFilePath) : (first?.path ?? null));
 
@@ -969,6 +976,7 @@ function App() {
       findOpen={find.open}
       merged={barMerged}
       mode={mode}
+      theme={theme}
       saving={saving}
       onModeChange={(nextMode) => {
         setMode(nextMode);
@@ -985,6 +993,7 @@ function App() {
         find.toggle();
       }}
       onToggleMerged={() => setBarMerged((merged) => !merged)}
+      onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
     />
   ) : null;
   const formatControls =
@@ -1089,7 +1098,7 @@ function App() {
   });
 
   return (
-    <div className={`app-window ${explorerHidden ? "explorer-hidden" : ""} ${isMaximized ? "fullscreen" : ""}`}>
+    <div className={`app-window ${explorerHidden ? "explorer-hidden" : ""} ${isMaximized ? "fullscreen" : ""} ${theme === "light" ? "theme-light" : ""}`}>
       <TitleBar
         fileActionsSlot={barMerged ? fileActionControls : null}
         explorerHidden={explorerHidden}

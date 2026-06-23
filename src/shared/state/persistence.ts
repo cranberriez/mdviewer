@@ -10,11 +10,14 @@ export interface StoredWindowFrame {
   maximized: boolean;
 }
 
+export type AppTheme = "dark" | "light";
+
 export interface AppConfigurationState {
   explorerHidden: boolean;
   sidebarWidth: number;
   barMerged: boolean;
   viewMode: StoredFileViewMode;
+  theme?: AppTheme;
   windowFrame?: StoredWindowFrame;
   /** Folders the user explicitly pinned to Saved (beyond the defaults). */
   pinnedLocations?: Entry[];
@@ -141,6 +144,10 @@ function readViewMode(value: unknown): StoredFileViewMode | undefined {
     : undefined;
 }
 
+function readTheme(value: unknown): AppTheme | undefined {
+  return value === "dark" || value === "light" ? value : undefined;
+}
+
 function readWindowFrame(value: unknown): StoredWindowFrame | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -176,6 +183,7 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
     sidebarWidth: readNumber(record.sidebarWidth),
     barMerged: readBoolean(record.barMerged),
     viewMode: readViewMode(record.viewMode),
+    theme: readTheme(record.theme),
     windowFrame: readWindowFrame(record.windowFrame),
     pinnedLocations: readEntryArray(record.pinnedLocations),
     removedDefaultPaths: readStringArray(record.removedDefaultPaths),
