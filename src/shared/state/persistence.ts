@@ -1,4 +1,4 @@
-export type StoredFileViewMode = "preview" | "edit";
+export type StoredFileViewMode = "preview" | "edit" | "code";
 
 export interface StoredWindowFrame {
   width: number;
@@ -83,7 +83,9 @@ function readBoolean(value: unknown) {
 }
 
 function readViewMode(value: unknown): StoredFileViewMode | undefined {
-  return value === "edit" || value === "preview" ? value : undefined;
+  return value === "edit" || value === "preview" || value === "code"
+    ? value
+    : undefined;
 }
 
 function readWindowFrame(value: unknown): StoredWindowFrame | undefined {

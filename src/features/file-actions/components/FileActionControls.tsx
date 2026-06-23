@@ -1,6 +1,7 @@
 import {
   ArrowDownToLine,
   ArrowUpToLine,
+  Code2,
   Eye,
   Pencil,
   Save,
@@ -8,7 +9,7 @@ import {
 } from "lucide-react";
 import { IconActionButton } from "./IconActionButton";
 
-export type FileViewMode = "edit" | "preview";
+export type FileViewMode = "edit" | "preview" | "code";
 
 interface FileActionControlsProps {
   dirty: boolean;
@@ -94,6 +95,16 @@ export function FileActionControls({
             onClick={() => onModeChange("preview")}
           >
             <Eye size={14} />
+          </button>
+          <button
+            type="button"
+            className={`view-mode-toggle-button ${mode === "code" ? "active" : ""}`}
+            aria-label="Code view"
+            aria-pressed={mode === "code"}
+            title="Code view"
+            onClick={() => onModeChange("code")}
+          >
+            <Code2 size={14} />
           </button>
         </div>
       </div>

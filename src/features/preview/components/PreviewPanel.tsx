@@ -10,9 +10,17 @@ import type { FileViewMode } from "../../file-actions/components/FileActionContr
 import type { OpenFile } from "../../../shared/types/files";
 import { parentPath } from "../../../shared/utils/path";
 import { Notice } from "../../../shared/ui/components/Notice";
+import {
+  applyMarkdownAction,
+  type MarkdownAction,
+} from "../markdownActions";
 import { EmptyPreview } from "./EmptyPreview";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { PlainTextPreview } from "./PlainTextPreview";
+import {
+  VisualMarkdownEditor,
+  type VisualMarkdownEditorHandle,
+} from "./VisualMarkdownEditor";
 
 interface PreviewPanelProps {
   actionBar: ReactNode;
@@ -22,10 +30,16 @@ interface PreviewPanelProps {
   mode: FileViewMode;
   openFile: OpenFile | null;
   onContentChange: (content: string) => void;
+  pendingFormatAction: { action: MarkdownAction; id: number } | null;
   renderedMarkdown: string;
 }
 
 type ScrollPanel = "editor" | "preview";
+
+interface ToolbarHistoryEntry {
+  before: string;
+  after: string;
+}
 
 function clampScrollTop(scrollTop: number, element: HTMLElement) {
   return Math.max(0, Math.min(element.scrollHeight - element.clientHeight, scrollTop));
@@ -50,13 +64,18 @@ export function PreviewPanel({
   mode,
   openFile,
   onContentChange,
+  pendingFormatAction,
   renderedMarkdown,
 }: PreviewPanelProps) {
   const editorScrollRef = useRef<HTMLTextAreaElement | null>(null);
   const previewScrollRef = useRef<HTMLElement | null>(null);
+  const visualEditorRef = useRef<VisualMarkdownEditorHandle | null>(null);
   const centerRatioRef = useRef(0);
   const ignoredScrollPanelRef = useRef<ScrollPanel | null>(null);
   const lastScrolledPanelRef = useRef<ScrollPanel>("preview");
+  const appliedFormatActionIdRef = useRef(0);
+  const undoStackRef = useRef<ToolbarHistoryEntry[]>([]);
+  const redoStackRef = useRef<ToolbarHistoryEntry[]>([]);
 
   const setPreviewScrollRef = useCallback(
     (node: HTMLElement | null) => {
@@ -134,11 +153,90 @@ export function PreviewPanel({
     [onContentChange],
   );
 
+  const focusActiveEditor = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      if (mode === "edit" && openFile?.kind === "md") {
+        visualEditorRef.current?.focus();
+        return;
+      }
+
+      editorScrollRef.current?.focus();
+    });
+  }, [mode, openFile?.kind]);
+
+  const pushToolbarHistory = useCallback((before: string, after: string) => {
+    if (before === after) {
+      return;
+    }
+
+    undoStackRef.current = [...undoStackRef.current, { before, after }].slice(-100);
+    redoStackRef.current = [];
+  }, []);
+
+  const undoToolbarAction = useCallback(() => {
+    const entry = undoStackRef.current[undoStackRef.current.length - 1];
+    if (!entry) {
+      return false;
+    }
+
+    undoStackRef.current = undoStackRef.current.slice(0, -1);
+    redoStackRef.current = [...redoStackRef.current, entry];
+    onContentChange(entry.before);
+    focusActiveEditor();
+    return true;
+  }, [focusActiveEditor, onContentChange]);
+
+  const redoToolbarAction = useCallback(() => {
+    const entry = redoStackRef.current[redoStackRef.current.length - 1];
+    if (!entry) {
+      return false;
+    }
+
+    redoStackRef.current = redoStackRef.current.slice(0, -1);
+    undoStackRef.current = [...undoStackRef.current, entry];
+    onContentChange(entry.after);
+    focusActiveEditor();
+    return true;
+  }, [focusActiveEditor, onContentChange]);
+
   useEffect(() => {
     centerRatioRef.current = 0;
     ignoredScrollPanelRef.current = null;
     lastScrolledPanelRef.current = "preview";
+    undoStackRef.current = [];
+    redoStackRef.current = [];
   }, [openFile?.path]);
+
+  useEffect(() => {
+    if (!openFile || openFile.kind !== "md") {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      const key = event.key.toLowerCase();
+      const modifier = event.ctrlKey || event.metaKey;
+
+      if (!modifier) {
+        return;
+      }
+
+      if (key === "z") {
+        if (event.shiftKey ? redoToolbarAction() : undoToolbarAction()) {
+          event.preventDefault();
+        }
+      }
+
+      if (key === "y" && redoToolbarAction()) {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openFile, redoToolbarAction, undoToolbarAction]);
 
   useEffect(() => {
     if (!openFile) {
@@ -154,7 +252,7 @@ export function PreviewPanel({
   }, [applyCenterRatio, mode, openFile?.path]);
 
   useEffect(() => {
-    if (!openFile || mode !== "edit") {
+    if (!openFile || mode === "preview") {
       return;
     }
 
@@ -165,6 +263,53 @@ export function PreviewPanel({
 
     return () => window.cancelAnimationFrame(frame);
   }, [applyCenterRatio, mode, openFile?.content, openFile?.path, renderedMarkdown]);
+
+  useEffect(() => {
+    if (
+      !openFile ||
+      openFile.kind !== "md" ||
+      !pendingFormatAction ||
+      appliedFormatActionIdRef.current === pendingFormatAction.id
+    ) {
+      return;
+    }
+
+    appliedFormatActionIdRef.current = pendingFormatAction.id;
+
+    if (mode === "edit") {
+      const result = visualEditorRef.current?.applyAction(pendingFormatAction.action);
+      if (result) {
+        pushToolbarHistory(openFile.content, result.content);
+      }
+      return;
+    }
+
+    const editor = editorScrollRef.current;
+    const selectionStart = editor?.selectionStart ?? openFile.content.length;
+    const selectionEnd = editor?.selectionEnd ?? selectionStart;
+    const result = applyMarkdownAction(
+      openFile.content,
+      selectionStart,
+      selectionEnd,
+      pendingFormatAction.action,
+    );
+
+    pushToolbarHistory(openFile.content, result.content);
+    onContentChange(result.content);
+
+    window.requestAnimationFrame(() => {
+      const currentEditor = editorScrollRef.current;
+      if (!currentEditor) {
+        return;
+      }
+
+      currentEditor.focus();
+      currentEditor.setSelectionRange(
+        result.selection.start,
+        result.selection.end,
+      );
+    });
+  }, [mode, onContentChange, openFile, pendingFormatAction, pushToolbarHistory]);
 
   const previewContent = openFile ? (
     openFile.kind === "md" ? (
@@ -192,7 +337,22 @@ export function PreviewPanel({
           {findBar}
 
           <div className="document-layout">
-            {mode === "edit" ? (
+            {mode === "edit" && openFile.kind === "md" ? (
+              <section
+                className="document-panel rendered-panel visual-editor-panel"
+                aria-label="Markdown editor"
+              >
+                <VisualMarkdownEditor
+                  ref={visualEditorRef}
+                  content={openFile.content}
+                  html={renderedMarkdown}
+                  onChange={handleEditorContentChange}
+                  onScroll={handlePreviewScroll}
+                />
+              </section>
+            ) : null}
+
+            {mode === "code" || (mode === "edit" && openFile.kind !== "md") ? (
               <section className="document-panel editor-panel" aria-label="Editor">
                 <textarea
                   ref={editorScrollRef}
@@ -205,9 +365,11 @@ export function PreviewPanel({
               </section>
             ) : null}
 
-            <section className="document-panel rendered-panel" aria-label="Preview">
-              {previewContent}
-            </section>
+            {mode !== "edit" ? (
+              <section className="document-panel rendered-panel" aria-label="Preview">
+                {previewContent}
+              </section>
+            ) : null}
           </div>
 
           <div className="file-meta">

@@ -19,7 +19,9 @@ import {
   type FileViewMode,
 } from "./features/file-actions/components/FileActionControls";
 import { FindBar } from "./features/file-actions/components/FindBar";
+import { MarkdownFormatToolbar } from "./features/file-actions/components/MarkdownFormatToolbar";
 import { useFindInPreview } from "./features/file-actions/hooks/useFindInPreview";
+import type { MarkdownAction } from "./features/preview/markdownActions";
 import { markdown } from "./features/preview/markdown";
 import { PreviewPanel } from "./features/preview/components/PreviewPanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
@@ -104,6 +106,10 @@ function App() {
   const [mode, setMode] = useState<FileViewMode>(
     () => initialConfiguration.viewMode ?? "preview",
   );
+  const [pendingFormatAction, setPendingFormatAction] = useState<{
+    action: MarkdownAction;
+    id: number;
+  } | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [barMerged, setBarMerged] = useState(
@@ -478,7 +484,7 @@ function App() {
       saving={saving}
       onModeChange={(nextMode) => {
         setMode(nextMode);
-        if (nextMode === "edit") {
+        if (nextMode === "code") {
           find.close();
         }
       }}
@@ -493,6 +499,17 @@ function App() {
       onToggleMerged={() => setBarMerged((merged) => !merged)}
     />
   ) : null;
+  const formatControls =
+    openFile?.kind === "md" && (mode === "edit" || mode === "code") ? (
+      <MarkdownFormatToolbar
+        onAction={(action) =>
+          setPendingFormatAction((current) => ({
+            action,
+            id: (current?.id ?? 0) + 1,
+          }))
+        }
+      />
+    ) : null;
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -548,8 +565,12 @@ function App() {
 
         <PreviewPanel
           actionBar={
-            openFile && !barMerged ? (
-              <FileActionBar>{fileActionControls}</FileActionBar>
+            openFile && (formatControls || !barMerged) ? (
+              <FileActionBar>
+                {formatControls}
+                <span className="file-action-spacer" aria-hidden="true" />
+                {!barMerged ? fileActionControls : null}
+              </FileActionBar>
             ) : null
           }
           error={error}
@@ -571,6 +592,7 @@ function App() {
           mode={mode}
           openFile={openFile}
           onContentChange={updateOpenFileContent}
+          pendingFormatAction={pendingFormatAction}
           renderedMarkdown={renderedMarkdown}
         />
       </div>

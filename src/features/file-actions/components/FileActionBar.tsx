@@ -6,7 +6,7 @@ interface FileActionBarProps {
 
 export function FileActionBar({ children }: FileActionBarProps) {
   return (
-    <div className="flex h-[38px] flex-none items-center justify-end gap-2 px-2 pl-3">
+    <div className="file-action-row">
       {children}
     </div>
   );
