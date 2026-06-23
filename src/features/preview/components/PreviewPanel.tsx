@@ -30,6 +30,7 @@ interface PreviewPanelProps {
   mode: FileViewMode;
   openFile: OpenFile | null;
   onContentChange: (content: string) => void;
+  onLinkClick: (href: string) => void;
   pendingFormatAction: { action: MarkdownAction; id: number } | null;
   renderedMarkdown: string;
 }
@@ -64,6 +65,7 @@ export function PreviewPanel({
   mode,
   openFile,
   onContentChange,
+  onLinkClick,
   pendingFormatAction,
   renderedMarkdown,
 }: PreviewPanelProps) {
@@ -317,6 +319,7 @@ export function PreviewPanel({
         ref={setPreviewScrollRef}
         html={renderedMarkdown}
         onScroll={handlePreviewScroll}
+        onLinkClick={onLinkClick}
       />
     ) : (
       <PlainTextPreview

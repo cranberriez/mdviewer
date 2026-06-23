@@ -198,6 +198,38 @@ fn reveal_in_explorer(path: String) -> Result<(), String> {
     }
 }
 
+/// Resolve a link target (from a rendered markdown link) against the directory
+/// of the file it appears in. Relative targets are joined onto that directory;
+/// absolute targets are used as-is. The result is canonicalized to an absolute
+/// path and only returned if it exists, so the UI can guard against dead links.
+#[tauri::command]
+fn resolve_link_path(base_file: String, target: String) -> Result<String, String> {
+    let base_dir = Path::new(&base_file)
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    let raw = Path::new(&target);
+    let joined = if raw.is_absolute() {
+        raw.to_path_buf()
+    } else {
+        base_dir.join(raw)
+    };
+
+    let canonical = std::fs::canonicalize(&joined)
+        .map_err(|error| format!("\"{}\": {}", joined.display(), error))?;
+
+    // Strip Windows' verbatim (\\?\) prefix so the path matches what the rest of
+    // the app stores and compares against.
+    let resolved = canonical.display().to_string();
+    let resolved = resolved
+        .strip_prefix(r"\\?\")
+        .map(String::from)
+        .unwrap_or(resolved);
+
+    Ok(resolved)
+}
+
 fn display_name(path: &Path) -> String {
     path.file_name()
         .and_then(|name| name.to_str())
@@ -237,7 +269,8 @@ pub fn run() {
             rename_path,
             delete_path,
             reveal_in_explorer,
-            folder_entry
+            folder_entry,
+            resolve_link_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

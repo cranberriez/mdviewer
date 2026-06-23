@@ -43,6 +43,15 @@ export function folderEntry(path: string) {
 }
 
 /**
+ * Resolve a link target (from a rendered markdown link) against the directory of
+ * the file it appears in, returning an absolute canonical path. Rejects if the
+ * target does not exist.
+ */
+export function resolveLinkPath(baseFile: string, target: string) {
+  return invoke<string>("resolve_link_path", { baseFile, target });
+}
+
+/**
  * Open the native directory picker and return the chosen folder as an Entry,
  * or null if the user cancelled.
  */

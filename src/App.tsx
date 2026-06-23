@@ -17,9 +17,11 @@ import {
   readFile,
   readFolder,
   renamePath,
+  resolveLinkPath,
   revealInExplorer,
   writeFile,
 } from "./features/files/api/filesApi";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { Sidebar } from "./features/explorer/components/Sidebar";
 import {
   ContextMenu,
@@ -42,6 +44,7 @@ import { MarkdownFormatToolbar } from "./features/file-actions/components/Markdo
 import { useFindInPreview } from "./features/file-actions/hooks/useFindInPreview";
 import type { MarkdownAction } from "./features/preview/markdownActions";
 import { markdown } from "./features/preview/markdown";
+import { slugify } from "./features/preview/slug";
 import { PreviewPanel } from "./features/preview/components/PreviewPanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
 import type { Entry, OpenFile } from "./shared/types/files";
@@ -162,6 +165,9 @@ function App() {
   const [draft, setDraft] = useState<InlineDraft | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const findTargetRef = useRef<HTMLElement | null>(null);
+  // A heading fragment to scroll to once the just-opened file has rendered
+  // (set when following a cross-file link like `doc.md#section`).
+  const pendingAnchorRef = useRef<string | null>(null);
   const configurationRef = useRef<AppConfigurationState>({
     explorerHidden,
     sidebarWidth,
@@ -233,6 +239,25 @@ function App() {
     findTargetRef,
     `${openFile?.path ?? ""}:${openFile?.content ?? ""}:${mode}`,
   );
+
+  // After following a cross-file link with a #fragment, scroll to the heading
+  // once the new document has rendered into the preview. The preview container
+  // (findTargetRef) only exists when its pane is visible, so this no-ops in the
+  // editor-only view; the pending anchor is cleared either way.
+  useEffect(() => {
+    const fragment = pendingAnchorRef.current;
+    if (!fragment) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollToAnchor(fragment);
+      pendingAnchorRef.current = null;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openFile?.path, renderedMarkdown, mode]);
 
   useEffect(() => {
     const nextConfiguration: AppConfigurationState = {
@@ -524,6 +549,103 @@ function App() {
     }
   }
 
+  // Scroll the preview to a heading matching a URL fragment. Tries the raw
+  // fragment first (explicit ids/names), then the slugified form so a link like
+  // `#My Heading` matches the generated `my-heading` heading id. Returns whether
+  // a target was found.
+  function scrollToAnchor(fragment: string) {
+    const scope = findTargetRef.current;
+    if (!scope || !fragment) {
+      return false;
+    }
+
+    for (const candidate of [fragment, slugify(fragment)]) {
+      if (!candidate) {
+        continue;
+      }
+      const node = scope.querySelector(
+        `#${CSS.escape(candidate)}, [name="${CSS.escape(candidate)}"]`,
+      );
+      if (node) {
+        node.scrollIntoView({ behavior: "smooth", block: "start" });
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // Route a clicked link in the rendered preview by its target:
+  //  - anchors (#heading) scroll within the current document
+  //  - external links (http(s), mailto, etc.) open in the OS default handler
+  //  - everything else is treated as a file path resolved against the open
+  //    file's directory; supported files open in-app (jumping to the heading if
+  //    the link carries a #fragment), the rest fall back to the OS so e.g.
+  //    images or PDFs still open.
+  async function handleLinkClick(href: string) {
+    const target = href.trim();
+    if (!target) {
+      return;
+    }
+
+    // In-document anchor.
+    if (target.startsWith("#")) {
+      scrollToAnchor(decodeURIComponent(target.slice(1)));
+      return;
+    }
+
+    // External / non-file schemes (http, https, mailto, tel, …) — hand off to
+    // the OS. A leading "scheme:" that isn't a Windows drive letter (C:\) marks
+    // these.
+    if (/^[a-z][a-z0-9+.-]*:/i.test(target) && !/^[a-z]:[\\/]/i.test(target)) {
+      try {
+        await openUrl(target);
+      } catch (cause) {
+        setError(`Unable to open link: ${String(cause)}`);
+      }
+      return;
+    }
+
+    if (!openFilePath) {
+      return;
+    }
+
+    // File link, optionally with a heading fragment (`doc.md#section`). Split off
+    // the fragment, resolve the path against the open file's directory, open it,
+    // then scroll to the heading once the new content has rendered.
+    const hashIndex = target.indexOf("#");
+    const pathPart = hashIndex >= 0 ? target.slice(0, hashIndex) : target;
+    const fragment =
+      hashIndex >= 0 ? decodeURIComponent(target.slice(hashIndex + 1)) : "";
+    const [cleanPath] = pathPart.split("?");
+
+    try {
+      const resolved = await resolveLinkPath(
+        openFilePath,
+        decodeURIComponent(cleanPath),
+      );
+
+      if (isVisibleFileName(resolved)) {
+        // Same file already open: just scroll. Otherwise open it and defer the
+        // scroll until the preview has re-rendered with the new headings.
+        if (
+          fragment &&
+          comparablePath(resolved) === comparablePath(openFilePath)
+        ) {
+          scrollToAnchor(fragment);
+        } else {
+          pendingAnchorRef.current = fragment || null;
+          await openFileAtPath(resolved);
+        }
+      } else {
+        // Not a viewer-supported file (image, pdf, folder, …) — let the OS open it.
+        await openPath(resolved);
+      }
+    } catch (cause) {
+      setError(`Unable to open link: ${String(cause)}`);
+    }
+  }
+
   async function selectLocation(location: Entry) {
     setActiveRoot(location);
     setSelectedFolderPath(location.path);
@@ -660,6 +782,34 @@ function App() {
       setPinnedLocations((current) =>
         current.filter((entry) => comparablePath(entry.path) !== key),
       );
+    }
+  }
+
+  // Pin or unpin the current explorer root, with a confirmation prompt. Disabled
+  // for Home (and when there is no root).
+  function toggleRootPin() {
+    if (!activeRoot || !isUnpinnable(activeRoot)) {
+      return;
+    }
+
+    const pinned = !isPinnable(activeRoot.path);
+
+    if (pinned) {
+      const confirmed = window.confirm(
+        `Remove "${activeRoot.name}" from your pinned folders?`,
+      );
+      if (!confirmed) {
+        return;
+      }
+      unpinLocation(activeRoot);
+    } else {
+      const confirmed = window.confirm(
+        `Pin "${activeRoot.name}" to your saved folders?`,
+      );
+      if (!confirmed) {
+        return;
+      }
+      pinFolder(activeRoot);
     }
   }
 
@@ -1088,6 +1238,9 @@ function App() {
           onRootContextMenu={openRootContextMenu}
           onSavedContextMenu={openSavedContextMenu}
           onOpenFolder={() => void openFolderAsRoot()}
+          rootPinned={activeRoot ? !isPinnable(activeRoot.path) : false}
+          rootPinDisabled={!activeRoot || !isUnpinnable(activeRoot)}
+          onToggleRootPin={toggleRootPin}
           onDraftSubmit={submitDraft}
           onDraftCancel={cancelDraft}
         />
@@ -1123,6 +1276,7 @@ function App() {
           mode={mode}
           openFile={openFile}
           onContentChange={updateOpenFileContent}
+          onLinkClick={(href) => void handleLinkClick(href)}
           pendingFormatAction={pendingFormatAction}
           renderedMarkdown={renderedMarkdown}
         />

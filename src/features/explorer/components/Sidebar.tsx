@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { FolderOpen, Home } from "lucide-react";
+import { FolderOpen, Home, Pin, PinOff } from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
 import { EmptySidebar } from "./EmptySidebar";
 import { TreeNode } from "./TreeNode";
@@ -25,6 +25,11 @@ interface SidebarProps {
   onRootContextMenu: (event: ReactMouseEvent) => void;
   onSavedContextMenu: (location: Entry, event: ReactMouseEvent) => void;
   onOpenFolder: () => void;
+  /** Whether the current explorer root is already pinned. */
+  rootPinned: boolean;
+  /** Whether the pin toggle is disabled (Home, or no root). */
+  rootPinDisabled: boolean;
+  onToggleRootPin: () => void;
   onDraftSubmit: (value: string) => void;
   onDraftCancel: () => void;
 }
@@ -49,6 +54,9 @@ export function Sidebar({
   onRootContextMenu,
   onSavedContextMenu,
   onOpenFolder,
+  rootPinned,
+  rootPinDisabled,
+  onToggleRootPin,
   onDraftSubmit,
   onDraftCancel,
 }: SidebarProps) {
@@ -62,15 +70,36 @@ export function Sidebar({
       <section className="sidebar-section">
         <div className="saved-heading">
           <div className="section-label">Saved</div>
-          <button
-            type="button"
-            className="saved-add"
-            title="Open a folder as the explorer root…"
-            aria-label="Open folder"
-            onClick={onOpenFolder}
-          >
-            <FolderOpen size={15} />
-          </button>
+          <div className="saved-actions">
+            <button
+              type="button"
+              className={`saved-add ${rootPinned ? "is-pinned" : ""}`}
+              disabled={rootPinDisabled}
+              title={
+                rootPinDisabled
+                  ? "Home is always pinned"
+                  : rootPinned
+                    ? "Unpin the current root folder"
+                    : "Pin the current root folder"
+              }
+              aria-label={
+                rootPinned ? "Unpin current root folder" : "Pin current root folder"
+              }
+              aria-pressed={rootPinned}
+              onClick={onToggleRootPin}
+            >
+              {rootPinned ? <PinOff size={15} /> : <Pin size={15} />}
+            </button>
+            <button
+              type="button"
+              className="saved-add"
+              title="Open a folder as the explorer root…"
+              aria-label="Open folder"
+              onClick={onOpenFolder}
+            >
+              <FolderOpen size={15} />
+            </button>
+          </div>
         </div>
         <div className="saved-list">
           {locations.map((location) => (
