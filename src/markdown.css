@@ -171,15 +171,18 @@
   border-radius: 6px;
   border: 1px solid var(--color-border-base);
 }
-.md mark {
-  background: #4a4a2e;
+/* Find-in-file highlights, painted via the CSS Custom Highlight API (see
+   useFindInPreview.ts). These never touch the DOM, so they cannot shift layout
+   and survive React re-renders. ::highlight() only accepts a limited set of
+   properties (color, background-color, text-decoration, etc.) — no padding or
+   border — which is exactly what keeps the text from reflowing. */
+::highlight(find-matches) {
+  background-color: #4a4a2e;
   color: #f2f2dc;
-  border-radius: 3px;
-  padding: 0;
 }
-.md mark.current,
-.md mark[data-current="true"] {
-  background: #6b6b3a;
+::highlight(find-current) {
+  background-color: #b58900;
+  color: #1a1a1a;
 }
 
 /* plain text files render in mono */
