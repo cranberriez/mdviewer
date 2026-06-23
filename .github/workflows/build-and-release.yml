@@ -22,6 +22,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  run-context:
+    name: Show run context
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Write run context
+        run: |
+          {
+            echo "## Build and Release context"
+            echo ""
+            echo "- Event: ${{ github.event_name }}"
+            echo "- Ref: ${{ github.ref }}"
+            echo "- Ref name: ${{ github.ref_name }}"
+            echo "- SHA: ${{ github.sha }}"
+            echo "- Release tag: ${{ github.event.release.tag_name || '' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   validate:
     name: Validate frontend
     if: ${{ github.event_name != 'release' && !startsWith(github.ref, 'refs/tags/') }}
@@ -50,8 +67,10 @@ jobs:
 
   windows-artifact:
     name: Build Windows artifact
-    if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
-    needs: validate
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && needs.validate.result == 'success')) }}
+    needs:
+      - run-context
+      - validate
     runs-on: windows-latest
 
     steps:
@@ -102,6 +121,8 @@ jobs:
   github-release:
     name: Publish GitHub release
     if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')) }}
+    needs:
+      - run-context
     runs-on: windows-latest
     permissions:
       contents: write
