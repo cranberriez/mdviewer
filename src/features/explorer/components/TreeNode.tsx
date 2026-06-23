@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
 
@@ -28,18 +29,37 @@ export function TreeNode({
   onToggleFolder,
   onSelectFile,
 }: TreeNodeProps) {
+  const rowRef = useRef<HTMLButtonElement | null>(null);
   const isExpanded = expanded.has(entry.path);
   const children = childrenCache[entry.path];
   const isLoading = loadingPaths.has(entry.path);
-  const isActive = entry.is_dir
-    ? selectedFolderPath === entry.path
-    : activeFilePath === entry.path;
+  const hasActiveFile = Boolean(activeFilePath);
+  const isSelectedFolder = selectedFolderPath === entry.path;
+  const isActiveFile = activeFilePath === entry.path;
+  const isFolderContext = entry.is_dir && isSelectedFolder && hasActiveFile;
+  const isActive =
+    isActiveFile || (entry.is_dir && isSelectedFolder && (!hasActiveFile || !isExpanded));
+  const isContextOnly = isFolderContext && isExpanded;
+
+  useEffect(() => {
+    if (!isActiveFile) {
+      return;
+    }
+
+    rowRef.current?.scrollIntoView({
+      block: "center",
+      inline: "nearest",
+    });
+  }, [isActiveFile]);
 
   return (
     <div role="treeitem" aria-expanded={entry.is_dir ? isExpanded : undefined}>
       <button
+        ref={rowRef}
         type="button"
-        className={`tree-row ${isActive ? "active" : ""}`}
+        className={`tree-row ${isActive ? "active" : ""} ${
+          isContextOnly ? "active-context" : ""
+        }`}
         style={{ paddingLeft: TREE_BASE_INDENT + depth * TREE_DEPTH_INDENT }}
         onClick={() =>
           entry.is_dir ? void onToggleFolder(entry) : void onSelectFile(entry)

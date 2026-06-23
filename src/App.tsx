@@ -54,6 +54,32 @@ function clampSidebarWidth(width: number) {
   return Math.min(availableMax, Math.max(MIN_SIDEBAR_WIDTH, width));
 }
 
+function comparablePath(path: string) {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+function containsPath(rootPath: string, path: string) {
+  const root = comparablePath(rootPath);
+  const child = comparablePath(path);
+
+  return child === root || child.startsWith(`${root}/`);
+}
+
+function findContainingLocation(locations: Entry[], path?: string) {
+  if (!path) {
+    return null;
+  }
+
+  return (
+    locations
+      .filter((location) => containsPath(location.path, path))
+      .sort(
+        (left, right) =>
+          comparablePath(right.path).length - comparablePath(left.path).length,
+      )[0] ?? null
+  );
+}
+
 function App() {
   const initialConfiguration = useMemo(() => loadAppConfiguration(), []);
   const initialSession = useMemo(() => loadAppSession(), []);
@@ -64,6 +90,9 @@ function App() {
   );
   const [childrenCache, setChildrenCache] = useState<Record<string, Entry[]>>({});
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
+  const [openFilePath, setOpenFilePath] = useState<string | null>(
+    () => initialSession.openFilePath ?? null,
+  );
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [explorerHidden, setExplorerHidden] = useState(
@@ -132,13 +161,13 @@ function App() {
     saveAppSession({
       activeRootPath: activeRoot?.path,
       selectedFolderPath: selectedFolderPath ?? undefined,
-      openFilePath: openFile?.path,
+      openFilePath: openFilePath ?? undefined,
       expandedPaths: Array.from(expanded),
     });
   }, [
     activeRoot?.path,
     expanded,
-    openFile?.path,
+    openFilePath,
     selectedFolderPath,
     sessionHydrated,
   ]);
@@ -281,6 +310,8 @@ function App() {
           defaults.find(
             (location) => location.path === initialSession.selectedFolderPath,
           ) ??
+          findContainingLocation(defaults, initialSession.openFilePath) ??
+          findContainingLocation(defaults, initialSession.selectedFolderPath) ??
           null;
         const first = restoredRoot ?? defaults[0] ?? null;
         const restoredSelectedFolder =
@@ -355,6 +386,8 @@ function App() {
     options?: { preserveMode?: boolean },
   ) {
     setError(null);
+    setOpenFilePath(path);
+    setSelectedFolderPath(parentPath(path));
 
     try {
       const content = await readFile(path);
@@ -364,7 +397,6 @@ function App() {
         content,
         kind: fileKindFromPath(path),
       });
-      setSelectedFolderPath(parentPath(path));
       setDirty(false);
       if (!options?.preserveMode) {
         setMode("preview");
@@ -379,6 +411,7 @@ function App() {
     setActiveRoot(location);
     setSelectedFolderPath(location.path);
     setOpenFile(null);
+    setOpenFilePath(null);
     setExpanded(new Set());
     setError(null);
     setDirty(false);
@@ -407,7 +440,6 @@ function App() {
   }
 
   async function selectFile(entry: Entry) {
-    setSelectedFolderPath(parentPath(entry.path));
     await openFileAtPath(entry.path);
   }
 
@@ -506,7 +538,7 @@ function App() {
           childrenCache={childrenCache}
           loadingPaths={loadingPaths}
           selectedFolderPath={selectedFolderPath ?? undefined}
-          activeFilePath={openFile?.path}
+          activeFilePath={openFilePath ?? undefined}
           onSelectLocation={selectLocation}
           onToggleFolder={toggleFolder}
           onSelectFile={selectFile}

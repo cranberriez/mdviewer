@@ -227,6 +227,10 @@
   background: var(--color-bg-active);
 }
 
+.tree-row.active-context {
+  color: var(--color-text-primary);
+}
+
 .saved-row span,
 .tree-name {
   flex: 1 1 auto;
