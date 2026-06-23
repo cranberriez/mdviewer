@@ -1,0 +1,190 @@
+/* ---------------------------------------------------------------------------
+   Markdown preview styles — scoped under .md (rendered markdown-it output).
+   Ported from mockup-full.html. Plain CSS on purpose; not worth converting
+   to utility classes.
+
+   Zoom: the content container sets --zoom (1 = 100%); editor + preview scale.
+--------------------------------------------------------------------------- */
+
+.content {
+  --zoom: 1;
+}
+
+/* editor textarea */
+.editor {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: calc(13px * var(--zoom));
+  line-height: 1.7;
+  padding: 6px 24px 24px;
+}
+
+.preview-inner {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 6px 30px 56px;
+}
+
+.md {
+  font-size: calc(14px * var(--zoom));
+  line-height: 1.7;
+  color: var(--color-text-primary);
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  line-height: 1.3;
+  font-weight: 600;
+  color: #f2f2f4;
+}
+.md h1 {
+  font-size: 25px;
+  margin: 0.1em 0 0.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--color-border-base);
+}
+.md h2 {
+  font-size: 19px;
+  margin: 1.3em 0 0.4em;
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid var(--color-border-base);
+}
+.md h3 {
+  font-size: 16px;
+  margin: 1.2em 0 0.4em;
+}
+.md h4 {
+  font-size: 14px;
+  margin: 1.1em 0 0.35em;
+  color: var(--color-text-secondary);
+}
+.md p {
+  margin: 0.7em 0;
+  color: #d6d6da;
+}
+.md a {
+  color: #c9c9d2;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md strong {
+  color: #f2f2f4;
+  font-weight: 600;
+}
+.md em {
+  color: #dcdce2;
+}
+.md del {
+  color: var(--color-text-muted);
+}
+.md ul,
+.md ol {
+  margin: 0.6em 0 0.6em 1.4em;
+  color: #d6d6da;
+}
+.md li {
+  margin: 0.25em 0;
+}
+.md li.task,
+.md li.task-list-item {
+  list-style: none;
+  margin-left: -1.2em;
+  display: flex;
+  gap: 0.5em;
+  align-items: flex-start;
+}
+.md li.task input,
+.md li.task-list-item input {
+  margin-top: 0.35em;
+  accent-color: #6b6b72;
+}
+.md blockquote {
+  margin: 0.8em 0;
+  padding: 0.2em 1em;
+  color: var(--color-text-secondary);
+  border-left: 3px solid var(--color-bg-active);
+  background: rgba(255, 255, 255, 0.015);
+}
+.md code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: #1c1c20;
+  border: 1px solid var(--color-border-base);
+  border-radius: 4px;
+  padding: 0.08em 0.4em;
+  color: #dcdce2;
+}
+.md pre {
+  background: #121214;
+  border: 1px solid var(--color-border-base);
+  border-radius: 8px;
+  padding: 14px 16px;
+  overflow: auto;
+  margin: 0.9em 0;
+}
+.md pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.86em;
+  color: #cfcfd6;
+}
+.md table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+  font-size: 13px;
+}
+.md th,
+.md td {
+  border: 1px solid var(--color-border-base);
+  padding: 7px 11px;
+  text-align: left;
+}
+.md th {
+  background: #1a1a1d;
+  color: #e7e7ea;
+  font-weight: 600;
+}
+.md td {
+  color: #d0d0d6;
+}
+.md hr {
+  border: none;
+  border-top: 1px solid var(--color-border-base);
+  margin: 1.4em 0;
+}
+.md img {
+  max-width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-base);
+}
+.md mark {
+  background: #4a4a2e;
+  color: #f2f2dc;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.md mark.current {
+  background: #6b6b3a;
+}
+
+/* plain text files render in mono */
+.plain {
+  font-family: var(--font-mono);
+  font-size: calc(13px * var(--zoom));
+  line-height: 1.7;
+  color: #cfcfd6;
+  white-space: pre-wrap;
+  padding: 6px 30px 56px;
+}

@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Theme — palette ported from the mockup :root.
+   Tailwind v4 reads @theme tokens and generates utilities, e.g.
+   --color-bg-card  ->  bg-bg-card / text-bg-card / border-bg-card
+--------------------------------------------------------------------------- */
+@theme {
+  --color-bg-desktop: #050506;
+  --color-bg-window: #0e0e10;
+  --color-bg-card: #161618;
+  --color-bg-menu: #1a1a1d;
+  --color-bg-hover: #202024;
+  --color-bg-active: #2a2a2f;
+  --color-border-base: #26262b;
+  --color-text-primary: #e7e7ea;
+  --color-text-secondary: #9a9aa2;
+  --color-text-muted: #5f5f68;
+
+  --radius-win: 12px;
+  --radius-card: 12px;
+  --radius-ctl: 6px;
+  --radius-menu: 10px;
+
+  --font-ui: "Segoe UI", Inter, system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+
+/* ---------------------------------------------------------------------------
+   Base — transparent OS window so the app renders as a floating, rounded card.
+   (Pair with decorations:false + transparent:true in tauri.conf.json.)
+--------------------------------------------------------------------------- */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The window shell — apply to the top-level app container */
+.app-window {
+  height: 100%;
+  background: var(--color-bg-window);
+  border-radius: var(--radius-win);
+  box-shadow:
+    0 30px 80px -20px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Custom scrollbars to match the dark, flat aesthetic */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a2f;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a40;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
