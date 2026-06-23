@@ -1,8 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { defaultLocations, readFile, readFolder } from "./features/files/api/filesApi";
+import {
+  defaultLocations,
+  readFile,
+  readFolder,
+  writeFile,
+} from "./features/files/api/filesApi";
 import { Sidebar } from "./features/explorer/components/Sidebar";
 import { SidebarResizeHandle } from "./features/explorer/components/SidebarResizeHandle";
+import { FileActionBar } from "./features/file-actions/components/FileActionBar";
+import {
+  FileActionControls,
+  type FileViewMode,
+} from "./features/file-actions/components/FileActionControls";
+import { FindBar } from "./features/file-actions/components/FindBar";
+import { useFindInPreview } from "./features/file-actions/hooks/useFindInPreview";
 import { markdown } from "./features/preview/markdown";
 import { PreviewPanel } from "./features/preview/components/PreviewPanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
@@ -34,6 +46,11 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [explorerHidden, setExplorerHidden] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
+  const [mode, setMode] = useState<FileViewMode>("preview");
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [barMerged, setBarMerged] = useState(false);
+  const findTargetRef = useRef<HTMLElement | null>(null);
 
   const renderedMarkdown = useMemo(() => {
     if (!openFile || openFile.kind !== "md") {
@@ -42,6 +59,29 @@ function App() {
 
     return markdown.render(openFile.content);
   }, [openFile]);
+
+  const find = useFindInPreview(
+    findTargetRef,
+    `${openFile?.path ?? ""}:${openFile?.content ?? ""}:${mode}`,
+  );
+
+  const saveOpenFile = useCallback(async () => {
+    if (!openFile || saving) {
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      await writeFile(openFile.path, openFile.content);
+      setDirty(false);
+    } catch (cause) {
+      setError(`Unable to save file: ${String(cause)}`);
+    } finally {
+      setSaving(false);
+    }
+  }, [openFile, saving]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +140,10 @@ function App() {
     setOpenFile(null);
     setExpanded(new Set());
     setError(null);
+    setDirty(false);
+    setMode("preview");
+    setBarMerged(false);
+    find.close();
     await loadFolder(location.path);
   }
 
@@ -132,9 +176,17 @@ function App() {
         content,
         kind: fileKind(entry),
       });
+      setDirty(false);
+      setMode("preview");
+      find.close();
     } catch (cause) {
       setError(`Unable to read file: ${String(cause)}`);
     }
+  }
+
+  function updateOpenFileContent(content: string) {
+    setOpenFile((current) => (current ? { ...current, content } : current));
+    setDirty(true);
   }
 
   function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
@@ -158,10 +210,58 @@ function App() {
 
   const title = openFile?.name ?? activeRoot?.name ?? "Markdown Viewer";
   const rootChildren = activeRoot ? childrenCache[activeRoot.path] : undefined;
+  const fileActionControls = openFile ? (
+    <FileActionControls
+      dirty={dirty}
+      findOpen={find.open}
+      merged={barMerged}
+      mode={mode}
+      saving={saving}
+      onModeChange={(nextMode) => {
+        setMode(nextMode);
+        if (nextMode === "edit") {
+          find.close();
+        }
+      }}
+      onSave={() => void saveOpenFile()}
+      onToggleFind={() => {
+        if (!find.open) {
+          setMode("preview");
+        }
+
+        find.toggle();
+      }}
+      onToggleMerged={() => setBarMerged((merged) => !merged)}
+    />
+  ) : null;
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void saveOpenFile();
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        if (!find.open) {
+          setMode("preview");
+        }
+        find.setOpen(true);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [find, saveOpenFile]);
 
   return (
     <div className={`app-window ${explorerHidden ? "explorer-hidden" : ""}`}>
       <TitleBar
+        fileActionsSlot={barMerged ? fileActionControls : null}
         explorerHidden={explorerHidden}
         rootName={activeRoot?.name}
         scopeName={openFile ? parentName(openFile.path) : null}
@@ -187,8 +287,30 @@ function App() {
         <SidebarResizeHandle onPointerDown={startSidebarResize} />
 
         <PreviewPanel
+          actionBar={
+            openFile && !barMerged ? (
+              <FileActionBar>{fileActionControls}</FileActionBar>
+            ) : null
+          }
           error={error}
+          findBar={
+            openFile ? (
+              <FindBar
+                current={find.current}
+                open={find.open}
+                query={find.query}
+                total={find.total}
+                onClose={find.close}
+                onNext={find.goToNext}
+                onPrevious={find.goToPrevious}
+                onQueryChange={find.setQuery}
+              />
+            ) : null
+          }
+          findTargetRef={findTargetRef}
+          mode={mode}
           openFile={openFile}
+          onContentChange={updateOpenFileContent}
           renderedMarkdown={renderedMarkdown}
         />
       </div>

@@ -17,37 +17,14 @@ interface SidebarProps {
   onSelectFile: (entry: Entry) => Promise<void>;
 }
 
-export function Sidebar({
-  width,
-  locations,
-  activeRoot,
-  rootChildren,
-  expanded,
-  childrenCache,
-  loadingPaths,
-  activeFilePath,
-  onSelectLocation,
-  onToggleFolder,
-  onSelectFile,
-}: SidebarProps) {
+export function Sidebar({ width, locations, activeRoot, rootChildren, expanded, childrenCache, loadingPaths, activeFilePath, onSelectLocation, onToggleFolder, onSelectFile }: SidebarProps) {
   return (
-    <aside
-      className="sidebar"
-      style={{ width, flexBasis: width }}
-      aria-label="File explorer"
-    >
+    <aside className="sidebar" style={{ width, flexBasis: width }} aria-label="File explorer">
       <section className="sidebar-section">
         <div className="section-label">Saved</div>
         <div className="saved-list">
           {locations.map((location) => (
-            <button
-              type="button"
-              className={`saved-row ${
-                activeRoot?.path === location.path ? "active" : ""
-              }`}
-              key={location.path}
-              onClick={() => void onSelectLocation(location)}
-            >
+            <button type="button" className={`saved-row ${activeRoot?.path === location.path ? "active" : ""}`} key={location.path} onClick={() => void onSelectLocation(location)}>
               <Home size={15} />
               <span>{location.name}</span>
             </button>
@@ -59,13 +36,8 @@ export function Sidebar({
         <div className="explorer-heading">
           <div>
             <div className="section-label">Explorer</div>
-            <strong>{activeRoot?.name ?? "No location"}</strong>
           </div>
-          {activeRoot ? (
-            <span className="entry-count">
-              {rootChildren ? rootChildren.length : "..."}
-            </span>
-          ) : null}
+          {activeRoot ? <span className="entry-count">{rootChildren ? rootChildren.length : "..."}</span> : null}
         </div>
 
         <div className="tree" role="tree">
