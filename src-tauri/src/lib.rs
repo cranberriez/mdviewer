@@ -107,6 +107,104 @@ fn write_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(path, content).map_err(|error| error.to_string())
 }
 
+/// Create an empty file. Fails if a file or folder already exists at `path`
+/// so the UI can surface a clear "name already exists" message.
+#[tauri::command]
+fn create_file(path: String) -> Result<(), String> {
+    let target = Path::new(&path);
+    if target.exists() {
+        return Err(format!("\"{}\" already exists", display_name(target)));
+    }
+
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    std::fs::write(target, "").map_err(|error| error.to_string())
+}
+
+/// Create a new directory. Fails if anything already exists at `path`.
+#[tauri::command]
+fn create_folder(path: String) -> Result<(), String> {
+    let target = Path::new(&path);
+    if target.exists() {
+        return Err(format!("\"{}\" already exists", display_name(target)));
+    }
+
+    std::fs::create_dir_all(target).map_err(|error| error.to_string())
+}
+
+/// Rename/move a path. Refuses to clobber an existing destination.
+#[tauri::command]
+fn rename_path(from: String, to: String) -> Result<(), String> {
+    let destination = Path::new(&to);
+
+    // Allow case-only renames on case-insensitive filesystems, but otherwise
+    // refuse to overwrite an existing entry.
+    let same_target = Path::new(&from) == destination;
+    if !same_target && destination.exists() {
+        return Err(format!("\"{}\" already exists", display_name(destination)));
+    }
+
+    std::fs::rename(&from, &to).map_err(|error| error.to_string())
+}
+
+/// Move a path to the OS recycle bin / trash (recoverable).
+#[tauri::command]
+fn delete_path(path: String) -> Result<(), String> {
+    trash::delete(&path).map_err(|error| error.to_string())
+}
+
+/// Open the system file manager with the given path selected.
+#[tauri::command]
+fn reveal_in_explorer(path: String) -> Result<(), String> {
+    use std::process::Command;
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg("/select,")
+            .arg(&path)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        // Reveal the containing folder; most Linux file managers lack a
+        // portable "select file" flag.
+        let target = Path::new(&path);
+        let folder = if target.is_dir() {
+            target.to_path_buf()
+        } else {
+            target.parent().map(Path::to_path_buf).unwrap_or(target.to_path_buf())
+        };
+        Command::new("xdg-open")
+            .arg(folder)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+}
+
+fn display_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(String::from)
+        .unwrap_or_else(|| path.display().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -115,7 +213,12 @@ pub fn run() {
             default_locations,
             read_dir,
             read_file,
-            write_file
+            write_file,
+            create_file,
+            create_folder,
+            rename_path,
+            delete_path,
+            reveal_in_explorer
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

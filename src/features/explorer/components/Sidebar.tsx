@@ -1,7 +1,9 @@
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { Home } from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
 import { EmptySidebar } from "./EmptySidebar";
 import { TreeNode } from "./TreeNode";
+import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
 
 interface SidebarProps {
   width: number;
@@ -13,12 +15,44 @@ interface SidebarProps {
   loadingPaths: Set<string>;
   selectedFolderPath?: string;
   activeFilePath?: string;
+  contextPath?: string;
+  focusedPath?: string;
+  draft: InlineDraft | null;
   onSelectLocation: (location: Entry) => Promise<void>;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
+  onEntryContextMenu: (entry: Entry, event: ReactMouseEvent) => void;
+  onRootContextMenu: (event: ReactMouseEvent) => void;
+  onDraftSubmit: (value: string) => void;
+  onDraftCancel: () => void;
 }
 
-export function Sidebar({ width, locations, activeRoot, rootChildren, expanded, childrenCache, loadingPaths, selectedFolderPath, activeFilePath, onSelectLocation, onToggleFolder, onSelectFile }: SidebarProps) {
+export function Sidebar({
+  width,
+  locations,
+  activeRoot,
+  rootChildren,
+  expanded,
+  childrenCache,
+  loadingPaths,
+  selectedFolderPath,
+  activeFilePath,
+  contextPath,
+  focusedPath,
+  draft,
+  onSelectLocation,
+  onToggleFolder,
+  onSelectFile,
+  onEntryContextMenu,
+  onRootContextMenu,
+  onDraftSubmit,
+  onDraftCancel,
+}: SidebarProps) {
+  const rootDraft =
+    draft?.mode === "create" && activeRoot && draft.parentPath === activeRoot.path
+      ? draft
+      : null;
+
   return (
     <aside className="sidebar" style={{ width, flexBasis: width }} aria-label="File explorer">
       <section className="sidebar-section">
@@ -41,7 +75,25 @@ export function Sidebar({ width, locations, activeRoot, rootChildren, expanded, 
           {activeRoot ? <span className="entry-count">{rootChildren ? rootChildren.length : "..."}</span> : null}
         </div>
 
-        <div className="tree" role="tree">
+        <div
+          className="tree"
+          role="tree"
+          onContextMenu={(event) => {
+            // Only handle right-clicks on empty tree space; rows stop propagation
+            // by handling their own contextmenu.
+            if (event.target === event.currentTarget) {
+              onRootContextMenu(event);
+            }
+          }}
+        >
+          {rootDraft ? (
+            <TreeInlineInput
+              draft={rootDraft}
+              depth={0}
+              onSubmit={onDraftSubmit}
+              onCancel={onDraftCancel}
+            />
+          ) : null}
           {!activeRoot ? (
             <EmptySidebar message="No saved locations found." />
           ) : rootChildren ? (
@@ -56,11 +108,17 @@ export function Sidebar({ width, locations, activeRoot, rootChildren, expanded, 
                   loadingPaths={loadingPaths}
                   selectedFolderPath={selectedFolderPath}
                   activeFilePath={activeFilePath}
+                  contextPath={contextPath}
+                  focusedPath={focusedPath}
+                  draft={draft}
                   onToggleFolder={onToggleFolder}
                   onSelectFile={onSelectFile}
+                  onContextMenu={onEntryContextMenu}
+                  onDraftSubmit={onDraftSubmit}
+                  onDraftCancel={onDraftCancel}
                 />
               ))
-            ) : (
+            ) : rootDraft ? null : (
               <EmptySidebar message="No markdown or text files here." />
             )
           ) : (

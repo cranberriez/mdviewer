@@ -1,17 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   getCurrentWindow,
   PhysicalPosition,
   PhysicalSize,
 } from "@tauri-apps/api/window";
 import {
+  createFile,
+  createFolder,
   defaultLocations,
+  deletePath,
   readFile,
   readFolder,
+  renamePath,
+  revealInExplorer,
   writeFile,
 } from "./features/files/api/filesApi";
 import { Sidebar } from "./features/explorer/components/Sidebar";
+import {
+  ContextMenu,
+  type ContextMenuAction,
+  type ContextMenuTarget,
+} from "./features/explorer/components/ContextMenu";
+import type { InlineDraft } from "./features/explorer/components/TreeInlineInput";
 import { SidebarResizeHandle } from "./features/explorer/components/SidebarResizeHandle";
 import { FileActionBar } from "./features/file-actions/components/FileActionBar";
 import {
@@ -27,8 +41,11 @@ import { PreviewPanel } from "./features/preview/components/PreviewPanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
 import type { Entry, OpenFile } from "./shared/types/files";
 import {
+  fileExtension,
   fileKindFromPath,
   fileName,
+  isVisibleFileName,
+  joinPath,
   parentName,
   parentPath,
 } from "./shared/utils/path";
@@ -123,6 +140,9 @@ function App() {
   const [windowFrame, setWindowFrame] = useState<StoredWindowFrame | undefined>(
     () => initialConfiguration.windowFrame,
   );
+  const [contextMenu, setContextMenu] = useState<ContextMenuTarget | null>(null);
+  const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
+  const [draft, setDraft] = useState<InlineDraft | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const findTargetRef = useRef<HTMLElement | null>(null);
   const configurationRef = useRef<AppConfigurationState>({
@@ -361,8 +381,11 @@ function App() {
     };
   }, []);
 
-  async function loadFolder(path: string, options?: { quiet?: boolean }) {
-    if (childrenCache[path]) {
+  async function loadFolder(
+    path: string,
+    options?: { quiet?: boolean; force?: boolean },
+  ) {
+    if (childrenCache[path] && !options?.force) {
       return;
     }
 
@@ -385,6 +408,12 @@ function App() {
         return next;
       });
     }
+  }
+
+  // Re-read a folder from disk and refresh its cached children. The active root
+  // is keyed by its own path in childrenCache, so this covers it too.
+  async function refreshFolder(path: string) {
+    await loadFolder(path, { force: true, quiet: true });
   }
 
   async function openFileAtPath(
@@ -429,6 +458,7 @@ function App() {
   async function toggleFolder(entry: Entry) {
     const willExpand = !expanded.has(entry.path);
     setSelectedFolderPath(entry.path);
+    setFocusedEntry(entry);
 
     setExpanded((current) => {
       const next = new Set(current);
@@ -446,7 +476,233 @@ function App() {
   }
 
   async function selectFile(entry: Entry) {
+    setFocusedEntry(entry);
     await openFileAtPath(entry.path);
+  }
+
+  function entryToTarget(entry: Entry, x = 0, y = 0): ContextMenuTarget {
+    return {
+      kind: entry.is_dir ? "folder" : "file",
+      path: entry.path,
+      name: entry.name,
+      x,
+      y,
+    };
+  }
+
+  function openEntryContextMenu(entry: Entry, event: ReactMouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDraft(null);
+    setFocusedEntry(entry);
+    setContextMenu(entryToTarget(entry, event.clientX, event.clientY));
+  }
+
+  function openRootContextMenu(event: ReactMouseEvent) {
+    if (!activeRoot) {
+      return;
+    }
+    event.preventDefault();
+    setDraft(null);
+    setContextMenu({
+      kind: "folder",
+      path: activeRoot.path,
+      name: activeRoot.name,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }
+
+  // Ensure a folder is expanded and its children are loaded so a new draft row
+  // is visible inside it.
+  async function ensureFolderOpen(path: string) {
+    if (!expanded.has(path)) {
+      setExpanded((current) => new Set(current).add(path));
+    }
+    await loadFolder(path);
+  }
+
+  async function startCreateDraft(parentPath: string, kind: "file" | "folder") {
+    const isRoot = activeRoot?.path === parentPath;
+    if (!isRoot) {
+      await ensureFolderOpen(parentPath);
+    }
+
+    setDraft({
+      parentPath,
+      mode: "create",
+      kind,
+      initialValue: kind === "file" ? ".md" : "",
+      // For new files the suggested ".md" stays visible with the caret at the
+      // start so the user types the name before the extension.
+      selection: "start",
+    });
+  }
+
+  function startRenameDraft(entry: Entry) {
+    setDraft({
+      parentPath: parentPath(entry.path),
+      mode: "rename",
+      kind: entry.is_dir ? "folder" : "file",
+      initialValue: entry.name,
+      selection: entry.is_dir ? "all" : "name",
+      targetPath: entry.path,
+    });
+  }
+
+  function cancelDraft() {
+    setDraft(null);
+  }
+
+  // Returns true if the caller should proceed (user confirmed or no warning
+  // needed). Folders and any already-visible name skip the prompt.
+  function confirmExtensionIfNeeded(name: string, kind: "file" | "folder") {
+    if (kind === "folder" || isVisibleFileName(name)) {
+      return true;
+    }
+
+    const ext = fileExtension(name);
+    const detail = ext
+      ? `".${ext}" files`
+      : "files without a .md, .markdown, or .txt extension";
+    return window.confirm(
+      `"${name}" will not be visible in Markdown Viewer because ${detail} aren't shown here.\n\nCreate it anyway?`,
+    );
+  }
+
+  async function submitDraft(rawValue: string) {
+    const current = draft;
+    if (!current) {
+      return;
+    }
+
+    const name = rawValue.trim();
+    setDraft(null);
+
+    // Empty or unchanged-on-rename: treat as cancel.
+    if (!name) {
+      return;
+    }
+    if (/[\\/]/.test(name)) {
+      setError("Names cannot contain slashes.");
+      return;
+    }
+
+    try {
+      if (current.mode === "create") {
+        if (!confirmExtensionIfNeeded(name, current.kind)) {
+          return;
+        }
+
+        const targetPath = joinPath(current.parentPath, name);
+        if (current.kind === "folder") {
+          await createFolder(targetPath);
+        } else {
+          await createFile(targetPath);
+        }
+
+        await refreshFolder(current.parentPath);
+
+        // Open the new file in the editor so the user can start typing.
+        if (current.kind === "file" && isVisibleFileName(name)) {
+          await openFileAtPath(targetPath);
+          setMode("edit");
+        }
+        return;
+      }
+
+      // Rename
+      const originalPath = current.targetPath;
+      if (!originalPath || name === fileName(originalPath)) {
+        return;
+      }
+      if (current.kind === "file" && !confirmExtensionIfNeeded(name, "file")) {
+        return;
+      }
+
+      const targetPath = joinPath(current.parentPath, name);
+      await renamePath(originalPath, targetPath);
+      await refreshFolder(current.parentPath);
+
+      // Keep keyboard focus on the renamed entry at its new path.
+      setFocusedEntry((focused) =>
+        focused?.path === originalPath
+          ? { ...focused, name, path: targetPath }
+          : focused,
+      );
+
+      // If the renamed file is the open one, follow it (or close it when it is
+      // no longer a visible kind).
+      if (openFilePath === originalPath) {
+        if (current.kind === "file" && isVisibleFileName(name)) {
+          await openFileAtPath(targetPath, { preserveMode: true });
+        } else {
+          setOpenFile(null);
+          setOpenFilePath(null);
+        }
+      }
+    } catch (cause) {
+      setError(`${String(cause)}`);
+    }
+  }
+
+  async function handleContextAction(
+    action: ContextMenuAction,
+    target: ContextMenuTarget,
+  ) {
+    setContextMenu(null);
+
+    try {
+      switch (action) {
+        case "new-file":
+          await startCreateDraft(target.path, "file");
+          break;
+        case "new-folder":
+          await startCreateDraft(target.path, "folder");
+          break;
+        case "rename":
+          startRenameDraft({
+            name: target.name,
+            path: target.path,
+            is_dir: target.kind === "folder",
+            kind: target.kind === "folder" ? "folder" : fileKindFromPath(target.path),
+          });
+          break;
+        case "open":
+          if (target.kind === "file") {
+            await openFileAtPath(target.path);
+          }
+          break;
+        case "reveal":
+          await revealInExplorer(target.path);
+          break;
+        case "copy-path":
+          await navigator.clipboard?.writeText(target.path);
+          break;
+        case "delete": {
+          const confirmed = window.confirm(
+            `Move "${target.name}" to the Recycle Bin?`,
+          );
+          if (!confirmed) {
+            break;
+          }
+          await deletePath(target.path);
+          if (openFilePath === target.path) {
+            setOpenFile(null);
+            setOpenFilePath(null);
+          }
+          setFocusedEntry((current) =>
+            current?.path === target.path ? null : current,
+          );
+          await refreshFolder(parentPath(target.path));
+          break;
+        }
+        default:
+          break;
+      }
+    } catch (cause) {
+      setError(`${String(cause)}`);
+    }
   }
 
   function updateOpenFileContent(content: string) {
@@ -534,6 +790,72 @@ function App() {
     };
   }, [find, saveOpenFile]);
 
+  // Explorer keyboard shortcuts: act on the focused tree item, mirroring the
+  // context menu. Only fire when focus is inside the explorer and not typing in
+  // the inline rename/create input.
+  useEffect(() => {
+    function handleExplorerKeyDown(event: KeyboardEvent) {
+      if (!focusedEntry || draft) {
+        return;
+      }
+
+      const active = document.activeElement as HTMLElement | null;
+      const insideExplorer = Boolean(active?.closest(".sidebar"));
+      if (!insideExplorer) {
+        return;
+      }
+      if (active?.classList.contains("tree-inline-input")) {
+        return;
+      }
+
+      const target = entryToTarget(focusedEntry);
+
+      // Rename — F2
+      if (event.key === "F2") {
+        event.preventDefault();
+        void handleContextAction("rename", target);
+        return;
+      }
+
+      // Delete — Del (keeps the confirm dialog)
+      if (event.key === "Delete") {
+        event.preventDefault();
+        void handleContextAction("delete", target);
+        return;
+      }
+
+      // Open / toggle — Enter
+      if (event.key === "Enter") {
+        event.preventDefault();
+        if (focusedEntry.is_dir) {
+          void toggleFolder(focusedEntry);
+        } else {
+          void handleContextAction("open", target);
+        }
+        return;
+      }
+
+      // Reveal in File Explorer — Shift+Alt+R
+      if (event.shiftKey && event.altKey && event.key.toLowerCase() === "r") {
+        event.preventDefault();
+        void handleContextAction("reveal", target);
+        return;
+      }
+
+      // Copy Path — Shift+Alt+C
+      if (event.shiftKey && event.altKey && event.key.toLowerCase() === "c") {
+        event.preventDefault();
+        void handleContextAction("copy-path", target);
+      }
+    }
+
+    window.addEventListener("keydown", handleExplorerKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleExplorerKeyDown);
+    };
+  });
+
   return (
     <div className={`app-window ${explorerHidden ? "explorer-hidden" : ""}`}>
       <TitleBar
@@ -556,9 +878,16 @@ function App() {
           loadingPaths={loadingPaths}
           selectedFolderPath={selectedFolderPath ?? undefined}
           activeFilePath={openFilePath ?? undefined}
+          contextPath={contextMenu?.path}
+          focusedPath={focusedEntry?.path ?? undefined}
+          draft={draft}
           onSelectLocation={selectLocation}
           onToggleFolder={toggleFolder}
           onSelectFile={selectFile}
+          onEntryContextMenu={openEntryContextMenu}
+          onRootContextMenu={openRootContextMenu}
+          onDraftSubmit={submitDraft}
+          onDraftCancel={cancelDraft}
         />
 
         <SidebarResizeHandle onPointerDown={startSidebarResize} />
@@ -596,6 +925,14 @@ function App() {
           renderedMarkdown={renderedMarkdown}
         />
       </div>
+
+      {contextMenu ? (
+        <ContextMenu
+          target={contextMenu}
+          onAction={(action, target) => void handleContextAction(action, target)}
+          onClose={() => setContextMenu(null)}
+        />
+      ) : null}
     </div>
   );
 }

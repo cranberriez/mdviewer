@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
+import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
 
 const TREE_BASE_INDENT = 10;
 const TREE_DEPTH_INDENT = 8;
@@ -14,8 +16,14 @@ interface TreeNodeProps {
   loadingPaths: Set<string>;
   selectedFolderPath?: string;
   activeFilePath?: string;
+  contextPath?: string;
+  focusedPath?: string;
+  draft: InlineDraft | null;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
+  onContextMenu: (entry: Entry, event: ReactMouseEvent) => void;
+  onDraftSubmit: (value: string) => void;
+  onDraftCancel: () => void;
 }
 
 export function TreeNode({
@@ -26,8 +34,14 @@ export function TreeNode({
   loadingPaths,
   selectedFolderPath,
   activeFilePath,
+  contextPath,
+  focusedPath,
+  draft,
   onToggleFolder,
   onSelectFile,
+  onContextMenu,
+  onDraftSubmit,
+  onDraftCancel,
 }: TreeNodeProps) {
   const rowRef = useRef<HTMLButtonElement | null>(null);
   const isExpanded = expanded.has(entry.path);
@@ -40,6 +54,12 @@ export function TreeNode({
   const isActive =
     isActiveFile || (entry.is_dir && isSelectedFolder && (!hasActiveFile || !isExpanded));
   const isContextOnly = isFolderContext && isExpanded;
+  const isContextTarget = contextPath === entry.path;
+  const isFocused = focusedPath === entry.path;
+
+  const isRenaming = draft?.mode === "rename" && draft.targetPath === entry.path;
+  const childDraft =
+    draft?.mode === "create" && draft.parentPath === entry.path ? draft : null;
 
   useEffect(() => {
     if (!isActiveFile) {
@@ -52,6 +72,33 @@ export function TreeNode({
     });
   }, [isActiveFile]);
 
+  // Move real DOM focus to the focused row so keyboard shortcuts have a target
+  // and the focus ring is visible. Guard against stealing focus from the inline
+  // rename/create input, which lives elsewhere in the tree.
+  useEffect(() => {
+    if (!isFocused) {
+      return;
+    }
+    const active = document.activeElement;
+    const editingInline = active?.classList.contains("tree-inline-input");
+    if (!editingInline && rowRef.current && active !== rowRef.current) {
+      rowRef.current.focus({ preventScroll: true });
+    }
+  }, [isFocused]);
+
+  if (isRenaming && draft) {
+    return (
+      <div role="treeitem">
+        <TreeInlineInput
+          draft={draft}
+          depth={depth}
+          onSubmit={onDraftSubmit}
+          onCancel={onDraftCancel}
+        />
+      </div>
+    );
+  }
+
   return (
     <div role="treeitem" aria-expanded={entry.is_dir ? isExpanded : undefined}>
       <button
@@ -59,11 +106,13 @@ export function TreeNode({
         type="button"
         className={`tree-row ${isActive ? "active" : ""} ${
           isContextOnly ? "active-context" : ""
-        }`}
+        } ${isContextTarget ? "context-target" : ""}`}
         style={{ paddingLeft: TREE_BASE_INDENT + depth * TREE_DEPTH_INDENT }}
+        tabIndex={isFocused ? 0 : -1}
         onClick={() =>
           entry.is_dir ? void onToggleFolder(entry) : void onSelectFile(entry)
         }
+        onContextMenu={(event) => onContextMenu(entry, event)}
         title={entry.path}
       >
         <span className="tree-chevron">
@@ -89,6 +138,14 @@ export function TreeNode({
 
       {entry.is_dir && isExpanded ? (
         <div role="group">
+          {childDraft ? (
+            <TreeInlineInput
+              draft={childDraft}
+              depth={depth + 1}
+              onSubmit={onDraftSubmit}
+              onCancel={onDraftCancel}
+            />
+          ) : null}
           {isLoading ? (
             <div
               className="tree-loading"
@@ -112,11 +169,17 @@ export function TreeNode({
                 loadingPaths={loadingPaths}
                 selectedFolderPath={selectedFolderPath}
                 activeFilePath={activeFilePath}
+                contextPath={contextPath}
+                focusedPath={focusedPath}
+                draft={draft}
                 onToggleFolder={onToggleFolder}
                 onSelectFile={onSelectFile}
+                onContextMenu={onContextMenu}
+                onDraftSubmit={onDraftSubmit}
+                onDraftCancel={onDraftCancel}
               />
             ))
-          ) : children ? (
+          ) : children && !childDraft ? (
             <div
               className="tree-loading"
               style={{
