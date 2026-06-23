@@ -13,7 +13,9 @@
 /* editor textarea */
 .editor {
   width: 100%;
+  max-width: 800px;
   height: 100%;
+  margin: 0 auto;
   resize: none;
   border: none;
   outline: none;
@@ -181,6 +183,9 @@
 
 /* plain text files render in mono */
 .plain {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
   font-family: var(--font-mono);
   font-size: calc(13px * var(--zoom));
   line-height: 1.7;

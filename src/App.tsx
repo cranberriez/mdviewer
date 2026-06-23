@@ -22,7 +22,7 @@ import type { Entry, OpenFile } from "./shared/types/files";
 import { fileKind, parentName } from "./shared/utils/path";
 import "./App.css";
 
-const DEFAULT_SIDEBAR_WIDTH = 260;
+const DEFAULT_SIDEBAR_WIDTH = 280;
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
 const MIN_CONTENT_WIDTH = 420;

@@ -108,14 +108,14 @@
 }
 
 .sidebar {
-  width: 260px;
-  flex: 0 0 260px;
+  width: 280px;
+  flex: 0 0 280px;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 0 6px 10px;
+  padding: 0 1px 10px 4px;
   background: var(--color-bg-window);
   transition:
     opacity 0.12s ease,
@@ -189,7 +189,7 @@
 
 .saved-row,
 .tree-row {
-  width: calc(100% - 8px);
+  width: 100%;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -204,7 +204,7 @@
 
 .saved-row {
   height: 29px;
-  margin: 0 4px;
+  margin: 0;
   padding: 0 8px;
 }
 
@@ -222,6 +222,7 @@
 
 .saved-row span,
 .tree-name {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -266,7 +267,7 @@
 
 .tree-row {
   height: 28px;
-  margin: 2px 4px;
+  margin: 2px 0;
   padding-right: 8px;
 }
 
@@ -276,6 +277,13 @@
   display: grid;
   place-items: center;
   color: var(--color-text-muted);
+}
+
+.saved-row > svg,
+.tree-row > svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
 }
 
 .tree-loading,
@@ -333,12 +341,84 @@
   color: #e7d1d1;
 }
 
+.view-mode-toggle {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-ctl);
+  background: var(--color-bg-window);
+}
+
+.view-mode-toggle-button {
+  width: 28px;
+  height: 24px;
+  flex: 0 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: default;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.view-mode-toggle-button:hover {
+  color: var(--color-text-primary);
+}
+
+.view-mode-toggle-button.active {
+  background: var(--color-bg-active);
+  color: #fff;
+}
+
+.view-mode-toggle-button svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
 .preview-pane {
+  container-type: inline-size;
   min-height: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.document-layout {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.document-panel {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.mode-edit .rendered-panel {
+  display: none;
+}
+
+@container (min-width: 960px) {
+  .mode-edit .rendered-panel {
+    display: flex;
+  }
+
+  .mode-edit .editor-panel {
+    border-right: 1px solid var(--color-border-base);
+  }
 }
 
 .file-meta {

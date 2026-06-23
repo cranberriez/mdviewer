@@ -28,12 +28,30 @@ export function PreviewPanel({
   onContentChange,
   renderedMarkdown,
 }: PreviewPanelProps) {
+  const previewContent = openFile ? (
+    openFile.kind === "md" ? (
+      <MarkdownPreview
+        ref={(node) => {
+          findTargetRef.current = node;
+        }}
+        html={renderedMarkdown}
+      />
+    ) : (
+      <PlainTextPreview
+        ref={(node) => {
+          findTargetRef.current = node;
+        }}
+        content={openFile.content}
+      />
+    )
+  ) : null;
+
   return (
     <main className="content" aria-label="Markdown preview">
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       {openFile ? (
-        <article className="preview-pane">
+        <article className={`preview-pane mode-${mode}`}>
           {actionBar}
           {findBar}
 
@@ -42,28 +60,22 @@ export function PreviewPanel({
             <span>{parentPath(openFile.path)}</span>
           </div>
 
-          {mode === "edit" ? (
-            <textarea
-              className="min-h-0 flex-1 resize-none border-0 bg-transparent px-6 pb-6 pt-1 font-mono text-[13px] leading-[1.7] text-text-primary outline-none placeholder:text-text-muted"
-              spellCheck={false}
-              value={openFile.content}
-              onChange={(event) => onContentChange(event.target.value)}
-            />
-          ) : openFile.kind === "md" ? (
-            <MarkdownPreview
-              ref={(node) => {
-                findTargetRef.current = node;
-              }}
-              html={renderedMarkdown}
-            />
-          ) : (
-            <PlainTextPreview
-              ref={(node) => {
-                findTargetRef.current = node;
-              }}
-              content={openFile.content}
-            />
-          )}
+          <div className="document-layout">
+            {mode === "edit" ? (
+              <section className="document-panel editor-panel" aria-label="Editor">
+                <textarea
+                  className="editor"
+                  spellCheck={false}
+                  value={openFile.content}
+                  onChange={(event) => onContentChange(event.target.value)}
+                />
+              </section>
+            ) : null}
+
+            <section className="document-panel rendered-panel" aria-label="Preview">
+              {previewContent}
+            </section>
+          </div>
         </article>
       ) : (
         <EmptyPreview />
