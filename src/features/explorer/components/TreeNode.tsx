@@ -11,6 +11,7 @@ interface TreeNodeProps {
   expanded: Set<string>;
   childrenCache: Record<string, Entry[]>;
   loadingPaths: Set<string>;
+  selectedFolderPath?: string;
   activeFilePath?: string;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
@@ -22,6 +23,7 @@ export function TreeNode({
   expanded,
   childrenCache,
   loadingPaths,
+  selectedFolderPath,
   activeFilePath,
   onToggleFolder,
   onSelectFile,
@@ -29,7 +31,9 @@ export function TreeNode({
   const isExpanded = expanded.has(entry.path);
   const children = childrenCache[entry.path];
   const isLoading = loadingPaths.has(entry.path);
-  const isActive = activeFilePath === entry.path;
+  const isActive = entry.is_dir
+    ? selectedFolderPath === entry.path
+    : activeFilePath === entry.path;
 
   return (
     <div role="treeitem" aria-expanded={entry.is_dir ? isExpanded : undefined}>
@@ -86,6 +90,7 @@ export function TreeNode({
                 expanded={expanded}
                 childrenCache={childrenCache}
                 loadingPaths={loadingPaths}
+                selectedFolderPath={selectedFolderPath}
                 activeFilePath={activeFilePath}
                 onToggleFolder={onToggleFolder}
                 onSelectFile={onSelectFile}

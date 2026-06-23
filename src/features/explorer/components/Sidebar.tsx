@@ -11,20 +11,21 @@ interface SidebarProps {
   expanded: Set<string>;
   childrenCache: Record<string, Entry[]>;
   loadingPaths: Set<string>;
+  selectedFolderPath?: string;
   activeFilePath?: string;
   onSelectLocation: (location: Entry) => Promise<void>;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
 }
 
-export function Sidebar({ width, locations, activeRoot, rootChildren, expanded, childrenCache, loadingPaths, activeFilePath, onSelectLocation, onToggleFolder, onSelectFile }: SidebarProps) {
+export function Sidebar({ width, locations, activeRoot, rootChildren, expanded, childrenCache, loadingPaths, selectedFolderPath, activeFilePath, onSelectLocation, onToggleFolder, onSelectFile }: SidebarProps) {
   return (
     <aside className="sidebar" style={{ width, flexBasis: width }} aria-label="File explorer">
       <section className="sidebar-section">
         <div className="section-label">Saved</div>
         <div className="saved-list">
           {locations.map((location) => (
-            <button type="button" className={`saved-row ${activeRoot?.path === location.path ? "active" : ""}`} key={location.path} onClick={() => void onSelectLocation(location)}>
+            <button type="button" className={`saved-row ${selectedFolderPath === location.path ? "active" : ""}`} key={location.path} onClick={() => void onSelectLocation(location)}>
               <Home size={15} />
               <span>{location.name}</span>
             </button>
@@ -53,6 +54,7 @@ export function Sidebar({ width, locations, activeRoot, rootChildren, expanded, 
                   expanded={expanded}
                   childrenCache={childrenCache}
                   loadingPaths={loadingPaths}
+                  selectedFolderPath={selectedFolderPath}
                   activeFilePath={activeFilePath}
                   onToggleFolder={onToggleFolder}
                   onSelectFile={onSelectFile}

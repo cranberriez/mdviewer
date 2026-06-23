@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
+  getCurrentWindow,
+  PhysicalPosition,
+  PhysicalSize,
+} from "@tauri-apps/api/window";
+import {
   defaultLocations,
   readFile,
   readFolder,
@@ -19,7 +24,20 @@ import { markdown } from "./features/preview/markdown";
 import { PreviewPanel } from "./features/preview/components/PreviewPanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
 import type { Entry, OpenFile } from "./shared/types/files";
-import { fileKind, parentName } from "./shared/utils/path";
+import {
+  fileKindFromPath,
+  fileName,
+  parentName,
+  parentPath,
+} from "./shared/utils/path";
+import {
+  loadAppConfiguration,
+  loadAppSession,
+  saveAppConfiguration,
+  saveAppSession,
+  type AppConfigurationState,
+  type StoredWindowFrame,
+} from "./shared/state/persistence";
 import "./App.css";
 
 const DEFAULT_SIDEBAR_WIDTH = 280;
@@ -37,20 +55,48 @@ function clampSidebarWidth(width: number) {
 }
 
 function App() {
+  const initialConfiguration = useMemo(() => loadAppConfiguration(), []);
+  const initialSession = useMemo(() => loadAppSession(), []);
   const [locations, setLocations] = useState<Entry[]>([]);
   const [activeRoot, setActiveRoot] = useState<Entry | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(initialSession.expandedPaths),
+  );
   const [childrenCache, setChildrenCache] = useState<Record<string, Entry[]>>({});
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  const [explorerHidden, setExplorerHidden] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
-  const [mode, setMode] = useState<FileViewMode>("preview");
+  const [explorerHidden, setExplorerHidden] = useState(
+    () => initialConfiguration.explorerHidden ?? false,
+  );
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    clampSidebarWidth(initialConfiguration.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH),
+  );
+  const [mode, setMode] = useState<FileViewMode>(
+    () => initialConfiguration.viewMode ?? "preview",
+  );
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [barMerged, setBarMerged] = useState(false);
+  const [barMerged, setBarMerged] = useState(
+    () => initialConfiguration.barMerged ?? false,
+  );
+  const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(
+    () =>
+      initialSession.selectedFolderPath ??
+      (initialSession.openFilePath ? parentPath(initialSession.openFilePath) : null),
+  );
+  const [windowFrame, setWindowFrame] = useState<StoredWindowFrame | undefined>(
+    () => initialConfiguration.windowFrame,
+  );
+  const [sessionHydrated, setSessionHydrated] = useState(false);
   const findTargetRef = useRef<HTMLElement | null>(null);
+  const configurationRef = useRef<AppConfigurationState>({
+    explorerHidden,
+    sidebarWidth,
+    barMerged,
+    viewMode: mode,
+    windowFrame,
+  });
 
   const renderedMarkdown = useMemo(() => {
     if (!openFile || openFile.kind !== "md") {
@@ -64,6 +110,140 @@ function App() {
     findTargetRef,
     `${openFile?.path ?? ""}:${openFile?.content ?? ""}:${mode}`,
   );
+
+  useEffect(() => {
+    const nextConfiguration: AppConfigurationState = {
+      explorerHidden,
+      sidebarWidth,
+      barMerged,
+      viewMode: mode,
+      windowFrame,
+    };
+
+    configurationRef.current = nextConfiguration;
+    saveAppConfiguration(nextConfiguration);
+  }, [barMerged, explorerHidden, mode, sidebarWidth, windowFrame]);
+
+  useEffect(() => {
+    if (!sessionHydrated) {
+      return;
+    }
+
+    saveAppSession({
+      activeRootPath: activeRoot?.path,
+      selectedFolderPath: selectedFolderPath ?? undefined,
+      openFilePath: openFile?.path,
+      expandedPaths: Array.from(expanded),
+    });
+  }, [
+    activeRoot?.path,
+    expanded,
+    openFile?.path,
+    selectedFolderPath,
+    sessionHydrated,
+  ]);
+
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    const unlisteners: Array<() => void> = [];
+    let cancelled = false;
+
+    async function captureWindowFrame() {
+      try {
+        const [size, position, maximized] = await Promise.all([
+          appWindow.innerSize(),
+          appWindow.outerPosition(),
+          appWindow.isMaximized(),
+        ]);
+
+        const nextFrame: StoredWindowFrame = {
+          width: size.width,
+          height: size.height,
+          x: position.x,
+          y: position.y,
+          maximized,
+        };
+
+        if (cancelled) {
+          return;
+        }
+
+        setWindowFrame(nextFrame);
+
+        const nextConfiguration = {
+          ...configurationRef.current,
+          windowFrame: nextFrame,
+        };
+        configurationRef.current = nextConfiguration;
+        saveAppConfiguration(nextConfiguration);
+      } catch {
+        // Window persistence is best effort outside the Tauri runtime.
+      }
+    }
+
+    async function restoreWindowFrame() {
+      const frame = initialConfiguration.windowFrame;
+      if (!frame) {
+        return;
+      }
+
+      try {
+        if (frame.maximized) {
+          await appWindow.setPosition(new PhysicalPosition(frame.x, frame.y));
+          await appWindow.setSize(new PhysicalSize(frame.width, frame.height));
+          await appWindow.maximize();
+          return;
+        }
+
+        await appWindow.setPosition(new PhysicalPosition(frame.x, frame.y));
+        await appWindow.setSize(new PhysicalSize(frame.width, frame.height));
+      } catch {
+        // Ignore stale monitor positions or unavailable window APIs.
+      }
+    }
+
+    void restoreWindowFrame();
+
+    void appWindow
+      .onResized(() => void captureWindowFrame())
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+        } else {
+          unlisteners.push(unlisten);
+        }
+      })
+      .catch(() => undefined);
+
+    void appWindow
+      .onMoved(() => void captureWindowFrame())
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+        } else {
+          unlisteners.push(unlisten);
+        }
+      })
+      .catch(() => undefined);
+
+    void appWindow
+      .onCloseRequested(async () => {
+        await captureWindowFrame();
+      })
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+        } else {
+          unlisteners.push(unlisten);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+      unlisteners.forEach((unlisten) => unlisten());
+    };
+  }, [initialConfiguration.windowFrame]);
 
   const saveOpenFile = useCallback(async () => {
     if (!openFile || saving) {
@@ -94,14 +274,45 @@ function App() {
         }
 
         setLocations(defaults);
-        const first = defaults[0] ?? null;
+        const restoredRoot =
+          defaults.find(
+            (location) => location.path === initialSession.activeRootPath,
+          ) ??
+          defaults.find(
+            (location) => location.path === initialSession.selectedFolderPath,
+          ) ??
+          null;
+        const first = restoredRoot ?? defaults[0] ?? null;
+        const restoredSelectedFolder =
+          initialSession.selectedFolderPath ??
+          (initialSession.openFilePath
+            ? parentPath(initialSession.openFilePath)
+            : first?.path ?? null);
+
         setActiveRoot(first);
+        setSelectedFolderPath(restoredSelectedFolder);
+
         if (first) {
-          void loadFolder(first.path);
+          await loadFolder(first.path);
+          await Promise.all(
+            initialSession.expandedPaths
+              .filter((path) => path !== first.path)
+              .map((path) => loadFolder(path, { quiet: true })),
+          );
+        }
+
+        if (initialSession.openFilePath) {
+          await openFileAtPath(initialSession.openFilePath, {
+            preserveMode: true,
+          });
         }
       } catch (cause) {
         if (!cancelled) {
           setError(`Unable to load default locations: ${String(cause)}`);
+        }
+      } finally {
+        if (!cancelled) {
+          setSessionHydrated(true);
         }
       }
     }
@@ -113,19 +324,23 @@ function App() {
     };
   }, []);
 
-  async function loadFolder(path: string) {
+  async function loadFolder(path: string, options?: { quiet?: boolean }) {
     if (childrenCache[path]) {
       return;
     }
 
-    setError(null);
+    if (!options?.quiet) {
+      setError(null);
+    }
     setLoadingPaths((current) => new Set(current).add(path));
 
     try {
       const children = await readFolder(path);
       setChildrenCache((current) => ({ ...current, [path]: children }));
     } catch (cause) {
-      setError(`Unable to read folder: ${String(cause)}`);
+      if (!options?.quiet) {
+        setError(`Unable to read folder: ${String(cause)}`);
+      }
     } finally {
       setLoadingPaths((current) => {
         const next = new Set(current);
@@ -135,20 +350,46 @@ function App() {
     }
   }
 
+  async function openFileAtPath(
+    path: string,
+    options?: { preserveMode?: boolean },
+  ) {
+    setError(null);
+
+    try {
+      const content = await readFile(path);
+      setOpenFile({
+        path,
+        name: fileName(path),
+        content,
+        kind: fileKindFromPath(path),
+      });
+      setSelectedFolderPath(parentPath(path));
+      setDirty(false);
+      if (!options?.preserveMode) {
+        setMode("preview");
+      }
+      find.close();
+    } catch (cause) {
+      setError(`Unable to read file: ${String(cause)}`);
+    }
+  }
+
   async function selectLocation(location: Entry) {
     setActiveRoot(location);
+    setSelectedFolderPath(location.path);
     setOpenFile(null);
     setExpanded(new Set());
     setError(null);
     setDirty(false);
     setMode("preview");
-    setBarMerged(false);
     find.close();
     await loadFolder(location.path);
   }
 
   async function toggleFolder(entry: Entry) {
     const willExpand = !expanded.has(entry.path);
+    setSelectedFolderPath(entry.path);
 
     setExpanded((current) => {
       const next = new Set(current);
@@ -166,22 +407,8 @@ function App() {
   }
 
   async function selectFile(entry: Entry) {
-    setError(null);
-
-    try {
-      const content = await readFile(entry.path);
-      setOpenFile({
-        path: entry.path,
-        name: entry.name,
-        content,
-        kind: fileKind(entry),
-      });
-      setDirty(false);
-      setMode("preview");
-      find.close();
-    } catch (cause) {
-      setError(`Unable to read file: ${String(cause)}`);
-    }
+    setSelectedFolderPath(parentPath(entry.path));
+    await openFileAtPath(entry.path);
   }
 
   function updateOpenFileContent(content: string) {
@@ -278,6 +505,7 @@ function App() {
           expanded={expanded}
           childrenCache={childrenCache}
           loadingPaths={loadingPaths}
+          selectedFolderPath={selectedFolderPath ?? undefined}
           activeFilePath={openFile?.path}
           onSelectLocation={selectLocation}
           onToggleFolder={toggleFolder}

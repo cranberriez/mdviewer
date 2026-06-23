@@ -33,34 +33,29 @@ export function TitleBar({
         <PanelLeft size={15} />
       </button>
 
-      {fileActionsSlot ? (
-        <div className="flex min-w-0 items-center gap-1">
-          <span className="mr-1 max-w-40 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-text-muted">
-            {title}
-          </span>
-          {fileActionsSlot}
-        </div>
-      ) : (
-        <div className="titlebar-crumb" data-tauri-drag-region>
-          <span data-tauri-drag-region>{rootName ?? "Home"}</span>
-          {scopeName ? (
-            <>
-              <span className="crumb-separator" data-tauri-drag-region>
-                /
-              </span>
-              <span data-tauri-drag-region>{scopeName}</span>
-            </>
-          ) : null}
-          <span className="crumb-separator" data-tauri-drag-region>
-            /
-          </span>
-          <span className="crumb-name" data-tauri-drag-region>
-            {title}
-          </span>
-        </div>
-      )}
+      <div className="titlebar-crumb" data-tauri-drag-region>
+        <span data-tauri-drag-region>{rootName ?? "Home"}</span>
+        {scopeName ? (
+          <>
+            <span className="crumb-separator" data-tauri-drag-region>
+              /
+            </span>
+            <span data-tauri-drag-region>{scopeName}</span>
+          </>
+        ) : null}
+        <span className="crumb-separator" data-tauri-drag-region>
+          /
+        </span>
+        <span className="crumb-name" data-tauri-drag-region>
+          {title}
+        </span>
+      </div>
 
       <div className="titlebar-drag-space" data-tauri-drag-region />
+
+      {fileActionsSlot ? (
+        <div className="titlebar-actions">{fileActionsSlot}</div>
+      ) : null}
 
       <div className="window-controls">
         <button

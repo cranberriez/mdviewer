@@ -34,7 +34,7 @@ export function FileActionControls({
   saving,
 }: FileActionControlsProps) {
   return (
-    <>
+    <div className="flex items-center gap-2">
       <div className="flex items-center gap-0.5">
         <IconActionButton
           className={dirty ? "text-text-primary" : ""}
@@ -59,8 +59,6 @@ export function FileActionControls({
           <Search size={15} />
         </IconActionButton>
       </div>
-
-      <div className="flex-1" />
 
       <div className="flex items-center gap-0.5">
         <IconActionButton
@@ -99,6 +97,6 @@ export function FileActionControls({
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }
