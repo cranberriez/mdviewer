@@ -1,11 +1,14 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { FolderOpen, Moon, Pin, PinOff, Sun } from "lucide-react";
-import type { Entry } from "../../../shared/types/files";
+import { Folder, FolderOpen, Moon, Pin, PinOff, Search, Sun } from "lucide-react";
+import type { Entry, FileSearchMatch } from "../../../shared/types/files";
 import type { AppTheme } from "../../../shared/state/persistence";
 import { EmptySidebar } from "./EmptySidebar";
 import { TreeNode } from "./TreeNode";
 import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
 import { getIconComponent } from "./IconPickerMenu";
+import { CrossFileSearchPanel } from "./CrossFileSearchPanel";
+
+export type SidebarMode = "explorer" | "search";
 
 interface SidebarProps {
   width: number;
@@ -20,6 +23,18 @@ interface SidebarProps {
   contextPath?: string;
   focusedPath?: string;
   draft: InlineDraft | null;
+  sidebarMode: SidebarMode;
+  searchQuery: string;
+  searchedQuery: string;
+  searchResults: FileSearchMatch[];
+  searchLoading: boolean;
+  searchError: string | null;
+  searchTruncated: boolean;
+  onSidebarModeChange: (mode: SidebarMode) => void;
+  onSearchQueryChange: (query: string) => void;
+  onSearchClear: () => void;
+  onSearchSubmit: () => void;
+  onOpenSearchResult: (result: FileSearchMatch) => void;
   onSelectLocation: (location: Entry) => Promise<void>;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
@@ -55,6 +70,18 @@ export function Sidebar({
   contextPath,
   focusedPath,
   draft,
+  sidebarMode,
+  searchQuery,
+  searchedQuery,
+  searchResults,
+  searchLoading,
+  searchError,
+  searchTruncated,
+  onSidebarModeChange,
+  onSearchQueryChange,
+  onSearchClear,
+  onSearchSubmit,
+  onOpenSearchResult,
   onSelectLocation,
   onToggleFolder,
   onSelectFile,
@@ -76,12 +103,36 @@ export function Sidebar({
     draft?.mode === "create" && activeRoot && draft.parentPath === activeRoot.path
       ? draft
       : null;
+  const showingSearchResults = sidebarMode === "search" && Boolean(searchedQuery.trim());
 
   return (
     <aside className="sidebar" style={{ width, flexBasis: width }} aria-label="File explorer">
       <section className="sidebar-section">
         <div className="saved-heading">
-          <div className="section-label">Saved</div>
+          <div className="sidebar-view-switch" role="tablist" aria-label="Sidebar view">
+            <button
+              type="button"
+              className={`sidebar-view-button ${sidebarMode === "explorer" ? "active" : ""}`}
+              role="tab"
+              aria-selected={sidebarMode === "explorer"}
+              title="Explorer"
+              aria-label="Explorer"
+              onClick={() => onSidebarModeChange("explorer")}
+            >
+              <Folder size={14} />
+            </button>
+            <button
+              type="button"
+              className={`sidebar-view-button ${sidebarMode === "search" ? "active" : ""}`}
+              role="tab"
+              aria-selected={sidebarMode === "search"}
+              title="Search files"
+              aria-label="Search files"
+              onClick={() => onSidebarModeChange("search")}
+            >
+              <Search size={14} />
+            </button>
+          </div>
           <div className="saved-actions">
             <button
               type="button"
@@ -113,85 +164,121 @@ export function Sidebar({
             </button>
           </div>
         </div>
-        <div className="saved-list">
-          {locations.map((location) => {
-            const isHome = homePath ? location.path === homePath : false;
-            const iconName = isHome ? "Home" : (locationIcons?.[location.path] ?? "Folder");
-            const LocationIcon = getIconComponent(iconName);
-            return (
-              <button
-                type="button"
-                className={`saved-row ${selectedFolderPath === location.path ? "active" : ""}`}
-                key={location.path}
-                onClick={() => void onSelectLocation(location)}
-                onContextMenu={(event) => onSavedContextMenu(location, event)}
-              >
-                <LocationIcon size={15} />
-                <span>{location.name}</span>
-              </button>
-            );
-          })}
-        </div>
+        {sidebarMode === "search" ? (
+          <CrossFileSearchPanel
+            root={activeRoot?.path ?? null}
+            query={searchQuery}
+            searchedQuery={searchedQuery}
+            results={searchResults}
+            loading={searchLoading}
+            error={searchError}
+            truncated={searchTruncated}
+            showForm
+            showResults={false}
+            onQueryChange={onSearchQueryChange}
+            onClear={onSearchClear}
+            onSubmit={onSearchSubmit}
+            onOpenResult={onOpenSearchResult}
+          />
+        ) : (
+          <div className="saved-list">
+            {locations.map((location) => {
+              const isHome = homePath ? location.path === homePath : false;
+              const iconName = isHome ? "Home" : (locationIcons?.[location.path] ?? "Folder");
+              const LocationIcon = getIconComponent(iconName);
+              return (
+                <button
+                  type="button"
+                  className={`saved-row ${selectedFolderPath === location.path ? "active" : ""}`}
+                  key={location.path}
+                  onClick={() => void onSelectLocation(location)}
+                  onContextMenu={(event) => onSavedContextMenu(location, event)}
+                >
+                  <LocationIcon size={15} />
+                  <span>{location.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <section className="sidebar-section explorer-section">
         <div className="explorer-heading">
           <div>
-            <div className="section-label">Explorer</div>
+            <div className="section-label">{showingSearchResults ? "Search" : "Explorer"}</div>
           </div>
-          {activeRoot ? <span className="entry-count">{rootChildren ? rootChildren.length : "..."}</span> : null}
+          {!showingSearchResults && activeRoot ? <span className="entry-count">{rootChildren ? rootChildren.length : "..."}</span> : null}
         </div>
 
-        <div
-          className="tree"
-          role="tree"
-          onContextMenu={(event) => {
-            // Only handle right-clicks on empty tree space; rows stop propagation
-            // by handling their own contextmenu.
-            if (event.target === event.currentTarget) {
-              onRootContextMenu(event);
-            }
-          }}
-        >
-          {rootDraft ? (
-            <TreeInlineInput
-              draft={rootDraft}
-              depth={0}
-              onSubmit={onDraftSubmit}
-              onCancel={onDraftCancel}
-            />
-          ) : null}
-          {!activeRoot ? (
-            <EmptySidebar message="No saved locations found." />
-          ) : rootChildren ? (
-            rootChildren.length > 0 ? (
-              rootChildren.map((entry) => (
-                <TreeNode
-                  key={entry.path}
-                  entry={entry}
-                  depth={0}
-                  expanded={expanded}
-                  childrenCache={childrenCache}
-                  loadingPaths={loadingPaths}
-                  selectedFolderPath={selectedFolderPath}
-                  activeFilePath={activeFilePath}
-                  contextPath={contextPath}
-                  focusedPath={focusedPath}
-                  draft={draft}
-                  onToggleFolder={onToggleFolder}
-                  onSelectFile={onSelectFile}
-                  onContextMenu={onEntryContextMenu}
-                  onDraftSubmit={onDraftSubmit}
-                  onDraftCancel={onDraftCancel}
-                />
-              ))
-            ) : rootDraft ? null : (
-              <EmptySidebar message="No markdown or text files here." />
-            )
-          ) : (
-            <EmptySidebar message="Loading folder..." />
-          )}
-        </div>
+        {showingSearchResults ? (
+          <CrossFileSearchPanel
+            root={activeRoot?.path ?? null}
+            query={searchQuery}
+            searchedQuery={searchedQuery}
+            results={searchResults}
+            loading={searchLoading}
+            error={searchError}
+            truncated={searchTruncated}
+            showForm={false}
+            showResults
+            onQueryChange={onSearchQueryChange}
+            onClear={onSearchClear}
+            onSubmit={onSearchSubmit}
+            onOpenResult={onOpenSearchResult}
+          />
+        ) : (
+          <div
+            className="tree"
+            role="tree"
+            onContextMenu={(event) => {
+              // Only handle right-clicks on empty tree space; rows stop propagation
+              // by handling their own contextmenu.
+              if (event.target === event.currentTarget) {
+                onRootContextMenu(event);
+              }
+            }}
+          >
+            {rootDraft ? (
+              <TreeInlineInput
+                draft={rootDraft}
+                depth={0}
+                onSubmit={onDraftSubmit}
+                onCancel={onDraftCancel}
+              />
+            ) : null}
+            {!activeRoot ? (
+              <EmptySidebar message="No saved locations found." />
+            ) : rootChildren ? (
+              rootChildren.length > 0 ? (
+                rootChildren.map((entry) => (
+                  <TreeNode
+                    key={entry.path}
+                    entry={entry}
+                    depth={0}
+                    expanded={expanded}
+                    childrenCache={childrenCache}
+                    loadingPaths={loadingPaths}
+                    selectedFolderPath={selectedFolderPath}
+                    activeFilePath={activeFilePath}
+                    contextPath={contextPath}
+                    focusedPath={focusedPath}
+                    draft={draft}
+                    onToggleFolder={onToggleFolder}
+                    onSelectFile={onSelectFile}
+                    onContextMenu={onEntryContextMenu}
+                    onDraftSubmit={onDraftSubmit}
+                    onDraftCancel={onDraftCancel}
+                  />
+                ))
+              ) : rootDraft ? null : (
+                <EmptySidebar message="No markdown or text files here." />
+              )
+            ) : (
+              <EmptySidebar message="Loading folder..." />
+            )}
+          </div>
+        )}
       </section>
 
       <div className="sidebar-footer">

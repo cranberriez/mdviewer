@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
-import { createFile, createFolder, defaultLocations, deletePath, pickFolder, readFile, readFolder, renamePath, resolveLinkPath, revealInExplorer, writeFile } from "./features/files/api/filesApi";
+import { createFile, createFolder, defaultLocations, deletePath, pickFolder, readFile, readFolder, renamePath, resolveLinkPath, revealInExplorer, searchFiles, writeFile } from "./features/files/api/filesApi";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
-import { Sidebar } from "./features/explorer/components/Sidebar";
+import { Sidebar, type SidebarMode } from "./features/explorer/components/Sidebar";
 import { ContextMenu, type ContextMenuAction, type ContextMenuTarget } from "./features/explorer/components/ContextMenu";
 import { SavedContextMenu, type SavedMenuAction } from "./features/explorer/components/SavedContextMenu";
 import { IconPickerMenu } from "./features/explorer/components/IconPickerMenu";
@@ -19,7 +19,7 @@ import { markdown } from "./features/preview/markdown";
 import { slugify } from "./features/preview/slug";
 import { PreviewPanel } from "./features/preview/components/PreviewPanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
-import type { Entry, OpenFile } from "./shared/types/files";
+import type { Entry, FileSearchMatch, OpenFile } from "./shared/types/files";
 import { fileExtension, fileKindFromPath, fileName, isVisibleFileName, joinPath, parentName, parentPath, relativePath } from "./shared/utils/path";
 import { loadAppConfiguration, loadAppSession, saveAppConfiguration, saveAppSession, type AppConfigurationState, type AppTheme, type StoredWindowFrame } from "./shared/state/persistence";
 import "./App.css";
@@ -98,9 +98,18 @@ function App() {
   );
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
   const [draft, setDraft] = useState<InlineDraft | null>(null);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>("explorer");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchedQuery, setSearchedQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<FileSearchMatch[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchTruncated, setSearchTruncated] = useState(false);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const findTargetRef = useRef<HTMLElement | null>(null);
+  const searchRequestRef = useRef(0);
+  const pendingFindQueryRef = useRef<string | null>(null);
   // A heading fragment to scroll to once the just-opened file has rendered
   // (set when following a cross-file link like `doc.md#section`).
   const pendingAnchorRef = useRef<string | null>(null);
@@ -172,6 +181,20 @@ function App() {
   }, [openFile]);
 
   const find = useFindInPreview(findTargetRef, `${openFile?.path ?? ""}:${mode}:${openFile?.kind === "md" ? renderedMarkdown : (openFile?.content ?? "")}`);
+
+  useEffect(() => {
+    const query = pendingFindQueryRef.current;
+    if (!query || mode !== "preview") {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      find.openWithQuery(query);
+      pendingFindQueryRef.current = null;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [find, mode, openFile?.path, renderedMarkdown]);
 
   // After following a cross-file link with a #fragment, scroll to the heading
   // once the new document has rendered into the preview. The preview container
@@ -578,6 +601,10 @@ function App() {
     setDirty(false);
     setMode("preview");
     find.close();
+    setSearchResults([]);
+    setSearchedQuery("");
+    setSearchError(null);
+    setSearchTruncated(false);
     await loadFolder(location.path);
   }
 
@@ -604,6 +631,59 @@ function App() {
   async function selectFile(entry: Entry) {
     setFocusedEntry(entry);
     await openFileAtPath(entry.path);
+  }
+
+  async function runCrossFileSearch() {
+    const root = activeRoot;
+    const query = searchQuery.trim();
+    setSidebarMode("search");
+    setSearchError(null);
+
+    if (!root || !query) {
+      setSearchedQuery(query);
+      setSearchResults([]);
+      setSearchTruncated(false);
+      return;
+    }
+
+    const requestId = searchRequestRef.current + 1;
+    searchRequestRef.current = requestId;
+    setSearchLoading(true);
+    setSearchedQuery(query);
+    setSearchResults([]);
+    setSearchTruncated(false);
+
+    try {
+      const response = await searchFiles(root.path, query);
+      if (searchRequestRef.current !== requestId) {
+        return;
+      }
+      setSearchResults(response.matches);
+      setSearchTruncated(response.truncated);
+    } catch (cause) {
+      if (searchRequestRef.current === requestId) {
+        setSearchError(`Unable to search files: ${String(cause)}`);
+      }
+    } finally {
+      if (searchRequestRef.current === requestId) {
+        setSearchLoading(false);
+      }
+    }
+  }
+
+  async function openSearchResult(result: FileSearchMatch) {
+    pendingFindQueryRef.current = searchedQuery || searchQuery.trim();
+    await openFileAtPath(result.path, { mode: "preview" });
+  }
+
+  function clearCrossFileSearch() {
+    searchRequestRef.current += 1;
+    setSearchQuery("");
+    setSearchedQuery("");
+    setSearchResults([]);
+    setSearchError(null);
+    setSearchTruncated(false);
+    setSearchLoading(false);
   }
 
   function entryToTarget(entry: Entry, x = 0, y = 0): ContextMenuTarget {
@@ -1013,6 +1093,13 @@ function App() {
         void saveOpenFile();
       }
 
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setExplorerHidden(false);
+        setSidebarMode("search");
+        return;
+      }
+
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
         if (!find.open) {
@@ -1120,6 +1207,18 @@ function App() {
           contextPath={contextMenu?.path}
           focusedPath={focusedEntry?.path ?? undefined}
           draft={draft}
+          sidebarMode={sidebarMode}
+          searchQuery={searchQuery}
+          searchedQuery={searchedQuery}
+          searchResults={searchResults}
+          searchLoading={searchLoading}
+          searchError={searchError}
+          searchTruncated={searchTruncated}
+          onSidebarModeChange={setSidebarMode}
+          onSearchQueryChange={setSearchQuery}
+          onSearchClear={clearCrossFileSearch}
+          onSearchSubmit={() => void runCrossFileSearch()}
+          onOpenSearchResult={(result) => void openSearchResult(result)}
           onSelectLocation={selectLocation}
           onToggleFolder={toggleFolder}
           onSelectFile={selectFile}
