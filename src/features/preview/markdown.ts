@@ -1,10 +1,13 @@
 import MarkdownIt from "markdown-it";
+import taskLists from "markdown-it-task-lists";
 import { createSlugTracker } from "./slug";
 
 export const markdown = new MarkdownIt({
   html: false,
   linkify: true,
   typographer: true,
+}).use(taskLists, {
+  enabled: false,
 });
 
 /**

@@ -6,6 +6,7 @@ import {
   useRef,
   type FormEvent,
   type KeyboardEvent,
+  type ChangeEvent,
   type UIEventHandler,
 } from "react";
 import {
@@ -517,7 +518,6 @@ function blockAutoFormatBeforeInput(editor: HTMLElement, data: string) {
       const text = document.createTextNode(fullText.slice(5));
 
       checkbox.type = "checkbox";
-      checkbox.disabled = true;
       checkbox.checked = beforeCaret === "- [x]";
       item.append(checkbox, " ", text);
       list.append(item);
@@ -677,7 +677,6 @@ function insertChecklist(range: Range) {
     const text = document.createTextNode(line);
 
     checkbox.type = "checkbox";
-    checkbox.disabled = true;
     item.append(checkbox, " ", text);
     list.append(item);
     selectedNode ??= text;
@@ -865,6 +864,16 @@ export const VisualMarkdownEditor = forwardRef<
     [commitDom],
   );
 
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLDivElement>) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.type === "checkbox") {
+        commitDom();
+      }
+    },
+    [commitDom],
+  );
+
   return (
     <div
       ref={editorRef}
@@ -884,6 +893,7 @@ export const VisualMarkdownEditor = forwardRef<
         focusedRef.current = true;
       }}
       onBeforeInput={handleBeforeInput}
+      onChange={handleChange}
       onInput={commitDom}
       onKeyDown={handleKeyDown}
       onScroll={onScroll}
