@@ -19,6 +19,11 @@ export function TitleBar({
   title,
   onToggleExplorer,
 }: TitleBarProps) {
+  // Avoid a redundant trailing crumb when the title just repeats the root
+  // (e.g. "Home / Home" with no file open and no deeper scope).
+  const rootLabel = rootName ?? "Home";
+  const showTitleSegment = Boolean(scopeName) || title !== rootLabel;
+
   return (
     <header className="titlebar" data-tauri-drag-region>
       <button
@@ -43,12 +48,16 @@ export function TitleBar({
             <span data-tauri-drag-region>{scopeName}</span>
           </>
         ) : null}
-        <span className="crumb-separator" data-tauri-drag-region>
-          /
-        </span>
-        <span className="crumb-name" data-tauri-drag-region>
-          {title}
-        </span>
+        {showTitleSegment ? (
+          <>
+            <span className="crumb-separator" data-tauri-drag-region>
+              /
+            </span>
+            <span className="crumb-name" data-tauri-drag-region>
+              {title}
+            </span>
+          </>
+        ) : null}
       </div>
 
       <div className="titlebar-drag-space" data-tauri-drag-region />

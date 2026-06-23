@@ -13,6 +13,7 @@ import {
   createFolder,
   defaultLocations,
   deletePath,
+  pickFolder,
   readFile,
   readFolder,
   renamePath,
@@ -25,6 +26,10 @@ import {
   type ContextMenuAction,
   type ContextMenuTarget,
 } from "./features/explorer/components/ContextMenu";
+import {
+  SavedContextMenu,
+  type SavedMenuAction,
+} from "./features/explorer/components/SavedContextMenu";
 import type { InlineDraft } from "./features/explorer/components/TreeInlineInput";
 import { SidebarResizeHandle } from "./features/explorer/components/SidebarResizeHandle";
 import { FileActionBar } from "./features/file-actions/components/FileActionBar";
@@ -48,6 +53,7 @@ import {
   joinPath,
   parentName,
   parentPath,
+  relativePath,
 } from "./shared/utils/path";
 import {
   loadAppConfiguration,
@@ -102,7 +108,13 @@ function findContainingLocation(locations: Entry[], path?: string) {
 function App() {
   const initialConfiguration = useMemo(() => loadAppConfiguration(), []);
   const initialSession = useMemo(() => loadAppSession(), []);
-  const [locations, setLocations] = useState<Entry[]>([]);
+  const [defaultLocs, setDefaultLocs] = useState<Entry[]>([]);
+  const [pinnedLocations, setPinnedLocations] = useState<Entry[]>(
+    () => initialConfiguration.pinnedLocations ?? [],
+  );
+  const [removedDefaultPaths, setRemovedDefaultPaths] = useState<string[]>(
+    () => initialConfiguration.removedDefaultPaths ?? [],
+  );
   const [activeRoot, setActiveRoot] = useState<Entry | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(initialSession.expandedPaths),
@@ -141,6 +153,11 @@ function App() {
     () => initialConfiguration.windowFrame,
   );
   const [contextMenu, setContextMenu] = useState<ContextMenuTarget | null>(null);
+  const [savedMenu, setSavedMenu] = useState<{
+    location: Entry;
+    x: number;
+    y: number;
+  } | null>(null);
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
   const [draft, setDraft] = useState<InlineDraft | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
@@ -151,7 +168,58 @@ function App() {
     barMerged,
     viewMode: mode,
     windowFrame,
+    pinnedLocations,
+    removedDefaultPaths,
   });
+
+  // Home is the first default location and can never be unpinned.
+  const homePath = defaultLocs[0]?.path;
+
+  // The Saved list = defaults (minus user-removed) followed by custom pins,
+  // de-duplicated by path. Home always stays first.
+  const locations = useMemo<Entry[]>(() => {
+    const removed = new Set(
+      removedDefaultPaths.map((path) => comparablePath(path)),
+    );
+    const seen = new Set<string>();
+    const result: Entry[] = [];
+
+    for (const location of defaultLocs) {
+      const key = comparablePath(location.path);
+      const isHome = homePath ? comparablePath(homePath) === key : false;
+      if (!isHome && removed.has(key)) {
+        continue;
+      }
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      result.push(location);
+    }
+
+    for (const location of pinnedLocations) {
+      const key = comparablePath(location.path);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      result.push(location);
+    }
+
+    return result;
+  }, [defaultLocs, pinnedLocations, removedDefaultPaths, homePath]);
+
+  function isPinnable(path: string) {
+    const key = comparablePath(path);
+    return !locations.some((location) => comparablePath(location.path) === key);
+  }
+
+  function isUnpinnable(location: Entry) {
+    if (homePath && comparablePath(homePath) === comparablePath(location.path)) {
+      return false;
+    }
+    return true;
+  }
 
   const renderedMarkdown = useMemo(() => {
     if (!openFile || openFile.kind !== "md") {
@@ -173,11 +241,21 @@ function App() {
       barMerged,
       viewMode: mode,
       windowFrame,
+      pinnedLocations,
+      removedDefaultPaths,
     };
 
     configurationRef.current = nextConfiguration;
     saveAppConfiguration(nextConfiguration);
-  }, [barMerged, explorerHidden, mode, sidebarWidth, windowFrame]);
+  }, [
+    barMerged,
+    explorerHidden,
+    mode,
+    sidebarWidth,
+    windowFrame,
+    pinnedLocations,
+    removedDefaultPaths,
+  ]);
 
   useEffect(() => {
     if (!sessionHydrated) {
@@ -328,16 +406,20 @@ function App() {
           return;
         }
 
-        setLocations(defaults);
+        setDefaultLocs(defaults);
+        const restorable = [
+          ...defaults,
+          ...(initialConfiguration.pinnedLocations ?? []),
+        ];
         const restoredRoot =
-          defaults.find(
+          restorable.find(
             (location) => location.path === initialSession.activeRootPath,
           ) ??
-          defaults.find(
+          restorable.find(
             (location) => location.path === initialSession.selectedFolderPath,
           ) ??
-          findContainingLocation(defaults, initialSession.openFilePath) ??
-          findContainingLocation(defaults, initialSession.selectedFolderPath) ??
+          findContainingLocation(restorable, initialSession.openFilePath) ??
+          findContainingLocation(restorable, initialSession.selectedFolderPath) ??
           null;
         const first = restoredRoot ?? defaults[0] ?? null;
         const restoredSelectedFolder =
@@ -513,6 +595,103 @@ function App() {
     });
   }
 
+  function openSavedContextMenu(location: Entry, event: ReactMouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu(null);
+    setSavedMenu({ location, x: event.clientX, y: event.clientY });
+  }
+
+  // Add a folder to the Saved list. Re-pinning a previously removed default
+  // simply clears it from the removed set rather than duplicating it.
+  function pinFolder(entry: Entry) {
+    const key = comparablePath(entry.path);
+    const isDefault = defaultLocs.some(
+      (location) => comparablePath(location.path) === key,
+    );
+
+    if (isDefault) {
+      setRemovedDefaultPaths((current) =>
+        current.filter((path) => comparablePath(path) !== key),
+      );
+      return;
+    }
+
+    setPinnedLocations((current) =>
+      current.some((location) => comparablePath(location.path) === key)
+        ? current
+        : [...current, { ...entry, is_dir: true, kind: "folder" }],
+    );
+  }
+
+  // Open a folder via the native picker and make it the explorer root, without
+  // adding it to Saved. The user can pin it afterwards (right-click the explorer).
+  async function openFolderAsRoot() {
+    try {
+      const folder = await pickFolder();
+      if (!folder) {
+        return;
+      }
+      await selectLocation(folder);
+    } catch (cause) {
+      setError(`Unable to open folder: ${String(cause)}`);
+    }
+  }
+
+  // Remove a Saved location. Home cannot be unpinned. Removing a default is
+  // recorded so it stays hidden; removing a custom pin drops it.
+  function unpinLocation(location: Entry) {
+    if (!isUnpinnable(location)) {
+      return;
+    }
+
+    const key = comparablePath(location.path);
+    const isDefault = defaultLocs.some(
+      (entry) => comparablePath(entry.path) === key,
+    );
+
+    if (isDefault) {
+      setRemovedDefaultPaths((current) =>
+        current.some((path) => comparablePath(path) === key)
+          ? current
+          : [...current, location.path],
+      );
+    } else {
+      setPinnedLocations((current) =>
+        current.filter((entry) => comparablePath(entry.path) !== key),
+      );
+    }
+  }
+
+  async function handleSavedAction(action: SavedMenuAction, location: Entry) {
+    setSavedMenu(null);
+
+    try {
+      switch (action) {
+        case "reveal":
+          await revealInExplorer(location.path);
+          break;
+        case "copy-path":
+          await navigator.clipboard?.writeText(location.path);
+          break;
+        case "copy-relative-path":
+          await navigator.clipboard?.writeText(
+            activeRoot
+              ? relativePath(activeRoot.path, location.path)
+              : location.path,
+          );
+          break;
+        case "unpin":
+          unpinLocation(location);
+          break;
+        default:
+          break;
+      }
+    } catch (cause) {
+      setError(`${String(cause)}`);
+    }
+  }
+
   // Ensure a folder is expanded and its children are loaded so a new draft row
   // is visible inside it.
   async function ensureFolderOpen(path: string) {
@@ -660,6 +839,14 @@ function App() {
         case "new-folder":
           await startCreateDraft(target.path, "folder");
           break;
+        case "pin":
+          pinFolder({
+            name: target.name,
+            path: target.path,
+            is_dir: true,
+            kind: "folder",
+          });
+          break;
         case "rename":
           startRenameDraft({
             name: target.name,
@@ -678,6 +865,11 @@ function App() {
           break;
         case "copy-path":
           await navigator.clipboard?.writeText(target.path);
+          break;
+        case "copy-relative-path":
+          await navigator.clipboard?.writeText(
+            activeRoot ? relativePath(activeRoot.path, target.path) : target.path,
+          );
           break;
         case "delete": {
           const confirmed = window.confirm(
@@ -730,6 +922,14 @@ function App() {
   }
 
   const title = openFile?.name ?? activeRoot?.name ?? "Markdown Viewer";
+  // Show the open file's parent folder as a middle crumb, but only when it
+  // isn't the root itself (otherwise the root name would appear twice).
+  const breadcrumbScope =
+    openFile &&
+    activeRoot &&
+    comparablePath(parentPath(openFile.path)) !== comparablePath(activeRoot.path)
+      ? parentName(openFile.path)
+      : null;
   const rootChildren = activeRoot ? childrenCache[activeRoot.path] : undefined;
   const fileActionControls = openFile ? (
     <FileActionControls
@@ -862,7 +1062,7 @@ function App() {
         fileActionsSlot={barMerged ? fileActionControls : null}
         explorerHidden={explorerHidden}
         rootName={activeRoot?.name}
-        scopeName={openFile ? parentName(openFile.path) : null}
+        scopeName={breadcrumbScope}
         title={title}
         onToggleExplorer={() => setExplorerHidden((hidden) => !hidden)}
       />
@@ -886,6 +1086,8 @@ function App() {
           onSelectFile={selectFile}
           onEntryContextMenu={openEntryContextMenu}
           onRootContextMenu={openRootContextMenu}
+          onSavedContextMenu={openSavedContextMenu}
+          onOpenFolder={() => void openFolderAsRoot()}
           onDraftSubmit={submitDraft}
           onDraftCancel={cancelDraft}
         />
@@ -929,8 +1131,22 @@ function App() {
       {contextMenu ? (
         <ContextMenu
           target={contextMenu}
+          canPin={contextMenu.kind === "folder" && isPinnable(contextMenu.path)}
           onAction={(action, target) => void handleContextAction(action, target)}
           onClose={() => setContextMenu(null)}
+        />
+      ) : null}
+
+      {savedMenu ? (
+        <SavedContextMenu
+          location={savedMenu.location}
+          x={savedMenu.x}
+          y={savedMenu.y}
+          canUnpin={isUnpinnable(savedMenu.location)}
+          onAction={(action, location) =>
+            void handleSavedAction(action, location)
+          }
+          onClose={() => setSavedMenu(null)}
         />
       ) : null}
     </div>

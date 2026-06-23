@@ -205,10 +205,28 @@ fn display_name(path: &Path) -> String {
         .unwrap_or_else(|| path.display().to_string())
 }
 
+/// Build a Saved-location Entry for an existing folder path (used when pinning a
+/// folder picked from the native dialog).
+#[tauri::command]
+fn folder_entry(path: String) -> Result<Entry, String> {
+    let target = Path::new(&path);
+    if !target.is_dir() {
+        return Err(format!("\"{}\" is not a folder", path));
+    }
+
+    Ok(Entry {
+        name: display_name(target),
+        path: target.display().to_string(),
+        is_dir: true,
+        kind: "folder".to_string(),
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             default_locations,
             read_dir,
@@ -218,7 +236,8 @@ pub fn run() {
             create_folder,
             rename_path,
             delete_path,
-            reveal_in_explorer
+            reveal_in_explorer,
+            folder_entry
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

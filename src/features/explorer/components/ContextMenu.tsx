@@ -7,6 +7,7 @@ import {
   FolderPlus,
   Link2,
   Pencil,
+  Pin,
   Scissors,
   SquareArrowOutUpRight,
   TerminalSquare,
@@ -28,9 +29,11 @@ export interface ContextMenuTarget {
 export type ContextMenuAction =
   | "new-file"
   | "new-folder"
+  | "pin"
   | "open"
   | "reveal"
   | "copy-path"
+  | "copy-relative-path"
   | "rename"
   | "delete";
 
@@ -75,17 +78,26 @@ const COMMON_TAIL: MenuEntry[] = [
   PENDING_COPY,
   { separator: true },
   { id: "copy-path", label: "Copy Path", icon: Link2, shortcut: "Shift+Alt+C" },
+  {
+    id: "copy-relative-path",
+    label: "Copy Relative Path",
+    icon: Link2,
+    shortcut: "Ctrl+K Ctrl+Shift+C",
+  },
   { separator: true },
   { id: "rename", label: "Rename…", icon: Pencil, shortcut: "F2" },
   { id: "delete", label: "Delete", icon: Trash2, shortcut: "Del", danger: true },
 ];
 
-function entriesFor(kind: ContextMenuTargetKind): MenuEntry[] {
+function entriesFor(kind: ContextMenuTargetKind, canPin: boolean): MenuEntry[] {
   if (kind === "folder") {
     return [
       { id: "new-file", label: "New File…", icon: FilePlus },
       { id: "new-folder", label: "New Folder…", icon: FolderPlus },
       { separator: true },
+      ...(canPin
+        ? ([{ id: "pin", label: "Pin Folder", icon: Pin }, { separator: true }] as MenuEntry[])
+        : []),
       { id: "reveal", label: "Reveal in File Explorer", icon: CornerUpLeft, shortcut: "Shift+Alt+R" },
       {
         id: "open",
@@ -109,13 +121,15 @@ function entriesFor(kind: ContextMenuTargetKind): MenuEntry[] {
 
 interface ContextMenuProps {
   target: ContextMenuTarget;
+  /** Whether the "Pin Folder" item should appear (folders not already pinned). */
+  canPin?: boolean;
   onAction: (action: ContextMenuAction, target: ContextMenuTarget) => void;
   onClose: () => void;
 }
 
 const VIEWPORT_PADDING = 8;
 
-export function ContextMenu({ target, onAction, onClose }: ContextMenuProps) {
+export function ContextMenu({ target, canPin = false, onAction, onClose }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ x: target.x, y: target.y });
   const [ready, setReady] = useState(false);
@@ -169,7 +183,7 @@ export function ContextMenu({ target, onAction, onClose }: ContextMenuProps) {
     };
   }, [onClose]);
 
-  const entries = entriesFor(target.kind);
+  const entries = entriesFor(target.kind, canPin);
 
   return createPortal(
     <div

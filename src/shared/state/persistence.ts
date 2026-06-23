@@ -1,3 +1,5 @@
+import type { Entry } from "../types/files";
+
 export type StoredFileViewMode = "preview" | "edit" | "code";
 
 export interface StoredWindowFrame {
@@ -14,6 +16,10 @@ export interface AppConfigurationState {
   barMerged: boolean;
   viewMode: StoredFileViewMode;
   windowFrame?: StoredWindowFrame;
+  /** Folders the user explicitly pinned to Saved (beyond the defaults). */
+  pinnedLocations?: Entry[];
+  /** Paths of default locations (e.g. Documents) the user has unpinned. */
+  removedDefaultPaths?: string[];
 }
 
 export interface AppSessionState {
@@ -78,6 +84,37 @@ function readNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function readEntry(value: unknown): Entry | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const name = readString(value.name);
+  const path = readString(value.path);
+  const kind = value.kind;
+
+  if (
+    name === undefined ||
+    path === undefined ||
+    typeof value.is_dir !== "boolean" ||
+    (kind !== "folder" && kind !== "md" && kind !== "text")
+  ) {
+    return null;
+  }
+
+  return { name, path, is_dir: value.is_dir, kind };
+}
+
+function readEntryArray(value: unknown): Entry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(readEntry)
+    .filter((entry): entry is Entry => entry !== null);
+}
+
 function readBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
 }
@@ -124,6 +161,8 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
     barMerged: readBoolean(record.barMerged),
     viewMode: readViewMode(record.viewMode),
     windowFrame: readWindowFrame(record.windowFrame),
+    pinnedLocations: readEntryArray(record.pinnedLocations),
+    removedDefaultPaths: readStringArray(record.removedDefaultPaths),
   };
 }
 

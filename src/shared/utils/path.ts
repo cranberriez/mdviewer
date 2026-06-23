@@ -38,6 +38,33 @@ export function joinPath(parent: string, child: string) {
 /** Extensions the app can read and display in the explorer/preview. */
 export const VISIBLE_EXTENSIONS = ["md", "markdown", "txt"] as const;
 
+/**
+ * Path of `target` relative to `root`, using the root's separator. When the
+ * target isn't inside the root (shouldn't happen for tree items, but can for
+ * pinned folders elsewhere on disk) the absolute target path is returned.
+ */
+export function relativePath(root: string, target: string) {
+  const separator = root.includes("\\") ? "\\" : "/";
+  const normalize = (value: string) =>
+    value.replace(/[\\/]+$/, "").replace(/\\/g, "/");
+
+  const normalizedRoot = normalize(root);
+  const normalizedTarget = normalize(target);
+
+  if (normalizedTarget.toLowerCase() === normalizedRoot.toLowerCase()) {
+    return ".";
+  }
+
+  const prefix = `${normalizedRoot.toLowerCase()}/`;
+  if (!normalizedTarget.toLowerCase().startsWith(prefix)) {
+    // Outside the root — fall back to the absolute path.
+    return target;
+  }
+
+  const relative = normalizedTarget.slice(normalizedRoot.length + 1);
+  return separator === "\\" ? relative.replace(/\//g, "\\") : relative;
+}
+
 /** Lowercased extension without the dot, or "" if the name has none. */
 export function fileExtension(name: string) {
   const base = name.split(/[\\/]/).pop() ?? name;

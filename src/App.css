@@ -187,6 +187,35 @@
   text-transform: uppercase;
 }
 
+.saved-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 6px;
+}
+
+.saved-heading .section-label {
+  flex: 1 1 auto;
+}
+
+.saved-add {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border: 0;
+  border-radius: var(--radius-ctl);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.saved-add:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
 .saved-list {
   display: flex;
   flex-direction: column;

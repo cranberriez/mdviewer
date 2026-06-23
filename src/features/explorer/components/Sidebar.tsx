@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { Home } from "lucide-react";
+import { FolderOpen, Home } from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
 import { EmptySidebar } from "./EmptySidebar";
 import { TreeNode } from "./TreeNode";
@@ -23,6 +23,8 @@ interface SidebarProps {
   onSelectFile: (entry: Entry) => Promise<void>;
   onEntryContextMenu: (entry: Entry, event: ReactMouseEvent) => void;
   onRootContextMenu: (event: ReactMouseEvent) => void;
+  onSavedContextMenu: (location: Entry, event: ReactMouseEvent) => void;
+  onOpenFolder: () => void;
   onDraftSubmit: (value: string) => void;
   onDraftCancel: () => void;
 }
@@ -45,6 +47,8 @@ export function Sidebar({
   onSelectFile,
   onEntryContextMenu,
   onRootContextMenu,
+  onSavedContextMenu,
+  onOpenFolder,
   onDraftSubmit,
   onDraftCancel,
 }: SidebarProps) {
@@ -56,10 +60,27 @@ export function Sidebar({
   return (
     <aside className="sidebar" style={{ width, flexBasis: width }} aria-label="File explorer">
       <section className="sidebar-section">
-        <div className="section-label">Saved</div>
+        <div className="saved-heading">
+          <div className="section-label">Saved</div>
+          <button
+            type="button"
+            className="saved-add"
+            title="Open a folder as the explorer root…"
+            aria-label="Open folder"
+            onClick={onOpenFolder}
+          >
+            <FolderOpen size={15} />
+          </button>
+        </div>
         <div className="saved-list">
           {locations.map((location) => (
-            <button type="button" className={`saved-row ${selectedFolderPath === location.path ? "active" : ""}`} key={location.path} onClick={() => void onSelectLocation(location)}>
+            <button
+              type="button"
+              className={`saved-row ${selectedFolderPath === location.path ? "active" : ""}`}
+              key={location.path}
+              onClick={() => void onSelectLocation(location)}
+              onContextMenu={(event) => onSavedContextMenu(location, event)}
+            >
               <Home size={15} />
               <span>{location.name}</span>
             </button>

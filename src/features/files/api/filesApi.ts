@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import type { Entry } from "../../../shared/types/files";
 
 export function defaultLocations() {
@@ -35,4 +36,21 @@ export function deletePath(path: string) {
 
 export function revealInExplorer(path: string) {
   return invoke<void>("reveal_in_explorer", { path });
+}
+
+export function folderEntry(path: string) {
+  return invoke<Entry>("folder_entry", { path });
+}
+
+/**
+ * Open the native directory picker and return the chosen folder as an Entry,
+ * or null if the user cancelled.
+ */
+export async function pickFolder(): Promise<Entry | null> {
+  const selected = await open({ directory: true, multiple: false });
+  if (typeof selected !== "string") {
+    return null;
+  }
+
+  return folderEntry(selected);
 }
