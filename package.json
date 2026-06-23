@@ -2,10 +2,15 @@
   "name": "mdviewer",
   "private": true,
   "version": "0.1.0",
+  "packageManager": "pnpm@11.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "check": "tsc --noEmit",
     "build": "tsc && vite build",
+    "bundle": "tauri build",
+    "bundle:debug": "tauri build --debug",
+    "check:release-version": "node scripts/check-release-version.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },
