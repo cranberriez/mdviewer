@@ -1,44 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type {
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-} from "react";
-import {
-  getCurrentWindow,
-  PhysicalPosition,
-  PhysicalSize,
-} from "@tauri-apps/api/window";
-import {
-  createFile,
-  createFolder,
-  defaultLocations,
-  deletePath,
-  pickFolder,
-  readFile,
-  readFolder,
-  renamePath,
-  resolveLinkPath,
-  revealInExplorer,
-  writeFile,
-} from "./features/files/api/filesApi";
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import { getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
+import { createFile, createFolder, defaultLocations, deletePath, pickFolder, readFile, readFolder, renamePath, resolveLinkPath, revealInExplorer, writeFile } from "./features/files/api/filesApi";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { Sidebar } from "./features/explorer/components/Sidebar";
-import {
-  ContextMenu,
-  type ContextMenuAction,
-  type ContextMenuTarget,
-} from "./features/explorer/components/ContextMenu";
-import {
-  SavedContextMenu,
-  type SavedMenuAction,
-} from "./features/explorer/components/SavedContextMenu";
+import { ContextMenu, type ContextMenuAction, type ContextMenuTarget } from "./features/explorer/components/ContextMenu";
+import { SavedContextMenu, type SavedMenuAction } from "./features/explorer/components/SavedContextMenu";
 import type { InlineDraft } from "./features/explorer/components/TreeInlineInput";
 import { SidebarResizeHandle } from "./features/explorer/components/SidebarResizeHandle";
 import { FileActionBar } from "./features/file-actions/components/FileActionBar";
-import {
-  FileActionControls,
-  type FileViewMode,
-} from "./features/file-actions/components/FileActionControls";
+import { FileActionControls, type FileViewMode } from "./features/file-actions/components/FileActionControls";
 import { FindBar } from "./features/file-actions/components/FindBar";
 import { MarkdownFormatToolbar } from "./features/file-actions/components/MarkdownFormatToolbar";
 import { useFindInPreview } from "./features/file-actions/hooks/useFindInPreview";
@@ -48,24 +19,8 @@ import { slugify } from "./features/preview/slug";
 import { PreviewPanel } from "./features/preview/components/PreviewPanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
 import type { Entry, OpenFile } from "./shared/types/files";
-import {
-  fileExtension,
-  fileKindFromPath,
-  fileName,
-  isVisibleFileName,
-  joinPath,
-  parentName,
-  parentPath,
-  relativePath,
-} from "./shared/utils/path";
-import {
-  loadAppConfiguration,
-  loadAppSession,
-  saveAppConfiguration,
-  saveAppSession,
-  type AppConfigurationState,
-  type StoredWindowFrame,
-} from "./shared/state/persistence";
+import { fileExtension, fileKindFromPath, fileName, isVisibleFileName, joinPath, parentName, parentPath, relativePath } from "./shared/utils/path";
+import { loadAppConfiguration, loadAppSession, saveAppConfiguration, saveAppSession, type AppConfigurationState, type StoredWindowFrame } from "./shared/state/persistence";
 import "./App.css";
 
 const DEFAULT_SIDEBAR_WIDTH = 280;
@@ -74,10 +29,7 @@ const MAX_SIDEBAR_WIDTH = 420;
 const MIN_CONTENT_WIDTH = 420;
 
 function clampSidebarWidth(width: number) {
-  const availableMax = Math.max(
-    MIN_SIDEBAR_WIDTH,
-    Math.min(MAX_SIDEBAR_WIDTH, window.innerWidth - MIN_CONTENT_WIDTH),
-  );
+  const availableMax = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, window.innerWidth - MIN_CONTENT_WIDTH));
 
   return Math.min(availableMax, Math.max(MIN_SIDEBAR_WIDTH, width));
 }
@@ -98,63 +50,36 @@ function findContainingLocation(locations: Entry[], path?: string) {
     return null;
   }
 
-  return (
-    locations
-      .filter((location) => containsPath(location.path, path))
-      .sort(
-        (left, right) =>
-          comparablePath(right.path).length - comparablePath(left.path).length,
-      )[0] ?? null
-  );
+  return locations.filter((location) => containsPath(location.path, path)).sort((left, right) => comparablePath(right.path).length - comparablePath(left.path).length)[0] ?? null;
 }
 
 function App() {
   const initialConfiguration = useMemo(() => loadAppConfiguration(), []);
   const initialSession = useMemo(() => loadAppSession(), []);
   const [defaultLocs, setDefaultLocs] = useState<Entry[]>([]);
-  const [pinnedLocations, setPinnedLocations] = useState<Entry[]>(
-    () => initialConfiguration.pinnedLocations ?? [],
-  );
-  const [removedDefaultPaths, setRemovedDefaultPaths] = useState<string[]>(
-    () => initialConfiguration.removedDefaultPaths ?? [],
-  );
+  const [pinnedLocations, setPinnedLocations] = useState<Entry[]>(() => initialConfiguration.pinnedLocations ?? []);
+  const [removedDefaultPaths, setRemovedDefaultPaths] = useState<string[]>(() => initialConfiguration.removedDefaultPaths ?? []);
   const [activeRoot, setActiveRoot] = useState<Entry | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(initialSession.expandedPaths),
-  );
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(initialSession.expandedPaths));
   const [childrenCache, setChildrenCache] = useState<Record<string, Entry[]>>({});
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
-  const [openFilePath, setOpenFilePath] = useState<string | null>(
-    () => initialSession.openFilePath ?? null,
-  );
+  const [openFilePath, setOpenFilePath] = useState<string | null>(() => initialSession.openFilePath ?? null);
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  const [explorerHidden, setExplorerHidden] = useState(
-    () => initialConfiguration.explorerHidden ?? false,
-  );
-  const [sidebarWidth, setSidebarWidth] = useState(() =>
-    clampSidebarWidth(initialConfiguration.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH),
-  );
-  const [mode, setMode] = useState<FileViewMode>(
-    () => initialConfiguration.viewMode ?? "preview",
-  );
+  const [explorerHidden, setExplorerHidden] = useState(() => initialConfiguration.explorerHidden ?? false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => clampSidebarWidth(initialConfiguration.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH));
+  const [mode, setMode] = useState<FileViewMode>(() => initialConfiguration.viewMode ?? "preview");
   const [pendingFormatAction, setPendingFormatAction] = useState<{
     action: MarkdownAction;
     id: number;
   } | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [barMerged, setBarMerged] = useState(
-    () => initialConfiguration.barMerged ?? false,
-  );
+  const [barMerged, setBarMerged] = useState(() => initialConfiguration.barMerged ?? false);
   const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(
-    () =>
-      initialSession.selectedFolderPath ??
-      (initialSession.openFilePath ? parentPath(initialSession.openFilePath) : null),
+    () => initialSession.selectedFolderPath ?? (initialSession.openFilePath ? parentPath(initialSession.openFilePath) : null),
   );
-  const [windowFrame, setWindowFrame] = useState<StoredWindowFrame | undefined>(
-    () => initialConfiguration.windowFrame,
-  );
+  const [windowFrame, setWindowFrame] = useState<StoredWindowFrame | undefined>(() => initialConfiguration.windowFrame);
   const [contextMenu, setContextMenu] = useState<ContextMenuTarget | null>(null);
   const [savedMenu, setSavedMenu] = useState<{
     location: Entry;
@@ -184,9 +109,7 @@ function App() {
   // The Saved list = defaults (minus user-removed) followed by custom pins,
   // de-duplicated by path. Home always stays first.
   const locations = useMemo<Entry[]>(() => {
-    const removed = new Set(
-      removedDefaultPaths.map((path) => comparablePath(path)),
-    );
+    const removed = new Set(removedDefaultPaths.map((path) => comparablePath(path)));
     const seen = new Set<string>();
     const result: Entry[] = [];
 
@@ -235,10 +158,7 @@ function App() {
     return markdown.render(openFile.content);
   }, [openFile]);
 
-  const find = useFindInPreview(
-    findTargetRef,
-    `${openFile?.path ?? ""}:${openFile?.content ?? ""}:${mode}`,
-  );
+  const find = useFindInPreview(findTargetRef, `${openFile?.path ?? ""}:${mode}:${openFile?.kind === "md" ? renderedMarkdown : (openFile?.content ?? "")}`);
 
   // After following a cross-file link with a #fragment, scroll to the heading
   // once the new document has rendered into the preview. The preview container
@@ -272,15 +192,7 @@ function App() {
 
     configurationRef.current = nextConfiguration;
     saveAppConfiguration(nextConfiguration);
-  }, [
-    barMerged,
-    explorerHidden,
-    mode,
-    sidebarWidth,
-    windowFrame,
-    pinnedLocations,
-    removedDefaultPaths,
-  ]);
+  }, [barMerged, explorerHidden, mode, sidebarWidth, windowFrame, pinnedLocations, removedDefaultPaths]);
 
   useEffect(() => {
     if (!sessionHydrated) {
@@ -293,13 +205,7 @@ function App() {
       openFilePath: openFilePath ?? undefined,
       expandedPaths: Array.from(expanded),
     });
-  }, [
-    activeRoot?.path,
-    expanded,
-    openFilePath,
-    selectedFolderPath,
-    sessionHydrated,
-  ]);
+  }, [activeRoot?.path, expanded, openFilePath, selectedFolderPath, sessionHydrated]);
 
   useEffect(() => {
     const appWindow = getCurrentWindow();
@@ -308,11 +214,7 @@ function App() {
 
     async function captureWindowFrame() {
       try {
-        const [size, position, maximized] = await Promise.all([
-          appWindow.innerSize(),
-          appWindow.outerPosition(),
-          appWindow.isMaximized(),
-        ]);
+        const [size, position, maximized] = await Promise.all([appWindow.innerSize(), appWindow.outerPosition(), appWindow.isMaximized()]);
 
         const nextFrame: StoredWindowFrame = {
           width: size.width,
@@ -432,43 +334,26 @@ function App() {
         }
 
         setDefaultLocs(defaults);
-        const restorable = [
-          ...defaults,
-          ...(initialConfiguration.pinnedLocations ?? []),
-        ];
+        const restorable = [...defaults, ...(initialConfiguration.pinnedLocations ?? [])];
         const restoredRoot =
-          restorable.find(
-            (location) => location.path === initialSession.activeRootPath,
-          ) ??
-          restorable.find(
-            (location) => location.path === initialSession.selectedFolderPath,
-          ) ??
+          restorable.find((location) => location.path === initialSession.activeRootPath) ??
+          restorable.find((location) => location.path === initialSession.selectedFolderPath) ??
           findContainingLocation(restorable, initialSession.openFilePath) ??
           findContainingLocation(restorable, initialSession.selectedFolderPath) ??
           null;
         const first = restoredRoot ?? defaults[0] ?? null;
-        const restoredSelectedFolder =
-          initialSession.selectedFolderPath ??
-          (initialSession.openFilePath
-            ? parentPath(initialSession.openFilePath)
-            : first?.path ?? null);
+        const restoredSelectedFolder = initialSession.selectedFolderPath ?? (initialSession.openFilePath ? parentPath(initialSession.openFilePath) : (first?.path ?? null));
 
         setActiveRoot(first);
         setSelectedFolderPath(restoredSelectedFolder);
 
         if (first) {
           await loadFolder(first.path);
-          await Promise.all(
-            initialSession.expandedPaths
-              .filter((path) => path !== first.path)
-              .map((path) => loadFolder(path, { quiet: true })),
-          );
+          await Promise.all(initialSession.expandedPaths.filter((path) => path !== first.path).map((path) => loadFolder(path, { quiet: true })));
         }
 
         if (initialSession.openFilePath) {
-          await openFileAtPath(initialSession.openFilePath, {
-            preserveMode: true,
-          });
+          await openFileAtPath(initialSession.openFilePath);
         }
       } catch (cause) {
         if (!cancelled) {
@@ -488,10 +373,7 @@ function App() {
     };
   }, []);
 
-  async function loadFolder(
-    path: string,
-    options?: { quiet?: boolean; force?: boolean },
-  ) {
+  async function loadFolder(path: string, options?: { quiet?: boolean; force?: boolean }) {
     if (childrenCache[path] && !options?.force) {
       return;
     }
@@ -523,10 +405,7 @@ function App() {
     await loadFolder(path, { force: true, quiet: true });
   }
 
-  async function openFileAtPath(
-    path: string,
-    options?: { preserveMode?: boolean },
-  ) {
+  async function openFileAtPath(path: string, options?: { mode?: FileViewMode }) {
     setError(null);
     setOpenFilePath(path);
     setSelectedFolderPath(parentPath(path));
@@ -540,8 +419,8 @@ function App() {
         kind: fileKindFromPath(path),
       });
       setDirty(false);
-      if (!options?.preserveMode) {
-        setMode("preview");
+      if (options?.mode) {
+        setMode(options.mode);
       }
       find.close();
     } catch (cause) {
@@ -563,9 +442,7 @@ function App() {
       if (!candidate) {
         continue;
       }
-      const node = scope.querySelector(
-        `#${CSS.escape(candidate)}, [name="${CSS.escape(candidate)}"]`,
-      );
+      const node = scope.querySelector(`#${CSS.escape(candidate)}, [name="${CSS.escape(candidate)}"]`);
       if (node) {
         node.scrollIntoView({ behavior: "smooth", block: "start" });
         return true;
@@ -615,23 +492,16 @@ function App() {
     // then scroll to the heading once the new content has rendered.
     const hashIndex = target.indexOf("#");
     const pathPart = hashIndex >= 0 ? target.slice(0, hashIndex) : target;
-    const fragment =
-      hashIndex >= 0 ? decodeURIComponent(target.slice(hashIndex + 1)) : "";
+    const fragment = hashIndex >= 0 ? decodeURIComponent(target.slice(hashIndex + 1)) : "";
     const [cleanPath] = pathPart.split("?");
 
     try {
-      const resolved = await resolveLinkPath(
-        openFilePath,
-        decodeURIComponent(cleanPath),
-      );
+      const resolved = await resolveLinkPath(openFilePath, decodeURIComponent(cleanPath));
 
       if (isVisibleFileName(resolved)) {
         // Same file already open: just scroll. Otherwise open it and defer the
         // scroll until the preview has re-rendered with the new headings.
-        if (
-          fragment &&
-          comparablePath(resolved) === comparablePath(openFilePath)
-        ) {
+        if (fragment && comparablePath(resolved) === comparablePath(openFilePath)) {
           scrollToAnchor(fragment);
         } else {
           pendingAnchorRef.current = fragment || null;
@@ -728,22 +598,14 @@ function App() {
   // simply clears it from the removed set rather than duplicating it.
   function pinFolder(entry: Entry) {
     const key = comparablePath(entry.path);
-    const isDefault = defaultLocs.some(
-      (location) => comparablePath(location.path) === key,
-    );
+    const isDefault = defaultLocs.some((location) => comparablePath(location.path) === key);
 
     if (isDefault) {
-      setRemovedDefaultPaths((current) =>
-        current.filter((path) => comparablePath(path) !== key),
-      );
+      setRemovedDefaultPaths((current) => current.filter((path) => comparablePath(path) !== key));
       return;
     }
 
-    setPinnedLocations((current) =>
-      current.some((location) => comparablePath(location.path) === key)
-        ? current
-        : [...current, { ...entry, is_dir: true, kind: "folder" }],
-    );
+    setPinnedLocations((current) => (current.some((location) => comparablePath(location.path) === key) ? current : [...current, { ...entry, is_dir: true, kind: "folder" }]));
   }
 
   // Open a folder via the native picker and make it the explorer root, without
@@ -768,20 +630,12 @@ function App() {
     }
 
     const key = comparablePath(location.path);
-    const isDefault = defaultLocs.some(
-      (entry) => comparablePath(entry.path) === key,
-    );
+    const isDefault = defaultLocs.some((entry) => comparablePath(entry.path) === key);
 
     if (isDefault) {
-      setRemovedDefaultPaths((current) =>
-        current.some((path) => comparablePath(path) === key)
-          ? current
-          : [...current, location.path],
-      );
+      setRemovedDefaultPaths((current) => (current.some((path) => comparablePath(path) === key) ? current : [...current, location.path]));
     } else {
-      setPinnedLocations((current) =>
-        current.filter((entry) => comparablePath(entry.path) !== key),
-      );
+      setPinnedLocations((current) => current.filter((entry) => comparablePath(entry.path) !== key));
     }
   }
 
@@ -795,17 +649,13 @@ function App() {
     const pinned = !isPinnable(activeRoot.path);
 
     if (pinned) {
-      const confirmed = window.confirm(
-        `Remove "${activeRoot.name}" from your pinned folders?`,
-      );
+      const confirmed = window.confirm(`Remove "${activeRoot.name}" from your pinned folders?`);
       if (!confirmed) {
         return;
       }
       unpinLocation(activeRoot);
     } else {
-      const confirmed = window.confirm(
-        `Pin "${activeRoot.name}" to your saved folders?`,
-      );
+      const confirmed = window.confirm(`Pin "${activeRoot.name}" to your saved folders?`);
       if (!confirmed) {
         return;
       }
@@ -825,11 +675,7 @@ function App() {
           await navigator.clipboard?.writeText(location.path);
           break;
         case "copy-relative-path":
-          await navigator.clipboard?.writeText(
-            activeRoot
-              ? relativePath(activeRoot.path, location.path)
-              : location.path,
-          );
+          await navigator.clipboard?.writeText(activeRoot ? relativePath(activeRoot.path, location.path) : location.path);
           break;
         case "unpin":
           unpinLocation(location);
@@ -891,12 +737,8 @@ function App() {
     }
 
     const ext = fileExtension(name);
-    const detail = ext
-      ? `".${ext}" files`
-      : "files without a .md, .markdown, or .txt extension";
-    return window.confirm(
-      `"${name}" will not be visible in Markdown Viewer because ${detail} aren't shown here.\n\nCreate it anyway?`,
-    );
+    const detail = ext ? `".${ext}" files` : "files without a .md, .markdown, or .txt extension";
+    return window.confirm(`"${name}" will not be visible in Markdown Viewer because ${detail} aren't shown here.\n\nCreate it anyway?`);
   }
 
   async function submitDraft(rawValue: string) {
@@ -934,8 +776,7 @@ function App() {
 
         // Open the new file in the editor so the user can start typing.
         if (current.kind === "file" && isVisibleFileName(name)) {
-          await openFileAtPath(targetPath);
-          setMode("edit");
+          await openFileAtPath(targetPath, { mode: "edit" });
         }
         return;
       }
@@ -954,17 +795,13 @@ function App() {
       await refreshFolder(current.parentPath);
 
       // Keep keyboard focus on the renamed entry at its new path.
-      setFocusedEntry((focused) =>
-        focused?.path === originalPath
-          ? { ...focused, name, path: targetPath }
-          : focused,
-      );
+      setFocusedEntry((focused) => (focused?.path === originalPath ? { ...focused, name, path: targetPath } : focused));
 
       // If the renamed file is the open one, follow it (or close it when it is
       // no longer a visible kind).
       if (openFilePath === originalPath) {
         if (current.kind === "file" && isVisibleFileName(name)) {
-          await openFileAtPath(targetPath, { preserveMode: true });
+          await openFileAtPath(targetPath);
         } else {
           setOpenFile(null);
           setOpenFilePath(null);
@@ -975,10 +812,7 @@ function App() {
     }
   }
 
-  async function handleContextAction(
-    action: ContextMenuAction,
-    target: ContextMenuTarget,
-  ) {
+  async function handleContextAction(action: ContextMenuAction, target: ContextMenuTarget) {
     setContextMenu(null);
 
     try {
@@ -1017,14 +851,10 @@ function App() {
           await navigator.clipboard?.writeText(target.path);
           break;
         case "copy-relative-path":
-          await navigator.clipboard?.writeText(
-            activeRoot ? relativePath(activeRoot.path, target.path) : target.path,
-          );
+          await navigator.clipboard?.writeText(activeRoot ? relativePath(activeRoot.path, target.path) : target.path);
           break;
         case "delete": {
-          const confirmed = window.confirm(
-            `Move "${target.name}" to the Recycle Bin?`,
-          );
+          const confirmed = window.confirm(`Move "${target.name}" to the Recycle Bin?`);
           if (!confirmed) {
             break;
           }
@@ -1033,9 +863,7 @@ function App() {
             setOpenFile(null);
             setOpenFilePath(null);
           }
-          setFocusedEntry((current) =>
-            current?.path === target.path ? null : current,
-          );
+          setFocusedEntry((current) => (current?.path === target.path ? null : current));
           await refreshFolder(parentPath(target.path));
           break;
         }
@@ -1074,12 +902,7 @@ function App() {
   const title = openFile?.name ?? activeRoot?.name ?? "Markdown Viewer";
   // Show the open file's parent folder as a middle crumb, but only when it
   // isn't the root itself (otherwise the root name would appear twice).
-  const breadcrumbScope =
-    openFile &&
-    activeRoot &&
-    comparablePath(parentPath(openFile.path)) !== comparablePath(activeRoot.path)
-      ? parentName(openFile.path)
-      : null;
+  const breadcrumbScope = openFile && activeRoot && comparablePath(parentPath(openFile.path)) !== comparablePath(activeRoot.path) ? parentName(openFile.path) : null;
   const rootChildren = activeRoot ? childrenCache[activeRoot.path] : undefined;
   const fileActionControls = openFile ? (
     <FileActionControls
@@ -1297,9 +1120,7 @@ function App() {
           x={savedMenu.x}
           y={savedMenu.y}
           canUnpin={isUnpinnable(savedMenu.location)}
-          onAction={(action, location) =>
-            void handleSavedAction(action, location)
-          }
+          onAction={(action, location) => void handleSavedAction(action, location)}
           onClose={() => setSavedMenu(null)}
         />
       ) : null}

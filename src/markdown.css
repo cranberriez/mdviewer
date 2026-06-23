@@ -175,9 +175,10 @@
   background: #4a4a2e;
   color: #f2f2dc;
   border-radius: 3px;
-  padding: 0 2px;
+  padding: 0;
 }
-.md mark.current {
+.md mark.current,
+.md mark[data-current="true"] {
   background: #6b6b3a;
 }
 
