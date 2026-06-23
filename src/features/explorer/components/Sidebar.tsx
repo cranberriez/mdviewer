@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { Folder, FolderOpen, Moon, Pin, PinOff, Search, Sun } from "lucide-react";
+import { Folder, FolderOpen, Moon, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
 import type { Entry, FileSearchMatch } from "../../../shared/types/files";
 import type { AppTheme } from "../../../shared/state/persistence";
 import { EmptySidebar } from "./EmptySidebar";
@@ -30,11 +30,13 @@ interface SidebarProps {
   searchLoading: boolean;
   searchError: string | null;
   searchTruncated: boolean;
+  rootRefreshing: boolean;
   onSidebarModeChange: (mode: SidebarMode) => void;
   onSearchQueryChange: (query: string) => void;
   onSearchClear: () => void;
   onSearchSubmit: () => void;
   onOpenSearchResult: (result: FileSearchMatch) => void;
+  onRefreshRoot: () => void;
   onSelectLocation: (location: Entry) => Promise<void>;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
@@ -77,11 +79,13 @@ export function Sidebar({
   searchLoading,
   searchError,
   searchTruncated,
+  rootRefreshing,
   onSidebarModeChange,
   onSearchQueryChange,
   onSearchClear,
   onSearchSubmit,
   onOpenSearchResult,
+  onRefreshRoot,
   onSelectLocation,
   onToggleFolder,
   onSelectFile,
@@ -208,7 +212,18 @@ export function Sidebar({
           <div>
             <div className="section-label">{showingSearchResults ? "Search" : "Explorer"}</div>
           </div>
-          {!showingSearchResults && activeRoot ? <span className="entry-count">{rootChildren ? rootChildren.length : "..."}</span> : null}
+          {!showingSearchResults && activeRoot ? (
+            <button
+              type="button"
+              className="explorer-refresh"
+              title="Refresh explorer"
+              aria-label="Refresh explorer"
+              disabled={rootRefreshing}
+              onClick={onRefreshRoot}
+            >
+              <RefreshCw className={rootRefreshing ? "search-spinner" : undefined} size={14} />
+            </button>
+          ) : null}
         </div>
 
         {showingSearchResults ? (

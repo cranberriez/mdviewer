@@ -1214,11 +1214,17 @@ function App() {
           searchLoading={searchLoading}
           searchError={searchError}
           searchTruncated={searchTruncated}
+          rootRefreshing={activeRoot ? loadingPaths.has(activeRoot.path) : false}
           onSidebarModeChange={setSidebarMode}
           onSearchQueryChange={setSearchQuery}
           onSearchClear={clearCrossFileSearch}
           onSearchSubmit={() => void runCrossFileSearch()}
           onOpenSearchResult={(result) => void openSearchResult(result)}
+          onRefreshRoot={() => {
+            if (activeRoot) {
+              void refreshFolder(activeRoot.path);
+            }
+          }}
           onSelectLocation={selectLocation}
           onToggleFolder={toggleFolder}
           onSelectFile={selectFile}
