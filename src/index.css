@@ -73,7 +73,8 @@ body {
 }
 
 /* ---------- Light theme ---------- */
-.app-window.theme-light {
+.app-window.theme-light,
+body.theme-light {
   --color-bg-desktop: #e8e8ec;
   --color-bg-window: #f0f0f4;
   --color-bg-sidebar: #e8e8ec;
@@ -107,11 +108,13 @@ body {
   background: transparent;
 }
 
-.app-window.theme-light ::-webkit-scrollbar-thumb {
+.app-window.theme-light ::-webkit-scrollbar-thumb,
+body.theme-light ::-webkit-scrollbar-thumb {
   background: #c4c4cc;
   background-clip: content-box;
 }
-.app-window.theme-light ::-webkit-scrollbar-thumb:hover {
+.app-window.theme-light ::-webkit-scrollbar-thumb:hover,
+body.theme-light ::-webkit-scrollbar-thumb:hover {
   background: #adadb8;
   background-clip: content-box;
 }

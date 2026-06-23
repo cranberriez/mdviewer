@@ -54,6 +54,15 @@ function findContainingLocation(locations: Entry[], path?: string) {
   return locations.filter((location) => containsPath(location.path, path)).sort((left, right) => comparablePath(right.path).length - comparablePath(left.path).length)[0] ?? null;
 }
 
+function confirmDeleteTarget(target: ContextMenuTarget) {
+  const description =
+    target.kind === "folder"
+      ? `folder "${target.name}" and its contents`
+      : `file "${target.name}"`;
+
+  return window.confirm(`Move ${description} to the Recycle Bin?`);
+}
+
 function App() {
   const initialConfiguration = useMemo(() => loadAppConfiguration(), []);
   const initialSession = useMemo(() => loadAppSession(), []);
@@ -214,6 +223,14 @@ function App() {
     return () => window.cancelAnimationFrame(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openFile?.path, renderedMarkdown, mode]);
+
+  useEffect(() => {
+    document.body.classList.toggle("theme-light", theme === "light");
+
+    return () => {
+      document.body.classList.remove("theme-light");
+    };
+  }, [theme]);
 
   useEffect(() => {
     const nextConfiguration: AppConfigurationState = {
@@ -1000,7 +1017,7 @@ function App() {
           await navigator.clipboard?.writeText(activeRoot ? relativePath(activeRoot.path, target.path) : target.path);
           break;
         case "delete": {
-          const confirmed = window.confirm(`Move "${target.name}" to the Recycle Bin?`);
+          const confirmed = confirmDeleteTarget(target);
           if (!confirmed) {
             break;
           }

@@ -973,6 +973,29 @@ button {
   color: #e7c0c3;
 }
 
+body.theme-light .ctx-menu,
+body.theme-light .icon-picker-menu {
+  box-shadow:
+    0 18px 44px -18px rgba(24, 24, 28, 0.35),
+    0 0 0 1px rgba(24, 24, 28, 0.03);
+}
+
+body.theme-light .ctx-item.danger {
+  color: #a23b43;
+}
+
+body.theme-light .ctx-item.danger .ci-ico {
+  color: #b04a52;
+}
+
+body.theme-light .ctx-item.danger:hover:not(:disabled) {
+  background: #f4dadd;
+}
+
+body.theme-light .ctx-item.danger:hover:not(:disabled) .ci-ico {
+  color: #8f2e35;
+}
+
 .ctx-sep {
   height: 1px;
   margin: 5px 8px;
