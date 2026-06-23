@@ -102,19 +102,19 @@
   list-style: none;
   margin-left: -1.2em;
   position: relative;
-  padding-left: 1.45em;
+  padding-left: 1.8em;
 }
 .md li.task input,
 .md li.task-list-item input {
   position: absolute;
-  top: 0.35em;
+  top: 0.22em;
   left: 0;
-  width: 0.9em;
-  height: 0.9em;
+  width: 1.15em;
+  height: 1.15em;
   margin: 0;
   appearance: none;
   border: 1px solid #8a8a94;
-  border-radius: 3px;
+  border-radius: 4px;
   background: #2b2b30;
   color: #f4f4f6;
   cursor: pointer;
@@ -127,12 +127,12 @@
 .md li.task input:checked::after,
 .md li.task-list-item input:checked::after {
   position: absolute;
-  top: 0.02em;
-  left: 0.24em;
-  width: 0.3em;
-  height: 0.58em;
+  top: 0.07em;
+  left: 0.35em;
+  width: 0.34em;
+  height: 0.68em;
   border: solid #202024;
-  border-width: 0 0.14em 0.14em 0;
+  border-width: 0 0.15em 0.15em 0;
   content: "";
   transform: rotate(45deg);
 }
