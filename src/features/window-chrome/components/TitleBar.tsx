@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Minus, PanelLeft, Square, X } from "lucide-react";
 
@@ -19,6 +19,41 @@ export function TitleBar({
   title,
   onToggleExplorer,
 }: TitleBarProps) {
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    let cancelled = false;
+    let unlistenResize: (() => void) | undefined;
+
+    async function setup() {
+      try {
+        const maximized = await appWindow.isMaximized();
+        if (!cancelled) setIsMaximized(maximized);
+
+        const unlisten = await appWindow.onResized(async () => {
+          const v = await appWindow.isMaximized();
+          if (!cancelled) setIsMaximized(v);
+        });
+
+        if (cancelled) {
+          unlisten();
+        } else {
+          unlistenResize = unlisten;
+        }
+      } catch {
+        // Best effort — window APIs may not be available outside Tauri.
+      }
+    }
+
+    void setup();
+
+    return () => {
+      cancelled = true;
+      unlistenResize?.();
+    };
+  }, []);
+
   // Avoid a redundant trailing crumb when the title just repeats the root
   // (e.g. "Home / Home" with no file open and no deeper scope).
   const rootLabel = rootName ?? "Home";
@@ -79,11 +114,28 @@ export function TitleBar({
         <button
           type="button"
           className="window-button"
-          aria-label="Maximize"
-          title="Maximize"
+          aria-label={isMaximized ? "Restore" : "Maximize"}
+          title={isMaximized ? "Restore" : "Maximize"}
           onClick={() => void getCurrentWindow().toggleMaximize()}
         >
-          <Square size={12} />
+          {isMaximized ? (
+            /* Restore icon: two overlapping squares */
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 13 13"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.25"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="1" width="9" height="9" rx="1" />
+              <path d="M1 4v7a1 1 0 001 1h7" />
+            </svg>
+          ) : (
+            <Square size={12} />
+          )}
         </button>
         <button
           type="button"

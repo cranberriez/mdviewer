@@ -65,6 +65,12 @@ body {
   flex-direction: column;
 }
 
+/* No rounded corners or shadow when fullscreen */
+.app-window.fullscreen {
+  border-radius: 0;
+  box-shadow: none;
+}
+
 /* Custom scrollbars to match the dark, flat aesthetic */
 ::-webkit-scrollbar {
   width: 10px;

@@ -224,7 +224,7 @@
 
 /* Pinned state: accented so it reads as "active / will unpin". */
 .saved-add.is-pinned {
-  color: var(--color-text-primary);
+  color: var(--color-text-muted);
 }
 
 .saved-add.is-pinned:hover:not(:disabled) {

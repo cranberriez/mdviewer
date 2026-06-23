@@ -89,6 +89,7 @@ function App() {
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
   const [draft, setDraft] = useState<InlineDraft | null>(null);
   const [sessionHydrated, setSessionHydrated] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const findTargetRef = useRef<HTMLElement | null>(null);
   // A heading fragment to scroll to once the just-opened file has rendered
   // (set when following a cross-file link like `doc.md#section`).
@@ -206,6 +207,39 @@ function App() {
       expandedPaths: Array.from(expanded),
     });
   }, [activeRoot?.path, expanded, openFilePath, selectedFolderPath, sessionHydrated]);
+
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    let cancelled = false;
+    let unlistenResize: (() => void) | undefined;
+
+    async function setup() {
+      try {
+        const maximized = await appWindow.isMaximized();
+        if (!cancelled) setIsMaximized(maximized);
+
+        const unlisten = await appWindow.onResized(async () => {
+          const v = await appWindow.isMaximized();
+          if (!cancelled) setIsMaximized(v);
+        });
+
+        if (cancelled) {
+          unlisten();
+        } else {
+          unlistenResize = unlisten;
+        }
+      } catch {
+        // Best effort — window APIs may not be available outside Tauri.
+      }
+    }
+
+    void setup();
+
+    return () => {
+      cancelled = true;
+      unlistenResize?.();
+    };
+  }, []);
 
   useEffect(() => {
     const appWindow = getCurrentWindow();
@@ -1030,7 +1064,7 @@ function App() {
   });
 
   return (
-    <div className={`app-window ${explorerHidden ? "explorer-hidden" : ""}`}>
+    <div className={`app-window ${explorerHidden ? "explorer-hidden" : ""} ${isMaximized ? "fullscreen" : ""}`}>
       <TitleBar
         fileActionsSlot={barMerged ? fileActionControls : null}
         explorerHidden={explorerHidden}
