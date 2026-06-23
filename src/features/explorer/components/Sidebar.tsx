@@ -1,6 +1,7 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { FolderOpen, Home, Pin, PinOff } from "lucide-react";
+import { FolderOpen, Moon, Pin, PinOff, Sun } from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
+import type { AppTheme } from "../../../shared/state/persistence";
 import { EmptySidebar } from "./EmptySidebar";
 import { TreeNode } from "./TreeNode";
 import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
@@ -37,6 +38,8 @@ interface SidebarProps {
   locationIcons?: Record<string, string>;
   /** Path of Home (first default location) — its icon is always Home and can't be changed. */
   homePath?: string;
+  theme: AppTheme;
+  onToggleTheme: () => void;
 }
 
 export function Sidebar({
@@ -66,6 +69,8 @@ export function Sidebar({
   onDraftCancel,
   locationIcons,
   homePath,
+  theme,
+  onToggleTheme,
 }: SidebarProps) {
   const rootDraft =
     draft?.mode === "create" && activeRoot && draft.parentPath === activeRoot.path
@@ -188,6 +193,18 @@ export function Sidebar({
           )}
         </div>
       </section>
+
+      <div className="sidebar-footer">
+        <button
+          type="button"
+          className="sidebar-footer-button"
+          title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+          aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+          onClick={onToggleTheme}
+        >
+          {theme === "light" ? <Moon size={14} /> : <Sun size={14} />}
+        </button>
+      </div>
     </aside>
   );
 }

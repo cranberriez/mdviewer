@@ -976,7 +976,6 @@ function App() {
       findOpen={find.open}
       merged={barMerged}
       mode={mode}
-      theme={theme}
       saving={saving}
       onModeChange={(nextMode) => {
         setMode(nextMode);
@@ -993,7 +992,6 @@ function App() {
         find.toggle();
       }}
       onToggleMerged={() => setBarMerged((merged) => !merged)}
-      onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
     />
   ) : null;
   const formatControls =
@@ -1136,6 +1134,8 @@ function App() {
           onDraftCancel={cancelDraft}
           locationIcons={locationIcons}
           homePath={homePath}
+          theme={theme}
+          onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
         />
 
         <SidebarResizeHandle onPointerDown={startSidebarResize} />
