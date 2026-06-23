@@ -73,6 +73,36 @@ function serializeInline(node: Node): string {
   return body;
 }
 
+function isListElement(node: Node) {
+  return (
+    node instanceof HTMLElement &&
+    ["ul", "ol"].includes(node.tagName.toLowerCase())
+  );
+}
+
+function directChildCheckbox(element: HTMLElement) {
+  return Array.from(element.children).find(
+    (child): child is HTMLInputElement =>
+      child instanceof HTMLInputElement && child.type === "checkbox",
+  );
+}
+
+function serializeListItemInline(element: HTMLElement) {
+  return Array.from(element.childNodes)
+    .filter((child) => child !== directChildCheckbox(element) && !isListElement(child))
+    .map(serializeInline)
+    .join("")
+    .trim();
+}
+
+function indentNestedList(value: string) {
+  return value
+    .trimEnd()
+    .split("\n")
+    .map((line) => (line ? `  ${line}` : line))
+    .join("\n");
+}
+
 function serializeBlock(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) {
     return node.textContent ?? "";
@@ -111,15 +141,18 @@ function serializeBlock(node: Node): string {
     const items = Array.from(node.children)
       .filter((child) => child.tagName.toLowerCase() === "li")
       .map((child, index) => {
-        const checkbox = child.querySelector("input[type='checkbox']");
+        const checkbox = directChildCheckbox(child as HTMLElement);
         const prefix = checkbox
-          ? `- [${(checkbox as HTMLInputElement).checked ? "x" : " "}] `
+          ? `- [${checkbox.checked ? "x" : " "}] `
           : ordered
             ? `${index + 1}. `
             : "- ";
-        const clone = child.cloneNode(true) as HTMLElement;
-        clone.querySelector("input[type='checkbox']")?.remove();
-        return `${prefix}${serializeInline(clone).trim()}`;
+        const nestedLists = Array.from(child.children)
+          .filter(isListElement)
+          .map((list) => indentNestedList(serializeBlock(list)));
+        return [`${prefix}${serializeListItemInline(child as HTMLElement)}`, ...nestedLists]
+          .filter(Boolean)
+          .join("\n");
       });
     return `${items.join("\n")}\n\n`;
   }
@@ -155,6 +188,17 @@ function serializeEditor(element: HTMLElement) {
     .join("")
     .replace(/\n{3,}/g, "\n\n")
     .trimEnd();
+}
+
+function enableEditorCheckboxes(element: HTMLElement) {
+  element
+    .querySelectorAll<HTMLInputElement>("input[type='checkbox']")
+    .forEach((checkbox) => {
+      checkbox.checked = checkbox.hasAttribute("checked");
+      checkbox.defaultChecked = checkbox.checked;
+      checkbox.contentEditable = "false";
+      checkbox.disabled = false;
+    });
 }
 
 function selectionInside(element: HTMLElement) {
@@ -521,6 +565,7 @@ function blockAutoFormatBeforeInput(editor: HTMLElement, data: string) {
       item.className = "task-list-item";
       checkbox.className = "task-list-item-checkbox";
       checkbox.type = "checkbox";
+      checkbox.contentEditable = "false";
       checkbox.checked = beforeCaret === "- [x]";
       item.append(checkbox, " ", text);
       list.append(item);
@@ -683,6 +728,7 @@ function insertChecklist(range: Range) {
     item.className = "task-list-item";
     checkbox.className = "task-list-item-checkbox";
     checkbox.type = "checkbox";
+    checkbox.contentEditable = "false";
     item.append(checkbox, " ", text);
     list.append(item);
     selectedNode ??= text;
@@ -734,6 +780,7 @@ export const VisualMarkdownEditor = forwardRef<
     }
 
     editor.innerHTML = html;
+    enableEditorCheckboxes(editor);
     lastSyncedContentRef.current = content;
   }, [content, html]);
 
