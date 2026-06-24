@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
-import { createFile, createFolder, defaultLocations, deletePath, pickFolder, readFile, readFolder, renamePath, resolveLinkPath, revealInExplorer, searchFiles, writeFile } from "./features/files/api/filesApi";
+import {
+  createFile,
+  createFolder,
+  defaultLocations,
+  deletePath,
+  pickFolder,
+  readFile,
+  readFolder,
+  renamePath,
+  resolveLinkPath,
+  revealInExplorer,
+  searchFiles,
+  writeFile,
+} from "./features/files/api/filesApi";
 import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { Sidebar, type SidebarMode } from "./features/explorer/components/Sidebar";
@@ -24,7 +37,19 @@ import { HomeView } from "./features/home/components/HomeView";
 import { OnboardingView, type OnboardingResult } from "./features/home/components/OnboardingView";
 import type { Entry, FileSearchMatch, OpenFile } from "./shared/types/files";
 import { fileExtension, fileKindFromPath, fileName, isVisibleFileName, joinPath, parentName, parentPath, relativePath } from "./shared/utils/path";
-import { loadAppConfiguration, loadAppSession, recordRecentFile, removeRecent, saveAppConfiguration, saveAppSession, touchRecentRoot, type AppConfigurationState, type AppTheme, type RecentItem, type StoredWindowFrame } from "./shared/state/persistence";
+import {
+  loadAppConfiguration,
+  loadAppSession,
+  recordRecentFile,
+  removeRecent,
+  saveAppConfiguration,
+  saveAppSession,
+  touchRecentRoot,
+  type AppConfigurationState,
+  type AppTheme,
+  type RecentItem,
+  type StoredWindowFrame,
+} from "./shared/state/persistence";
 import "./App.css";
 
 const DEFAULT_SIDEBAR_WIDTH = 280;
@@ -64,9 +89,7 @@ function pathIsDeletedTarget(target: ContextMenuTarget, path?: string | null) {
     return false;
   }
 
-  return target.kind === "folder"
-    ? containsPath(target.path, path)
-    : comparablePath(path) === comparablePath(target.path);
+  return target.kind === "folder" ? containsPath(target.path, path) : comparablePath(path) === comparablePath(target.path);
 }
 
 function rebasePath(path: string, fromRoot: string, toRoot: string) {
@@ -78,10 +101,7 @@ function rebasePath(path: string, fromRoot: string, toRoot: string) {
 }
 
 function confirmDeleteTarget(target: ContextMenuTarget) {
-  const description =
-    target.kind === "folder"
-      ? `folder "${target.name}" and its contents`
-      : `file "${target.name}"`;
+  const description = target.kind === "folder" ? `folder "${target.name}" and its contents` : `file "${target.name}"`;
 
   return confirmDialog(`Move ${description} to the Recycle Bin?`, {
     title: "Move to Recycle Bin",
@@ -97,11 +117,7 @@ function confirmDeleteTarget(target: ContextMenuTarget) {
 // (how VS Code does this) isn't available under Tauri. The existing markdown
 // editor already relies on execCommand for the same reason. The cast keeps the
 // deprecation off the call site without disabling type-checking.
-const execEditCommand = document.execCommand.bind(document) as (
-  commandId: string,
-  showUI?: boolean,
-  value?: string,
-) => boolean;
+const execEditCommand = document.execCommand.bind(document) as (commandId: string, showUI?: boolean, value?: string) => boolean;
 
 function App() {
   const initialConfiguration = useMemo(() => loadAppConfiguration(), []);
@@ -147,20 +163,14 @@ function App() {
     x: number;
     y: number;
   } | null>(null);
-  const [locationIcons, setLocationIcons] = useState<Record<string, string>>(
-    () => initialConfiguration.locationIcons ?? {},
-  );
+  const [locationIcons, setLocationIcons] = useState<Record<string, string>>(() => initialConfiguration.locationIcons ?? {});
   const [recents, setRecents] = useState<RecentItem[]>(() => initialConfiguration.recents ?? []);
-  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(
-    () => initialConfiguration.onboardingCompleted ?? false,
-  );
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(() => initialConfiguration.onboardingCompleted ?? false);
   const [userName, setUserName] = useState<string>(() => initialConfiguration.userName ?? "");
   // Which overlay screen (if any) is showing. "onboarding" forces the setup
   // flow; "home" is the default landing until the user opens a file/root.
   // null = the normal preview/editor workspace.
-  const [overlay, setOverlay] = useState<"onboarding" | "home" | null>(
-    initialConfiguration.onboardingCompleted ? "home" : "onboarding",
-  );
+  const [overlay, setOverlay] = useState<"onboarding" | "home" | null>(initialConfiguration.onboardingCompleted ? "home" : "onboarding");
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
   const [draft, setDraft] = useState<InlineDraft | null>(null);
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("explorer");
@@ -187,12 +197,9 @@ function App() {
     });
   }, []);
   // Record that a file was opened within a root (updates that root's lastFile).
-  const recordFileRecent = useCallback(
-    (root: { path: string; name: string }, file: { path: string; name: string; kind: Exclude<OpenFile["kind"], "folder"> }) => {
-      setRecents((current) => recordRecentFile(current, root, file));
-    },
-    [],
-  );
+  const recordFileRecent = useCallback((root: { path: string; name: string }, file: { path: string; name: string; kind: Exclude<OpenFile["kind"], "folder"> }) => {
+    setRecents((current) => recordRecentFile(current, root, file));
+  }, []);
   // Record that a root was selected (no file), moving it to the top.
   const touchRootRecent = useCallback((root: { path: string; name: string }) => {
     setRecents((current) => touchRecentRoot(current, root));
@@ -269,10 +276,7 @@ function App() {
     return markdown.render(openFile.content);
   }, [openFile]);
 
-  const findContentKey =
-    mode === "preview" && openFile?.kind === "md"
-      ? renderedMarkdown
-      : (openFile?.content ?? "");
+  const findContentKey = mode === "preview" && openFile?.kind === "md" ? renderedMarkdown : (openFile?.content ?? "");
   const find = useFindInPreview(findTargetRef, `${openFile?.path ?? ""}:${mode}:${findContentKey}`);
 
   useEffect(() => {
@@ -475,9 +479,7 @@ function App() {
         }
 
         const confirmed = await confirmDialog(
-          draftCount === 1
-            ? "There are unsaved changes in 1 file. Close without saving?"
-            : `There are unsaved changes in ${draftCount} files. Close without saving?`,
+          draftCount === 1 ? "There are unsaved changes in 1 file. Close without saving?" : `There are unsaved changes in ${draftCount} files. Close without saving?`,
           {
             title: "Unsaved Changes",
             kind: "warning",
@@ -554,9 +556,7 @@ function App() {
           findContainingLocation(restorable, initialSession.selectedFolderPath) ??
           // Fall back to reconstructing the root from the saved path if it isn't
           // a pinned/default location (e.g. a folder opened via the native picker).
-          (initialSession.activeRootPath
-            ? { name: fileName(initialSession.activeRootPath), path: initialSession.activeRootPath, is_dir: true, kind: "folder" as const }
-            : null);
+          (initialSession.activeRootPath ? { name: fileName(initialSession.activeRootPath), path: initialSession.activeRootPath, is_dir: true, kind: "folder" as const } : null);
         const first = restoredRoot ?? defaults[0] ?? null;
         const restoredSelectedFolder = initialSession.selectedFolderPath ?? (initialSession.openFilePath ? parentPath(initialSession.openFilePath) : (first?.path ?? null));
 
@@ -644,10 +644,7 @@ function App() {
       // file. Only one Recent entry exists per root. If there's no active root
       // (shouldn't normally happen when opening a file), skip recording.
       if (activeRoot) {
-        recordFileRecent(
-          { path: activeRoot.path, name: activeRoot.name },
-          { path, name: fileName(path), kind },
-        );
+        recordFileRecent({ path: activeRoot.path, name: activeRoot.name }, { path, name: fileName(path), kind });
       }
       find.close();
     } catch (cause) {
@@ -1168,10 +1165,7 @@ function App() {
         const next = { ...drafts };
 
         Object.entries(drafts).forEach(([key, fileDraft]) => {
-          const draftIsAffected =
-            current.kind === "folder"
-              ? containsPath(originalPath, fileDraft.path)
-              : comparablePath(fileDraft.path) === comparablePath(originalPath);
+          const draftIsAffected = current.kind === "folder" ? containsPath(originalPath, fileDraft.path) : comparablePath(fileDraft.path) === comparablePath(originalPath);
 
           if (!draftIsAffected) {
             return;
@@ -1179,10 +1173,7 @@ function App() {
 
           delete next[key];
 
-          const nextPath =
-            current.kind === "folder"
-              ? rebasePath(fileDraft.path, originalPath, targetPath)
-              : targetPath;
+          const nextPath = current.kind === "folder" ? rebasePath(fileDraft.path, originalPath, targetPath) : targetPath;
 
           if (!isVisibleFileName(nextPath)) {
             return;
@@ -1204,16 +1195,8 @@ function App() {
 
       // If the open file was renamed directly or inside a renamed folder, follow
       // it (or close it when it is no longer a visible kind).
-      if (
-        openFilePath &&
-        (current.kind === "folder"
-          ? containsPath(originalPath, openFilePath)
-          : comparablePath(openFilePath) === comparablePath(originalPath))
-      ) {
-        const nextOpenPath =
-          current.kind === "folder"
-            ? rebasePath(openFilePath, originalPath, targetPath)
-            : targetPath;
+      if (openFilePath && (current.kind === "folder" ? containsPath(originalPath, openFilePath) : comparablePath(openFilePath) === comparablePath(originalPath))) {
+        const nextOpenPath = current.kind === "folder" ? rebasePath(openFilePath, originalPath, targetPath) : targetPath;
 
         if (isVisibleFileName(nextOpenPath)) {
           await openFileAtPath(nextOpenPath);
@@ -1323,11 +1306,7 @@ function App() {
           setRecents((current) =>
             current
               .filter((item) => !pathIsDeletedTarget(target, item.path))
-              .map((item) =>
-                item.lastFile && pathIsDeletedTarget(target, item.lastFile.path)
-                  ? { ...item, lastFile: undefined }
-                  : item,
-              ),
+              .map((item) => (item.lastFile && pathIsDeletedTarget(target, item.lastFile.path) ? { ...item, lastFile: undefined } : item)),
           );
 
           if (pathIsDeletedTarget(target, activeRoot?.path)) {
@@ -1468,14 +1447,7 @@ function App() {
           return;
       }
     },
-    [
-      activeRoot?.path,
-      find,
-      openFile,
-      openFilePath,
-      saveOpenFile,
-      selectedFolderPath,
-    ],
+    [activeRoot?.path, find, openFile, openFilePath, saveOpenFile, selectedFolderPath],
   );
 
   const menuState = useMemo(
@@ -1624,64 +1596,66 @@ function App() {
       <TitleBar
         fileActionsSlot={barMerged ? fileActionControls : null}
         explorerHidden={explorerHidden || overlay !== null}
+        menuState={menuState}
         rootName={overlay ? undefined : activeRoot?.name}
         scopeName={overlay ? null : breadcrumbScope}
         title={overlay ? "Markdown Viewer" : title}
+        onMenuAction={handleMenuAction}
         onToggleExplorer={() => setExplorerHidden((hidden) => !hidden)}
         hideExplorerToggle={overlay !== null}
       />
 
       <div className="workspace">
         {overlay === null ? (
-        <Sidebar
-          width={explorerHidden ? 0 : sidebarWidth}
-          locations={locations}
-          activeRoot={activeRoot}
-          rootChildren={rootChildren}
-          expanded={expanded}
-          childrenCache={childrenCache}
-          loadingPaths={loadingPaths}
-          selectedFolderPath={selectedFolderPath ?? undefined}
-          activeFilePath={openFilePath ?? undefined}
-          unsavedFilePathKeys={unsavedFilePathKeys}
-          contextPath={contextMenu?.path}
-          focusedPath={focusedEntry?.path ?? undefined}
-          draft={draft}
-          sidebarMode={sidebarMode}
-          searchQuery={searchQuery}
-          searchedQuery={searchedQuery}
-          searchResults={searchResults}
-          searchLoading={searchLoading}
-          searchError={searchError}
-          searchTruncated={searchTruncated}
-          rootRefreshing={activeRoot ? loadingPaths.has(activeRoot.path) : false}
-          onSidebarModeChange={setSidebarMode}
-          onSearchQueryChange={setSearchQuery}
-          onSearchClear={clearCrossFileSearch}
-          onSearchSubmit={() => void runCrossFileSearch()}
-          onOpenSearchResult={(result) => void openSearchResult(result)}
-          onRefreshRoot={() => {
-            if (activeRoot) {
-              void refreshFolder(activeRoot.path);
-            }
-          }}
-          onSelectLocation={selectLocation}
-          onToggleFolder={toggleFolder}
-          onSelectFile={selectFile}
-          onEntryContextMenu={openEntryContextMenu}
-          onRootContextMenu={openRootContextMenu}
-          onSavedContextMenu={openSavedContextMenu}
-          onOpenFolder={() => void openFolderAsRoot()}
-          rootPinned={activeRoot ? !isPinnable(activeRoot.path) : false}
-          rootPinDisabled={!activeRoot || !isUnpinnable(activeRoot)}
-          onToggleRootPin={toggleRootPin}
-          onDraftSubmit={submitDraft}
-          onDraftCancel={cancelDraft}
-          locationIcons={locationIcons}
-          homePath={homePath}
-          theme={theme}
-          onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-        />
+          <Sidebar
+            width={explorerHidden ? 0 : sidebarWidth}
+            locations={locations}
+            activeRoot={activeRoot}
+            rootChildren={rootChildren}
+            expanded={expanded}
+            childrenCache={childrenCache}
+            loadingPaths={loadingPaths}
+            selectedFolderPath={selectedFolderPath ?? undefined}
+            activeFilePath={openFilePath ?? undefined}
+            unsavedFilePathKeys={unsavedFilePathKeys}
+            contextPath={contextMenu?.path}
+            focusedPath={focusedEntry?.path ?? undefined}
+            draft={draft}
+            sidebarMode={sidebarMode}
+            searchQuery={searchQuery}
+            searchedQuery={searchedQuery}
+            searchResults={searchResults}
+            searchLoading={searchLoading}
+            searchError={searchError}
+            searchTruncated={searchTruncated}
+            rootRefreshing={activeRoot ? loadingPaths.has(activeRoot.path) : false}
+            onSidebarModeChange={setSidebarMode}
+            onSearchQueryChange={setSearchQuery}
+            onSearchClear={clearCrossFileSearch}
+            onSearchSubmit={() => void runCrossFileSearch()}
+            onOpenSearchResult={(result) => void openSearchResult(result)}
+            onRefreshRoot={() => {
+              if (activeRoot) {
+                void refreshFolder(activeRoot.path);
+              }
+            }}
+            onSelectLocation={selectLocation}
+            onToggleFolder={toggleFolder}
+            onSelectFile={selectFile}
+            onEntryContextMenu={openEntryContextMenu}
+            onRootContextMenu={openRootContextMenu}
+            onSavedContextMenu={openSavedContextMenu}
+            onOpenFolder={() => void openFolderAsRoot()}
+            rootPinned={activeRoot ? !isPinnable(activeRoot.path) : false}
+            rootPinDisabled={!activeRoot || !isUnpinnable(activeRoot)}
+            onToggleRootPin={toggleRootPin}
+            onDraftSubmit={submitDraft}
+            onDraftCancel={cancelDraft}
+            locationIcons={locationIcons}
+            homePath={homePath}
+            theme={theme}
+            onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+          />
         ) : null}
 
         {overlay === null ? <SidebarResizeHandle onPointerDown={startSidebarResize} /> : null}
