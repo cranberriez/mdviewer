@@ -76,11 +76,12 @@ const EDITOR_NODES = [
   HorizontalRuleNode,
 ];
 
-// Keep import and export symmetric: preserving newlines on import is required
-// so fenced ```code``` blocks parse as one CodeNode; exporting with the same
-// flag makes the round-trip an identity, so opening a file doesn't immediately
-// mark it dirty from a reformat.
-const PRESERVE_NEWLINES = true;
+// Keep import and export symmetric with rendered Markdown semantics. Raw blank
+// lines delimit blocks; they should not become editable empty paragraphs.
+// Adjacent non-empty prose lines are soft wraps, so merge them on import. Fenced
+// code contents stay intact because Lexical's normalizer preserves code blocks.
+const PRESERVE_NEWLINES = false;
+const MERGE_ADJACENT_LINES = true;
 
 function $importMarkdown(markdown: string): void {
   // Normalise CRLF/CR to LF before import. Lexical's importer splits on "\n";
@@ -94,6 +95,7 @@ function $importMarkdown(markdown: string): void {
     MARKDOWN_TRANSFORMERS,
     undefined,
     PRESERVE_NEWLINES,
+    MERGE_ADJACENT_LINES,
   );
 }
 
