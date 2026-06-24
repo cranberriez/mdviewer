@@ -18,6 +18,8 @@
   --color-text-secondary: #9a9aa2;
   --color-text-muted: #5f5f68;
   --color-text-on-active: #ffffff;
+  --color-accent-primary: #8bc5ff;
+  --color-accent-primary-strong: #4aa8ff;
 
   --radius-win: 12px;
   --radius-card: 12px;
@@ -87,6 +89,8 @@ body.theme-light {
   --color-text-secondary: #5a5a66;
   --color-text-muted: #9898a6;
   --color-text-on-active: #000000;
+  --color-accent-primary: #1677d2;
+  --color-accent-primary-strong: #0069c9;
 }
 
 /* Custom scrollbars to match the dark, flat aesthetic */

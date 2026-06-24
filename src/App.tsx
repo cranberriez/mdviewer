@@ -30,6 +30,8 @@ const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
 const MIN_CONTENT_WIDTH = 420;
 
+type UnsavedFileDrafts = Record<string, OpenFile>;
+
 function clampSidebarWidth(width: number) {
   const availableMax = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, window.innerWidth - MIN_CONTENT_WIDTH));
 
@@ -65,6 +67,14 @@ function pathIsDeletedTarget(target: ContextMenuTarget, path?: string | null) {
     : comparablePath(path) === comparablePath(target.path);
 }
 
+function rebasePath(path: string, fromRoot: string, toRoot: string) {
+  if (comparablePath(path) === comparablePath(fromRoot)) {
+    return toRoot;
+  }
+
+  return `${toRoot}${path.slice(fromRoot.length)}`;
+}
+
 function confirmDeleteTarget(target: ContextMenuTarget) {
   const description =
     target.kind === "folder"
@@ -97,7 +107,7 @@ function App() {
     action: MarkdownAction;
     id: number;
   } | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const [unsavedFileDrafts, setUnsavedFileDrafts] = useState<UnsavedFileDrafts>({});
   const [saving, setSaving] = useState(false);
   const [barMerged, setBarMerged] = useState(() => initialConfiguration.barMerged ?? false);
   const [theme, setTheme] = useState<AppTheme>(() => initialConfiguration.theme ?? "dark");
@@ -131,11 +141,19 @@ function App() {
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const findTargetRef = useRef<HTMLElement | null>(null);
+  const unsavedFileDraftsRef = useRef<UnsavedFileDrafts>({});
   const searchRequestRef = useRef(0);
   const pendingFindQueryRef = useRef<string | null>(null);
   // A heading fragment to scroll to once the just-opened file has rendered
   // (set when following a cross-file link like `doc.md#section`).
   const pendingAnchorRef = useRef<string | null>(null);
+  const updateUnsavedFileDrafts = useCallback((updater: (current: UnsavedFileDrafts) => UnsavedFileDrafts) => {
+    setUnsavedFileDrafts((current) => {
+      const next = updater(current);
+      unsavedFileDraftsRef.current = next;
+      return next;
+    });
+  }, []);
   const configurationRef = useRef<AppConfigurationState>({
     explorerHidden,
     sidebarWidth,
@@ -195,6 +213,8 @@ function App() {
     return true;
   }
 
+  const dirty = openFile ? Boolean(unsavedFileDrafts[comparablePath(openFile.path)]) : false;
+
   const renderedMarkdown = useMemo(() => {
     if (!openFile || openFile.kind !== "md") {
       return "";
@@ -245,6 +265,10 @@ function App() {
       document.body.classList.remove("theme-light");
     };
   }, [theme]);
+
+  useEffect(() => {
+    unsavedFileDraftsRef.current = unsavedFileDrafts;
+  }, [unsavedFileDrafts]);
 
   useEffect(() => {
     const nextConfiguration: AppConfigurationState = {
@@ -389,8 +413,29 @@ function App() {
       .catch(() => undefined);
 
     void appWindow
-      .onCloseRequested(async () => {
+      .onCloseRequested(async (event) => {
         await captureWindowFrame();
+
+        const draftCount = Object.keys(unsavedFileDraftsRef.current).length;
+        if (draftCount === 0) {
+          return;
+        }
+
+        const confirmed = await confirmDialog(
+          draftCount === 1
+            ? "There are unsaved changes in 1 file. Close without saving?"
+            : `There are unsaved changes in ${draftCount} files. Close without saving?`,
+          {
+            title: "Unsaved Changes",
+            kind: "warning",
+            okLabel: "Close Without Saving",
+            cancelLabel: "Cancel",
+          },
+        );
+
+        if (!confirmed) {
+          event.preventDefault();
+        }
       })
       .then((unlisten) => {
         if (cancelled) {
@@ -412,18 +457,30 @@ function App() {
       return;
     }
 
+    const fileToSave = openFile;
+    const draftKey = comparablePath(fileToSave.path);
+
     setSaving(true);
     setError(null);
 
     try {
-      await writeFile(openFile.path, openFile.content);
-      setDirty(false);
+      await writeFile(fileToSave.path, fileToSave.content);
+      updateUnsavedFileDrafts((current) => {
+        const currentDraft = current[draftKey];
+        if (currentDraft && currentDraft.content !== fileToSave.content) {
+          return current;
+        }
+
+        const next = { ...current };
+        delete next[draftKey];
+        return next;
+      });
     } catch (cause) {
       setError(`Unable to save file: ${String(cause)}`);
     } finally {
       setSaving(false);
     }
-  }, [openFile, saving]);
+  }, [openFile, saving, updateUnsavedFileDrafts]);
 
   useEffect(() => {
     let cancelled = false;
@@ -518,13 +575,13 @@ function App() {
 
     try {
       const content = await readFile(path);
+      const draft = unsavedFileDraftsRef.current[comparablePath(path)];
       setOpenFile({
         path,
         name: fileName(path),
-        content,
+        content: draft?.content ?? content,
         kind: fileKindFromPath(path),
       });
-      setDirty(false);
       if (options?.mode) {
         setMode(options.mode);
       }
@@ -532,7 +589,6 @@ function App() {
     } catch (cause) {
       setOpenFile(null);
       setOpenFilePath(null);
-      setDirty(false);
       setError(`Unable to read file: ${String(cause)}`);
     }
   }
@@ -632,7 +688,6 @@ function App() {
     setOpenFilePath(null);
     setExpanded(new Set());
     setError(null);
-    setDirty(false);
     setMode("preview");
     find.close();
     setSearchResults([]);
@@ -974,14 +1029,59 @@ function App() {
       await renamePath(originalPath, targetPath);
       await refreshFolder(current.parentPath);
 
+      updateUnsavedFileDrafts((drafts) => {
+        const next = { ...drafts };
+
+        Object.entries(drafts).forEach(([key, fileDraft]) => {
+          const draftIsAffected =
+            current.kind === "folder"
+              ? containsPath(originalPath, fileDraft.path)
+              : comparablePath(fileDraft.path) === comparablePath(originalPath);
+
+          if (!draftIsAffected) {
+            return;
+          }
+
+          delete next[key];
+
+          const nextPath =
+            current.kind === "folder"
+              ? rebasePath(fileDraft.path, originalPath, targetPath)
+              : targetPath;
+
+          if (!isVisibleFileName(nextPath)) {
+            return;
+          }
+
+          next[comparablePath(nextPath)] = {
+            ...fileDraft,
+            path: nextPath,
+            name: fileName(nextPath),
+            kind: fileKindFromPath(nextPath) as OpenFile["kind"],
+          };
+        });
+
+        return next;
+      });
+
       // Keep keyboard focus on the renamed entry at its new path.
       setFocusedEntry((focused) => (focused?.path === originalPath ? { ...focused, name, path: targetPath } : focused));
 
-      // If the renamed file is the open one, follow it (or close it when it is
-      // no longer a visible kind).
-      if (openFilePath === originalPath) {
-        if (current.kind === "file" && isVisibleFileName(name)) {
-          await openFileAtPath(targetPath);
+      // If the open file was renamed directly or inside a renamed folder, follow
+      // it (or close it when it is no longer a visible kind).
+      if (
+        openFilePath &&
+        (current.kind === "folder"
+          ? containsPath(originalPath, openFilePath)
+          : comparablePath(openFilePath) === comparablePath(originalPath))
+      ) {
+        const nextOpenPath =
+          current.kind === "folder"
+            ? rebasePath(openFilePath, originalPath, targetPath)
+            : targetPath;
+
+        if (isVisibleFileName(nextOpenPath)) {
+          await openFileAtPath(nextOpenPath);
         } else {
           setOpenFile(null);
           setOpenFilePath(null);
@@ -1044,8 +1144,16 @@ function App() {
           if (pathIsDeletedTarget(target, openFilePath)) {
             setOpenFile(null);
             setOpenFilePath(null);
-            setDirty(false);
           }
+          updateUnsavedFileDrafts((current) => {
+            const next: UnsavedFileDrafts = {};
+            Object.entries(current).forEach(([key, draft]) => {
+              if (!pathIsDeletedTarget(target, draft.path)) {
+                next[key] = draft;
+              }
+            });
+            return next;
+          });
           setSelectedFolderPath((current) => (pathIsDeletedTarget(target, current) ? parentPath(target.path) : current));
           setFocusedEntry((current) => (pathIsDeletedTarget(target, current?.path) ? null : current));
           setExpanded((current) => {
@@ -1088,8 +1196,18 @@ function App() {
   }
 
   function updateOpenFileContent(content: string) {
-    setOpenFile((current) => (current ? { ...current, content } : current));
-    setDirty(true);
+    if (!openFile) {
+      return;
+    }
+
+    const nextFile = { ...openFile, content };
+    const draftKey = comparablePath(openFile.path);
+
+    setOpenFile(nextFile);
+    updateUnsavedFileDrafts((current) => ({
+      ...current,
+      [draftKey]: nextFile,
+    }));
   }
 
   function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {

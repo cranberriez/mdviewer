@@ -660,6 +660,21 @@ body.theme-light .notice.error {
   color: #4a0509;
 }
 
+.save-action.save-action-dirty {
+  background: var(--color-accent-primary);
+  color: #000000;
+}
+
+.save-action.save-action-dirty:hover {
+  background: var(--color-accent-primary-strong);
+  color: #000000;
+}
+
+.save-action.save-action-dirty:active {
+  background: var(--color-accent-primary-strong);
+  color: #000000;
+}
+
 .view-mode-toggle {
   display: flex;
   flex: 0 0 auto;

@@ -38,17 +38,11 @@ export function FileActionControls({
     <div className="flex items-center gap-2">
       <div className="flex items-center gap-0.5">
         <IconActionButton
-          className={dirty ? "text-text-primary" : ""}
+          className={`save-action ${dirty ? "save-action-dirty" : ""}`}
           disabled={saving}
-          tooltip={saving ? "Saving" : "Save"}
+          tooltip={saving ? "Saving" : dirty ? "Save unsaved changes" : "Save"}
           onClick={onSave}
         >
-          <span
-            className={`absolute right-[5px] top-[5px] h-[5px] w-[5px] rounded-full transition-colors duration-100 ${
-              dirty ? "bg-text-secondary" : "bg-transparent"
-            }`}
-            aria-hidden="true"
-          />
           <Save size={15} />
         </IconActionButton>
 
