@@ -1347,6 +1347,7 @@ function App() {
       dirty,
       isMarkdown: openFile?.kind === "md",
       isEditing: mode === "edit" || mode === "code",
+      canCopy: Boolean(openFile),
       explorerHidden,
       barMerged,
       theme,

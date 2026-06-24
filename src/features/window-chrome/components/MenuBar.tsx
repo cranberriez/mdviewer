@@ -68,6 +68,8 @@ export interface MenuBarState {
   dirty: boolean;
   isMarkdown: boolean;
   isEditing: boolean;
+  /** Copy is available in every mode (incl. read-only preview) when a file is open. */
+  canCopy: boolean;
   explorerHidden: boolean;
   barMerged: boolean;
   theme: "dark" | "light";
@@ -127,7 +129,9 @@ function buildMenus(state: MenuBarState): TopMenuDef[] {
         { id: "redo", label: "Redo", icon: Redo2, shortcut: "Ctrl+Y", disabled: !editingText },
         { separator: true },
         { id: "cut", label: "Cut", icon: Scissors, shortcut: "Ctrl+X", disabled: !editingText },
-        { id: "copy", label: "Copy", icon: Copy, shortcut: "Ctrl+C", disabled: !editingText },
+        // Copy works in every mode, including read-only preview (copies the
+        // current selection, as Markdown source when copying from the preview).
+        { id: "copy", label: "Copy", icon: Copy, shortcut: "Ctrl+C", disabled: !state.canCopy },
         {
           id: "paste",
           label: "Paste",
