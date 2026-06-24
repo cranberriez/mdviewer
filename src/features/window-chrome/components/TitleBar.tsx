@@ -1,25 +1,53 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Minus, PanelLeft, Square, X } from "lucide-react";
+import { MenuBar, type MenuBarState } from "./MenuBar";
+
+// Below this titlebar width the File/Edit/View row collapses to a single
+// hamburger button so the breadcrumb and window controls keep their space.
+const MENU_COLLAPSE_WIDTH = 620;
 
 interface TitleBarProps {
   explorerHidden: boolean;
   fileActionsSlot?: ReactNode;
+  menuState: MenuBarState;
   rootName?: string;
   scopeName?: string | null;
   title: string;
+  onMenuAction: (id: string) => void;
+  /** Hide the explorer toggle (e.g. on the Home/onboarding overlay). */
+  hideExplorerToggle?: boolean;
   onToggleExplorer: () => void;
 }
 
 export function TitleBar({
   explorerHidden,
   fileActionsSlot,
+  menuState,
   rootName,
   scopeName,
   title,
+  onMenuAction,
+  hideExplorerToggle = false,
   onToggleExplorer,
 }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
+  const headerRef = useRef<HTMLElement | null>(null);
+  const [menuCompact, setMenuCompact] = useState(false);
+
+  // Collapse the menu to a hamburger when the titlebar gets narrow.
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? header.clientWidth;
+      setMenuCompact(width < MENU_COLLAPSE_WIDTH);
+    });
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const appWindow = getCurrentWindow();
@@ -60,39 +88,49 @@ export function TitleBar({
   const showTitleSegment = Boolean(scopeName) || title !== rootLabel;
 
   return (
-    <header className="titlebar" data-tauri-drag-region>
-      <button
-        type="button"
-        className={`titlebar-button titlebar-explorer ${
-          explorerHidden ? "bright" : ""
-        }`}
-        aria-label="Toggle explorer"
-        title="Toggle explorer"
-        onClick={onToggleExplorer}
-      >
-        <PanelLeft size={15} />
-      </button>
+    <header className="titlebar" data-tauri-drag-region ref={headerRef}>
+      {hideExplorerToggle ? null : (
+        <button
+          type="button"
+          className={`titlebar-button titlebar-explorer ${
+            explorerHidden ? "bright" : ""
+          }`}
+          aria-label="Toggle explorer"
+          title="Toggle explorer"
+          onClick={onToggleExplorer}
+        >
+          <PanelLeft size={15} />
+        </button>
+      )}
+
+      <MenuBar state={menuState} compact={menuCompact} onAction={onMenuAction} />
 
       <div className="titlebar-crumb" data-tauri-drag-region>
-        <span data-tauri-drag-region>{rootName ?? "Home"}</span>
-        {scopeName ? (
+        {hideExplorerToggle ? (
+          <span data-tauri-drag-region>{title}</span>
+        ) : (
           <>
-            <span className="crumb-separator" data-tauri-drag-region>
-              /
-            </span>
-            <span data-tauri-drag-region>{scopeName}</span>
+            <span data-tauri-drag-region>{rootName ?? "Home"}</span>
+            {scopeName ? (
+              <>
+                <span className="crumb-separator" data-tauri-drag-region>
+                  /
+                </span>
+                <span data-tauri-drag-region>{scopeName}</span>
+              </>
+            ) : null}
+            {showTitleSegment ? (
+              <>
+                <span className="crumb-separator" data-tauri-drag-region>
+                  /
+                </span>
+                <span className="crumb-name" data-tauri-drag-region>
+                  {title}
+                </span>
+              </>
+            ) : null}
           </>
-        ) : null}
-        {showTitleSegment ? (
-          <>
-            <span className="crumb-separator" data-tauri-drag-region>
-              /
-            </span>
-            <span className="crumb-name" data-tauri-drag-region>
-              {title}
-            </span>
-          </>
-        ) : null}
+        )}
       </div>
 
       <div className="titlebar-drag-space" data-tauri-drag-region />

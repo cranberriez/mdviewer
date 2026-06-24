@@ -8,7 +8,7 @@ const PLAIN_TEXT_LANGUAGES = new Set(["text", "txt", "plain", "plaintext", "nohi
 function highlightCode(source: string, language: string) {
   const normalizedLanguage = language.trim().toLowerCase();
 
-  if (PLAIN_TEXT_LANGUAGES.has(normalizedLanguage)) {
+  if (!normalizedLanguage || PLAIN_TEXT_LANGUAGES.has(normalizedLanguage)) {
     return markdown.utils.escapeHtml(source);
   }
 

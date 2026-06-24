@@ -11,6 +11,12 @@
   user-select: none;
 }
 
+/* On the Home/onboarding overlay the titlebar flows into the overlay surface
+   (same colour, no visible seam) so the chrome reads as one calm panel. */
+.app-window.overlay-active .titlebar {
+  background: var(--color-bg-card);
+}
+
 .titlebar-button {
   position: relative;
   height: 28px;
@@ -74,6 +80,72 @@
   display: flex;
   align-items: center;
   margin-left: auto;
+}
+
+/* ---------- Menu bar (File / Edit / View) ---------- */
+.menubar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.menubar-button {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-ctl);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.menubar-button:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.menubar-button.open {
+  background: var(--color-bg-active);
+  color: var(--color-text-on-active);
+}
+
+.menubar-hamburger {
+  height: 28px;
+  min-width: 28px;
+}
+
+/* Dropdowns reuse the context-menu surface (.ctx-menu) for theme parity. */
+.menu-dropdown {
+  min-width: 200px;
+  transform-origin: top left;
+}
+
+.menu-compact-root {
+  min-width: 132px;
+}
+
+.menu-compact-row .ci-label {
+  flex: 1;
+}
+
+.menu-compact-row.active {
+  background: var(--color-bg-active);
+}
+
+.menu-compact-caret {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+}
+
+.menu-compact-sub {
+  min-width: 200px;
 }
 
 .window-controls {
@@ -848,8 +920,8 @@ body.theme-light .notice.error {
   white-space: nowrap;
 }
 
-.preview-inner,
-.plain {
+.preview-scroll,
+.plain-scroll {
   min-height: 0;
   flex: 1;
   overflow: auto;
@@ -857,22 +929,6 @@ body.theme-light .notice.error {
 
 .visual-editor-panel {
   flex-basis: 100%;
-}
-
-.visual-markdown-editor {
-  width: 100%;
-  outline: none;
-  caret-color: var(--color-text-primary);
-  tab-size: 4;
-}
-
-.visual-markdown-editor .md-tab {
-  white-space: pre;
-}
-
-.visual-markdown-editor:empty::before {
-  color: var(--color-text-muted);
-  content: "Start writing markdown...";
 }
 
 .empty-state {
@@ -1156,4 +1212,469 @@ body.theme-light .ctx-item.danger:hover:not(:disabled) .ci-ico {
 
 .tree-inline-input:focus {
   border-color: var(--color-text-secondary);
+}
+
+/* ============================================================= */
+/* Home screen + Onboarding                                       */
+/* A shared, calm type scale and gentle letter-spacing keep these */
+/* dense lists readable. Both fill the panel area and never force */
+/* the window to scroll at common sizes.                          */
+/* ============================================================= */
+.home,
+.onboarding {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  background: var(--color-bg-card);
+  padding: clamp(20px, 4vh, 44px) 32px;
+  letter-spacing: 0.01em;
+}
+
+.onboarding {
+  position: absolute;
+  inset: 38px 0 0 0;
+  z-index: 60;
+  background: var(--color-bg-card);
+}
+
+.home-inner {
+  width: min(720px, 100%);
+}
+
+.onboarding-inner {
+  width: min(520px, 100%);
+}
+
+.home-head,
+.onboarding-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: clamp(18px, 3vh, 28px);
+}
+
+.home-logo,
+.onboarding-logo {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 9px;
+  background: var(--color-bg-active);
+  border: 1px solid var(--color-border-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-primary);
+}
+
+.home-head h1,
+.onboarding-head h1 {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--color-text-primary);
+}
+
+.home-head p,
+.onboarding-head p {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.home-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.home-open-root {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px;
+  margin-bottom: clamp(16px, 2.6vh, 24px);
+  border: 1px solid var(--color-bg-active);
+  border-radius: var(--radius-ctl);
+  background: var(--color-bg-active);
+  color: var(--color-text-on-active);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.home-open-root:hover {
+  filter: brightness(1.12);
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(18px, 3vw, 30px);
+}
+
+.home-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-col > .home-label {
+  margin-bottom: 11px;
+}
+
+.home-pins {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.home-pin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid var(--color-border-base);
+  border-radius: var(--radius-ctl);
+  background: var(--color-bg-sidebar);
+  color: var(--color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.home-pin:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-bg-active);
+}
+
+.home-pin-ico {
+  flex: 0 0 16px;
+  display: flex;
+  color: var(--color-text-secondary);
+}
+
+.home-pin-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.home-recents {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-recent {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-ctl);
+  background: transparent;
+  color: var(--color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.home-recent:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.home-recent.first {
+  background: var(--color-bg-sidebar);
+  border-color: var(--color-border-base);
+}
+
+.home-recent.first:hover {
+  background: var(--color-bg-hover);
+}
+
+.home-recent-ico {
+  flex: 0 0 15px;
+  display: flex;
+  color: var(--color-text-muted);
+}
+
+.home-recent:hover .home-recent-ico,
+.home-recent.first .home-recent-ico {
+  color: var(--color-text-secondary);
+}
+
+.home-recent-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.home-recent-file {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.home-recent-file svg {
+  flex: 0 0 auto;
+  opacity: 0.8;
+}
+
+.home-empty {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.home-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: clamp(14px, 2.4vh, 22px);
+}
+
+.home-setup-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.home-setup-link:hover {
+  color: var(--color-text-secondary);
+}
+
+.home-setup-link svg {
+  opacity: 0.8;
+}
+
+.ob-field {
+  margin-bottom: clamp(16px, 2.6vh, 24px);
+}
+
+.ob-field > .home-label {
+  margin-bottom: 9px;
+}
+
+.ob-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border-base);
+  border-radius: var(--radius-ctl);
+  background: var(--color-bg-sidebar);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  outline: none;
+}
+
+.ob-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.ob-input:focus {
+  border-color: var(--color-text-secondary);
+  background: var(--color-bg-hover);
+}
+
+.ob-folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ob-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-base);
+  border-radius: var(--radius-ctl);
+  background: var(--color-bg-sidebar);
+}
+
+.ob-folder-ico {
+  flex: 0 0 16px;
+  display: flex;
+  color: var(--color-text-secondary);
+}
+
+.ob-folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.ob-folder-sub {
+  color: var(--color-text-muted);
+}
+
+.ob-row-act {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.ob-row-act:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.ob-add-folder {
+  width: 100%;
+  margin-top: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px dashed var(--color-border-base);
+  border-radius: var(--radius-ctl);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.ob-add-folder:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-text-muted);
+}
+
+.ob-seg {
+  display: inline-flex;
+  border: 1px solid var(--color-border-base);
+  border-radius: var(--radius-ctl);
+  overflow: hidden;
+}
+
+.ob-seg button {
+  padding: 7px 15px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.ob-seg button + button {
+  border-left: 1px solid var(--color-border-base);
+}
+
+.ob-seg button:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.ob-seg button.active {
+  background: var(--color-bg-active);
+  color: var(--color-text-on-active);
+}
+
+.ob-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: clamp(8px, 2vh, 16px);
+  padding-top: clamp(16px, 2.6vh, 22px);
+  border-top: 1px solid var(--color-border-base);
+}
+
+.ob-spacer {
+  flex: 1;
+}
+
+.ob-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border: 1px solid var(--color-border-base);
+  border-radius: var(--radius-ctl);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.ob-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.ob-btn.primary {
+  background: var(--color-bg-active);
+  color: var(--color-text-on-active);
+  border-color: var(--color-bg-active);
+}
+
+.ob-btn.primary:hover {
+  filter: brightness(1.12);
+  background: var(--color-bg-active);
+}
+
+.ob-btn.ghost {
+  border-color: transparent;
+  color: var(--color-text-muted);
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.ob-btn.ghost:hover {
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+@media (max-width: 680px) {
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
 }
