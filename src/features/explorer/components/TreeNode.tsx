@@ -53,7 +53,6 @@ export function TreeNode({
   const isExpanded = expanded.has(entry.path);
   const children = childrenCache[entry.path];
   const isLoading = loadingPaths.has(entry.path);
-  const isSelectedFolder = selectedFolderPath === entry.path;
   const isActiveFile = activeFilePath === entry.path;
   const isUnsavedFile = !entry.is_dir && unsavedFilePathKeys.has(comparablePath(entry.path));
   const isActive = isActiveFile;
