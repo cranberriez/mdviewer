@@ -859,17 +859,6 @@ body.theme-light .notice.error {
   flex-basis: 100%;
 }
 
-.visual-markdown-editor {
-  width: 100%;
-  outline: none;
-  caret-color: var(--color-text-primary);
-}
-
-.visual-markdown-editor:empty::before {
-  color: var(--color-text-muted);
-  content: "Start writing markdown...";
-}
-
 .empty-state {
   width: min(460px, calc(100% - 48px));
   margin: auto;

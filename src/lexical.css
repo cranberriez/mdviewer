@@ -130,10 +130,9 @@
   border-radius: 8px;
   padding: 14px 16px;
   margin: 0.9em 0;
-  overflow-x: auto;
+  overflow: auto;
   font-family: var(--font-mono);
   font-size: 0.86em;
-  line-height: 1.5;
   color: #cfcfd6;
 }
 .theme-light .md code.lexical-code {

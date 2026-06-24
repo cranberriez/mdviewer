@@ -230,7 +230,7 @@ export const LexicalMarkdownEditor = forwardRef<
         <RichTextPlugin
           contentEditable={
             <ContentEditable
-              className="preview-inner md visual-markdown-editor lexical-content"
+              className="preview-inner md lexical-content"
               aria-label="Markdown editor"
               aria-multiline="true"
               role="textbox"
