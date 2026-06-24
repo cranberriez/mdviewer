@@ -149,39 +149,23 @@
   user-select: none;
 }
 
-/* Table editing affordances on top of the preview's `.md table` styles. */
-.md .lexical-table {
-  table-layout: fixed;
-  width: max-content;
-  max-width: 100%;
-  overflow-y: scroll;
-}
+/* Editor tables intentionally inherit the preview's `.md table` / `.md th,td`
+   styles (border-collapse, width:100%, padding, header background) so the edit
+   view matches the rendered preview. Tables auto-size to content exactly like
+   markdown-it's output — we do NOT set a fixed layout or min column width. The
+   rules below only add what editing needs on top. */
 .md .lexical-table-cell,
 .md .lexical-table-cell-header {
   position: relative;
-  min-width: 75px;
   vertical-align: top;
   outline: none;
 }
-.md .lexical-table-cell-header {
-  background: #1a1a1d;
-  font-weight: 600;
-}
+/* Highlight for cells selected via drag (Lexical's cell selection). */
 .lexical-table-cell-selected {
   background: rgba(110, 168, 254, 0.18);
 }
-
-/* Selected-cell overlay Lexical renders while dragging across cells. */
 .lexical-table-selection ::selection {
   background: transparent;
-}
-
-/* TableCellResizerPlugin — drag zones portalled to <body>. */
-.TableCellResizer__resizer {
-  position: absolute;
-}
-.TableCellResizer__ui {
-  z-index: 10;
 }
 
 /* FloatingFormatToolbarPlugin — pops up above a text selection. */

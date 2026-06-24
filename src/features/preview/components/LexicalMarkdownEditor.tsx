@@ -41,7 +41,6 @@ import {
 } from "../markdownActions";
 import { applyMarkdownActionToEditor } from "./lexical/applyAction";
 import FloatingFormatToolbarPlugin from "./lexical/plugins/FloatingFormatToolbarPlugin";
-import TableCellResizerPlugin from "./lexical/plugins/TableCellResizerPlugin";
 import { lexicalTheme } from "./lexical/theme";
 import { MARKDOWN_TRANSFORMERS } from "./lexical/transformers";
 
@@ -215,8 +214,7 @@ export const LexicalMarkdownEditor = forwardRef<
         <ListPlugin />
         <CheckListPlugin />
         <LinkPlugin />
-        <TablePlugin hasCellMerge hasCellBackgroundColor={false} />
-        <TableCellResizerPlugin />
+        <TablePlugin />
         <FloatingFormatToolbarPlugin />
         <TabIndentationPlugin />
         <MarkdownShortcutPlugin transformers={MARKDOWN_TRANSFORMERS} />
