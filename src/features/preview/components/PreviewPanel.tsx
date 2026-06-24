@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   type ReactNode,
   type RefObject,
@@ -71,6 +72,7 @@ export function PreviewPanel({
 }: PreviewPanelProps) {
   const editorScrollRef = useRef<HTMLTextAreaElement | null>(null);
   const previewScrollRef = useRef<HTMLElement | null>(null);
+  const visualEditorRootRef = useRef<HTMLDivElement | null>(null);
   const visualEditorRef = useRef<VisualMarkdownEditorHandle | null>(null);
   const centerRatioRef = useRef(0);
   const ignoredScrollPanelRef = useRef<ScrollPanel | null>(null);
@@ -82,10 +84,28 @@ export function PreviewPanel({
   const setPreviewScrollRef = useCallback(
     (node: HTMLElement | null) => {
       previewScrollRef.current = node;
-      findTargetRef.current = node;
     },
-    [findTargetRef],
+    [],
   );
+
+  useLayoutEffect(() => {
+    if (!openFile) {
+      findTargetRef.current = null;
+      return;
+    }
+
+    if (mode === "code" || (mode === "edit" && openFile.kind !== "md")) {
+      findTargetRef.current = editorScrollRef.current;
+      return;
+    }
+
+    if (mode === "edit") {
+      findTargetRef.current = visualEditorRootRef.current;
+      return;
+    }
+
+    findTargetRef.current = previewScrollRef.current;
+  }, [findTargetRef, mode, openFile]);
 
   const applyCenterRatio = useCallback((panel: ScrollPanel, ratio: number) => {
     const element =
@@ -351,6 +371,7 @@ export function PreviewPanel({
                   html={renderedMarkdown}
                   onChange={handleEditorContentChange}
                   onScroll={handlePreviewScroll}
+                  rootRef={visualEditorRootRef}
                 />
               </section>
             ) : null}

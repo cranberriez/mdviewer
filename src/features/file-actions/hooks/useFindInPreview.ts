@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
-// Find-in-file built on the CSS Custom Highlight API.
+// Find-in-file built on the CSS Custom Highlight API where possible.
 //
 // Instead of injecting <mark> elements into the rendered preview (which React
 // owns via dangerouslySetInnerHTML and will happily wipe on re-render, and
@@ -10,6 +10,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 //   - highlights survive React re-renders and arrow/Enter navigation,
 //   - text never reflows (no width/letter changes), and
 //   - matches of any length (including a single character) are highlighted.
+//
+// Textareas do not expose their value as DOM text nodes, so code-mode find uses
+// textarea selection and scroll position for the active match instead.
 
 const ALL_HIGHLIGHT = "find-matches";
 const CURRENT_HIGHLIGHT = "find-current";
@@ -83,6 +86,38 @@ function buildRanges(root: HTMLElement, query: string): Range[] {
   return ranges;
 }
 
+interface TextareaMatch {
+  end: number;
+  start: number;
+}
+
+function buildTextareaMatches(value: string, query: string): TextareaMatch[] {
+  const needle = query.toLowerCase();
+  if (!needle) {
+    return [];
+  }
+
+  const haystack = value.toLowerCase();
+  const matches: TextareaMatch[] = [];
+  let from = 0;
+
+  for (;;) {
+    const index = haystack.indexOf(needle, from);
+    if (index === -1) {
+      break;
+    }
+
+    matches.push({ start: index, end: index + needle.length });
+    from = index + needle.length;
+  }
+
+  return matches;
+}
+
+function isTextarea(element: HTMLElement): element is HTMLTextAreaElement {
+  return element instanceof HTMLTextAreaElement;
+}
+
 function paint(ranges: Range[], currentIndex: number) {
   if (!highlightsSupported()) {
     return;
@@ -121,11 +156,38 @@ function scrollRangeIntoView(range: Range, container: HTMLElement) {
   container.scrollBy({ top: offset, behavior: "smooth" });
 }
 
+function lineHeightFor(textarea: HTMLTextAreaElement) {
+  const style = window.getComputedStyle(textarea);
+  const parsed = Number.parseFloat(style.lineHeight);
+  if (Number.isFinite(parsed)) {
+    return parsed;
+  }
+
+  const fontSize = Number.parseFloat(style.fontSize);
+  return Number.isFinite(fontSize) ? fontSize * 1.4 : 20;
+}
+
+function scrollTextareaMatchIntoView(
+  textarea: HTMLTextAreaElement,
+  match: TextareaMatch,
+) {
+  const lineIndex = textarea.value.slice(0, match.start).split(/\r?\n/).length - 1;
+  const lineHeight = lineHeightFor(textarea);
+  const top = lineIndex * lineHeight;
+  const nextScrollTop = top - textarea.clientHeight / 2 + lineHeight / 2;
+
+  textarea.scrollTop = Math.max(
+    0,
+    Math.min(textarea.scrollHeight - textarea.clientHeight, nextScrollTop),
+  );
+}
+
 export function useFindInPreview(
   targetRef: React.RefObject<HTMLElement | null>,
   contentKey: string,
 ) {
   const rangesRef = useRef<Range[]>([]);
+  const textareaMatchesRef = useRef<TextareaMatch[]>([]);
   const currentRef = useRef(-1);
   const queryRef = useRef("");
   const [current, setCurrent] = useState(-1);
@@ -139,12 +201,24 @@ export function useFindInPreview(
     (index: number, options?: { scroll?: boolean }) => {
       currentRef.current = index;
       setCurrent(index);
-      paint(rangesRef.current, index);
+      const target = targetRef.current;
+
+      if (target && isTextarea(target)) {
+        clearHighlights();
+        const match = textareaMatchesRef.current[index];
+        if (match) {
+          target.setSelectionRange(match.start, match.end);
+          if (options?.scroll) {
+            scrollTextareaMatchIntoView(target, match);
+          }
+        }
+      } else {
+        paint(rangesRef.current, index);
+      }
 
       if (options?.scroll) {
-        const target = targetRef.current;
         const range = rangesRef.current[index];
-        if (target && range) {
+        if (target && !isTextarea(target) && range) {
           scrollRangeIntoView(range, target);
         }
       }
@@ -158,6 +232,7 @@ export function useFindInPreview(
       const target = targetRef.current;
       if (!target || !open) {
         rangesRef.current = [];
+        textareaMatchesRef.current = [];
         clearHighlights();
         setTotal(0);
         currentRef.current = -1;
@@ -165,8 +240,31 @@ export function useFindInPreview(
         return;
       }
 
+      if (isTextarea(target)) {
+        const matches = buildTextareaMatches(target.value, queryRef.current.trim());
+        textareaMatchesRef.current = matches;
+        rangesRef.current = [];
+        clearHighlights();
+        setTotal(matches.length);
+
+        if (!matches.length) {
+          currentRef.current = -1;
+          setCurrent(-1);
+          return;
+        }
+
+        const keepIndex =
+          !options?.resetIndex &&
+          currentRef.current >= 0 &&
+          currentRef.current < matches.length;
+        const nextIndex = keepIndex ? currentRef.current : 0;
+        apply(nextIndex, { scroll: options?.resetIndex });
+        return;
+      }
+
       const ranges = buildRanges(target, queryRef.current.trim());
       rangesRef.current = ranges;
+      textareaMatchesRef.current = [];
       setTotal(ranges.length);
 
       if (!ranges.length) {
@@ -189,6 +287,7 @@ export function useFindInPreview(
   const close = useCallback(() => {
     clearHighlights();
     rangesRef.current = [];
+    textareaMatchesRef.current = [];
     currentRef.current = -1;
     queryRef.current = "";
     setCurrent(-1);
@@ -224,7 +323,9 @@ export function useFindInPreview(
   const goTo = useCallback(
     (direction: 1 | -1) => {
       const ranges = rangesRef.current;
-      if (!ranges.length) {
+      const textareaMatches = textareaMatchesRef.current;
+      const total = ranges.length || textareaMatches.length;
+      if (!total) {
         return;
       }
       const currentIndex = currentRef.current;
@@ -232,8 +333,8 @@ export function useFindInPreview(
         currentIndex < 0
           ? direction === 1
             ? 0
-            : ranges.length - 1
-          : (currentIndex + direction + ranges.length) % ranges.length;
+            : total - 1
+          : (currentIndex + direction + total) % total;
 
       apply(nextIndex, { scroll: true });
     },

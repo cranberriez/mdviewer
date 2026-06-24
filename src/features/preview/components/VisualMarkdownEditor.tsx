@@ -5,6 +5,7 @@ import {
   useImperativeHandle,
   useRef,
   type FormEvent,
+  type RefObject,
   type KeyboardEvent,
   type ChangeEvent,
   type UIEventHandler,
@@ -19,6 +20,7 @@ interface VisualMarkdownEditorProps {
   html: string;
   onChange: (content: string) => void;
   onScroll: UIEventHandler<HTMLDivElement>;
+  rootRef?: RefObject<HTMLDivElement | null>;
 }
 
 export interface VisualMarkdownEditorHandle {
@@ -768,10 +770,20 @@ function insertTable(range: Range) {
 export const VisualMarkdownEditor = forwardRef<
   VisualMarkdownEditorHandle,
   VisualMarkdownEditorProps
->(function VisualMarkdownEditor({ content, html, onChange, onScroll }, ref) {
+>(function VisualMarkdownEditor({ content, html, onChange, onScroll, rootRef }, ref) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const focusedRef = useRef(false);
   const lastSyncedContentRef = useRef(content);
+
+  const setEditorRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      editorRef.current = node;
+      if (rootRef) {
+        rootRef.current = node;
+      }
+    },
+    [rootRef],
+  );
 
   const syncHtml = useCallback(() => {
     const editor = editorRef.current;
@@ -929,7 +941,7 @@ export const VisualMarkdownEditor = forwardRef<
 
   return (
     <div
-      ref={editorRef}
+      ref={setEditorRef}
       className="preview-inner md visual-markdown-editor"
       contentEditable
       data-find-content="true"

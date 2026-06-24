@@ -223,7 +223,11 @@ function App() {
     return markdown.render(openFile.content);
   }, [openFile]);
 
-  const find = useFindInPreview(findTargetRef, `${openFile?.path ?? ""}:${mode}:${openFile?.kind === "md" ? renderedMarkdown : (openFile?.content ?? "")}`);
+  const findContentKey =
+    mode === "preview" && openFile?.kind === "md"
+      ? renderedMarkdown
+      : (openFile?.content ?? "");
+  const find = useFindInPreview(findTargetRef, `${openFile?.path ?? ""}:${mode}:${findContentKey}`);
 
   useEffect(() => {
     const query = pendingFindQueryRef.current;
@@ -1244,18 +1248,9 @@ function App() {
       saving={saving}
       onModeChange={(nextMode) => {
         setMode(nextMode);
-        if (nextMode === "code") {
-          find.close();
-        }
       }}
       onSave={() => void saveOpenFile()}
-      onToggleFind={() => {
-        if (!find.open) {
-          setMode("preview");
-        }
-
-        find.toggle();
-      }}
+      onToggleFind={find.toggle}
       onToggleMerged={() => setBarMerged((merged) => !merged)}
     />
   ) : null;
@@ -1287,9 +1282,6 @@ function App() {
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
-        if (!find.open) {
-          setMode("preview");
-        }
         find.setOpen(true);
       }
     }
