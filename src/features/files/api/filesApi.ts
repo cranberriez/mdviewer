@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { Entry } from "../../../shared/types/files";
+import type { Entry, FileSearchResponse } from "../../../shared/types/files";
 
 export function defaultLocations() {
   return invoke<Entry[]>("default_locations");
@@ -12,6 +12,10 @@ export function readFolder(path: string) {
 
 export function readFile(path: string) {
   return invoke<string>("read_file", { path });
+}
+
+export function searchFiles(root: string, query: string) {
+  return invoke<FileSearchResponse>("search_files", { root, query });
 }
 
 export function writeFile(path: string, content: string) {

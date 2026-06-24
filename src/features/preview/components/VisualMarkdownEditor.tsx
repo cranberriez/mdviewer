@@ -6,6 +6,7 @@ import {
   useRef,
   type FormEvent,
   type KeyboardEvent,
+  type ChangeEvent,
   type UIEventHandler,
 } from "react";
 import {
@@ -72,6 +73,36 @@ function serializeInline(node: Node): string {
   return body;
 }
 
+function isListElement(node: Node) {
+  return (
+    node instanceof HTMLElement &&
+    ["ul", "ol"].includes(node.tagName.toLowerCase())
+  );
+}
+
+function directChildCheckbox(element: HTMLElement) {
+  return Array.from(element.children).find(
+    (child): child is HTMLInputElement =>
+      child instanceof HTMLInputElement && child.type === "checkbox",
+  );
+}
+
+function serializeListItemInline(element: HTMLElement) {
+  return Array.from(element.childNodes)
+    .filter((child) => child !== directChildCheckbox(element) && !isListElement(child))
+    .map(serializeInline)
+    .join("")
+    .trim();
+}
+
+function indentNestedList(value: string) {
+  return value
+    .trimEnd()
+    .split("\n")
+    .map((line) => (line ? `  ${line}` : line))
+    .join("\n");
+}
+
 function serializeBlock(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) {
     return node.textContent ?? "";
@@ -110,15 +141,18 @@ function serializeBlock(node: Node): string {
     const items = Array.from(node.children)
       .filter((child) => child.tagName.toLowerCase() === "li")
       .map((child, index) => {
-        const checkbox = child.querySelector("input[type='checkbox']");
+        const checkbox = directChildCheckbox(child as HTMLElement);
         const prefix = checkbox
-          ? `- [${(checkbox as HTMLInputElement).checked ? "x" : " "}] `
+          ? `- [${checkbox.checked ? "x" : " "}] `
           : ordered
             ? `${index + 1}. `
             : "- ";
-        const clone = child.cloneNode(true) as HTMLElement;
-        clone.querySelector("input[type='checkbox']")?.remove();
-        return `${prefix}${serializeInline(clone).trim()}`;
+        const nestedLists = Array.from(child.children)
+          .filter(isListElement)
+          .map((list) => indentNestedList(serializeBlock(list)));
+        return [`${prefix}${serializeListItemInline(child as HTMLElement)}`, ...nestedLists]
+          .filter(Boolean)
+          .join("\n");
       });
     return `${items.join("\n")}\n\n`;
   }
@@ -154,6 +188,17 @@ function serializeEditor(element: HTMLElement) {
     .join("")
     .replace(/\n{3,}/g, "\n\n")
     .trimEnd();
+}
+
+function enableEditorCheckboxes(element: HTMLElement) {
+  element
+    .querySelectorAll<HTMLInputElement>("input[type='checkbox']")
+    .forEach((checkbox) => {
+      checkbox.checked = checkbox.hasAttribute("checked");
+      checkbox.defaultChecked = checkbox.checked;
+      checkbox.contentEditable = "false";
+      checkbox.disabled = false;
+    });
 }
 
 function selectionInside(element: HTMLElement) {
@@ -516,8 +561,11 @@ function blockAutoFormatBeforeInput(editor: HTMLElement, data: string) {
       const checkbox = document.createElement("input");
       const text = document.createTextNode(fullText.slice(5));
 
+      list.className = "contains-task-list";
+      item.className = "task-list-item";
+      checkbox.className = "task-list-item-checkbox";
       checkbox.type = "checkbox";
-      checkbox.disabled = true;
+      checkbox.contentEditable = "false";
       checkbox.checked = beforeCaret === "- [x]";
       item.append(checkbox, " ", text);
       list.append(item);
@@ -671,13 +719,16 @@ function insertChecklist(range: Range) {
   const list = document.createElement("ul");
   let selectedNode: Node | undefined;
 
+  list.className = "contains-task-list";
   for (const line of lines) {
     const item = document.createElement("li");
     const checkbox = document.createElement("input");
     const text = document.createTextNode(line);
 
+    item.className = "task-list-item";
+    checkbox.className = "task-list-item-checkbox";
     checkbox.type = "checkbox";
-    checkbox.disabled = true;
+    checkbox.contentEditable = "false";
     item.append(checkbox, " ", text);
     list.append(item);
     selectedNode ??= text;
@@ -729,6 +780,7 @@ export const VisualMarkdownEditor = forwardRef<
     }
 
     editor.innerHTML = html;
+    enableEditorCheckboxes(editor);
     lastSyncedContentRef.current = content;
   }, [content, html]);
 
@@ -865,6 +917,16 @@ export const VisualMarkdownEditor = forwardRef<
     [commitDom],
   );
 
+  const handleChange = useCallback(
+    (event: ChangeEvent<HTMLDivElement>) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.type === "checkbox") {
+        commitDom();
+      }
+    },
+    [commitDom],
+  );
+
   return (
     <div
       ref={editorRef}
@@ -884,6 +946,7 @@ export const VisualMarkdownEditor = forwardRef<
         focusedRef.current = true;
       }}
       onBeforeInput={handleBeforeInput}
+      onChange={handleChange}
       onInput={commitDom}
       onKeyDown={handleKeyDown}
       onScroll={onScroll}
