@@ -15,6 +15,8 @@ interface TitleBarProps {
   scopeName?: string | null;
   title: string;
   onMenuAction: (id: string) => void;
+  /** Hide the explorer toggle (e.g. on the Home/onboarding overlay). */
+  hideExplorerToggle?: boolean;
   onToggleExplorer: () => void;
 }
 
@@ -26,6 +28,7 @@ export function TitleBar({
   scopeName,
   title,
   onMenuAction,
+  hideExplorerToggle = false,
   onToggleExplorer,
 }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
@@ -86,40 +89,48 @@ export function TitleBar({
 
   return (
     <header className="titlebar" data-tauri-drag-region ref={headerRef}>
-      <button
-        type="button"
-        className={`titlebar-button titlebar-explorer ${
-          explorerHidden ? "bright" : ""
-        }`}
-        aria-label="Toggle explorer"
-        title="Toggle explorer"
-        onClick={onToggleExplorer}
-      >
-        <PanelLeft size={15} />
-      </button>
+      {hideExplorerToggle ? null : (
+        <button
+          type="button"
+          className={`titlebar-button titlebar-explorer ${
+            explorerHidden ? "bright" : ""
+          }`}
+          aria-label="Toggle explorer"
+          title="Toggle explorer"
+          onClick={onToggleExplorer}
+        >
+          <PanelLeft size={15} />
+        </button>
+      )}
 
       <MenuBar state={menuState} compact={menuCompact} onAction={onMenuAction} />
 
       <div className="titlebar-crumb" data-tauri-drag-region>
-        <span data-tauri-drag-region>{rootName ?? "Home"}</span>
-        {scopeName ? (
+        {hideExplorerToggle ? (
+          <span data-tauri-drag-region>{title}</span>
+        ) : (
           <>
-            <span className="crumb-separator" data-tauri-drag-region>
-              /
-            </span>
-            <span data-tauri-drag-region>{scopeName}</span>
+            <span data-tauri-drag-region>{rootName ?? "Home"}</span>
+            {scopeName ? (
+              <>
+                <span className="crumb-separator" data-tauri-drag-region>
+                  /
+                </span>
+                <span data-tauri-drag-region>{scopeName}</span>
+              </>
+            ) : null}
+            {showTitleSegment ? (
+              <>
+                <span className="crumb-separator" data-tauri-drag-region>
+                  /
+                </span>
+                <span className="crumb-name" data-tauri-drag-region>
+                  {title}
+                </span>
+              </>
+            ) : null}
           </>
-        ) : null}
-        {showTitleSegment ? (
-          <>
-            <span className="crumb-separator" data-tauri-drag-region>
-              /
-            </span>
-            <span className="crumb-name" data-tauri-drag-region>
-              {title}
-            </span>
-          </>
-        ) : null}
+        )}
       </div>
 
       <div className="titlebar-drag-space" data-tauri-drag-region />

@@ -58,12 +58,12 @@ export const MarkdownPreview = forwardRef<HTMLDivElement, MarkdownPreviewProps>(
     return (
       <div
         ref={ref}
-        className="preview-inner"
+        className="preview-scroll"
         data-find-content="true"
         onScroll={onScroll}
       >
         <div
-          className="md"
+          className="preview-inner md"
           onClick={handleClick}
           onCopy={handleCopy}
           dangerouslySetInnerHTML={{ __html: html }}
