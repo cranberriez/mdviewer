@@ -219,8 +219,11 @@ const TABLE: ElementTransformer = {
  *
  * Assembled by hand (rather than reusing the bundled `TRANSFORMERS`) to
  * guarantee parity with the previous editor: `CHECK_LIST` adds `- [ ]` task
- * lists and the vendored `TABLE` adds GFM pipe tables. Order matters — element
- * transformers run before inline ones, and `CHECK_LIST` before the generic list
+ * lists and the vendored `TABLE` adds GFM pipe tables.
+ *
+ * Order mirrors Lexical's bundled `TRANSFORMERS` (ELEMENT before MULTILINE);
+ * the importer handles multiline fenced ```code``` blocks specially regardless
+ * of array position. `CHECK_LIST` is placed before the generic list
  * transformers so `- [ ]` isn't swallowed as a plain bullet.
  */
 export const MARKDOWN_TRANSFORMERS: Array<Transformer> = [

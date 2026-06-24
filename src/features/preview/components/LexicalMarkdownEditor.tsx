@@ -40,7 +40,12 @@ import {
   type MarkdownActionResult,
 } from "../markdownActions";
 import { applyMarkdownActionToEditor } from "./lexical/applyAction";
+import CodeBlockToolsPlugin from "./lexical/plugins/CodeBlockToolsPlugin";
+import CodeHighlightPlugin from "./lexical/plugins/CodeHighlightPlugin";
 import FloatingFormatToolbarPlugin from "./lexical/plugins/FloatingFormatToolbarPlugin";
+import FloatingLinkEditorPlugin from "./lexical/plugins/FloatingLinkEditorPlugin";
+import SlashCommandMenuPlugin from "./lexical/plugins/SlashCommandMenuPlugin";
+import TableActionsPlugin from "./lexical/plugins/TableActionsPlugin";
 import { lexicalTheme } from "./lexical/theme";
 import { MARKDOWN_TRANSFORMERS } from "./lexical/transformers";
 
@@ -71,8 +76,33 @@ const EDITOR_NODES = [
   HorizontalRuleNode,
 ];
 
+// Keep import and export symmetric: preserving newlines on import is required
+// so fenced ```code``` blocks parse as one CodeNode; exporting with the same
+// flag makes the round-trip an identity, so opening a file doesn't immediately
+// mark it dirty from a reformat.
+const PRESERVE_NEWLINES = true;
+
+function $importMarkdown(markdown: string): void {
+  // Normalise CRLF/CR to LF before import. Lexical's importer splits on "\n";
+  // on Windows-saved files the leftover "\r" defeats the code-fence end regex
+  // (/^[ \t]*`{3,}$/), so the closing ``` never matches and the whole block
+  // falls through to per-line inline code. (Editor re-serialises with "\n".)
+  const normalized = markdown.replace(/\r\n?/g, "\n");
+
+  $convertFromMarkdownString(
+    normalized,
+    MARKDOWN_TRANSFORMERS,
+    undefined,
+    PRESERVE_NEWLINES,
+  );
+}
+
 function $readMarkdown(): string {
-  return $convertToMarkdownString(MARKDOWN_TRANSFORMERS);
+  return $convertToMarkdownString(
+    MARKDOWN_TRANSFORMERS,
+    undefined,
+    PRESERVE_NEWLINES,
+  );
 }
 
 /**
@@ -104,8 +134,8 @@ const EditorBridge = forwardRef<
     lastIngestedRef.current = content;
     editor.update(
       () => {
-        $convertFromMarkdownString(content, MARKDOWN_TRANSFORMERS);
-        lastEmittedRef.current = $convertToMarkdownString(MARKDOWN_TRANSFORMERS);
+        $importMarkdown(content);
+        lastEmittedRef.current = $readMarkdown();
       },
       { discrete: true },
     );
@@ -158,7 +188,7 @@ export const LexicalMarkdownEditor = forwardRef<
     namespace: "mdviewer-editor",
     theme: lexicalTheme,
     nodes: EDITOR_NODES,
-    editorState: () => $convertFromMarkdownString(content, MARKDOWN_TRANSFORMERS),
+    editorState: () => $importMarkdown(content),
     onError(error: Error) {
       // Surface in dev tools; never let a transform error tear down the app.
       console.error("[LexicalMarkdownEditor]", error);
@@ -174,7 +204,7 @@ export const LexicalMarkdownEditor = forwardRef<
       }
 
       // Skip echoes of content we just ingested/emitted to avoid feedback loops.
-      const markdown = $convertToMarkdownString(MARKDOWN_TRANSFORMERS);
+      const markdown = $readMarkdown();
       if (markdown === lastEmittedRef.current) {
         return;
       }
@@ -215,7 +245,12 @@ export const LexicalMarkdownEditor = forwardRef<
         <CheckListPlugin />
         <LinkPlugin />
         <TablePlugin />
+        <TableActionsPlugin />
         <FloatingFormatToolbarPlugin />
+        <FloatingLinkEditorPlugin />
+        <CodeHighlightPlugin />
+        <CodeBlockToolsPlugin />
+        <SlashCommandMenuPlugin />
         <TabIndentationPlugin />
         <MarkdownShortcutPlugin transformers={MARKDOWN_TRANSFORMERS} />
         <OnChangePlugin

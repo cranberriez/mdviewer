@@ -102,12 +102,52 @@
   content: "";
   position: absolute;
   left: 5px;
-  top: 0.42em;
-  width: 3px;
-  height: 7px;
-  border: solid #202024;
+  top: 0.4em;
+  width: 4px;
+  height: 8px;
+  border: solid #1a1a1a;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+}
+
+/* ---------------------------------------------------------------------------
+   Block code (Lexical CodeNode).
+
+   Lexical renders a fenced block as a bare `<code class="lexical-code">` with
+   NO surrounding `<pre>`. That means the preview's `.md pre code` reset never
+   matches, so the inline `.md code` pill (background + border + radius) leaks
+   onto the block and, combined with the editor's preformatted whitespace, paints
+   one pill per visual line. We give the block its own box here (mirroring
+   `.md pre`) and reset any inline-code styling on its inner text spans.
+--------------------------------------------------------------------------- */
+.md code.lexical-code {
+  display: block;
+  position: relative;
+  white-space: pre;
+  tab-size: 2;
+  background: #121214;
+  border: 1px solid var(--color-border-base);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 0.9em 0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  line-height: 1.5;
+  color: #cfcfd6;
+}
+.theme-light .md code.lexical-code {
+  background: #f5f5f8;
+  color: #2e2e36;
+}
+/* Defensive: the inner highlight/text spans must never re-draw the inline pill
+   (they inherit `.md code`-adjacent rules in some browsers). */
+.md code.lexical-code span {
+  background: none;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
 }
 
 /* Code block highlight tokens (Prism token names from Lexical). Colours mirror
@@ -196,4 +236,176 @@
 .lexical-floating-toolbar-button:hover {
   background: var(--color-bg-hover, #202024);
   color: var(--color-text-primary);
+}
+
+/* SlashCommandMenuPlugin — typeahead menu anchored at the caret. */
+.lexical-slash-menu {
+  position: absolute;
+  top: 1.6em;
+  left: 0;
+  z-index: 50;
+  width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--color-border-base);
+  border-radius: 8px;
+  background: var(--color-bg-menu, #1a1a1d);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.lexical-slash-menu ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lexical-slash-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: 5px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+.lexical-slash-item.selected,
+.lexical-slash-item:hover {
+  background: var(--color-bg-hover, #202024);
+  color: var(--color-text-primary);
+}
+
+/* FloatingLinkEditorPlugin — popover anchored below a link selection. */
+.lexical-link-editor {
+  position: absolute;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 360px;
+  padding: 5px 6px;
+  border: 1px solid var(--color-border-base);
+  border-radius: 8px;
+  background: var(--color-bg-menu, #1a1a1d);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.lexical-link-editor-url {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+  color: #8ecbf0;
+  font-size: 12px;
+  text-decoration: none;
+}
+.lexical-link-editor-url:hover {
+  text-decoration: underline;
+}
+.lexical-link-editor-input {
+  width: 220px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border-base);
+  border-radius: 5px;
+  background: var(--color-bg-window, #0e0e10);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  outline: none;
+}
+.lexical-link-editor-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.lexical-link-editor-button:hover {
+  background: var(--color-bg-hover, #202024);
+  color: var(--color-text-primary);
+}
+
+/* CodeBlockToolsPlugin — language select + copy, tucked in the block's corner. */
+.lexical-code-tools {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* Anchored at the block's top-right corner; pull left by our own width. */
+  transform: translateX(-100%);
+}
+.lexical-code-tools-select {
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--color-border-base);
+  border-radius: 5px;
+  background: var(--color-bg-menu, #1a1a1d);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.lexical-code-tools-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border-base);
+  border-radius: 5px;
+  background: var(--color-bg-menu, #1a1a1d);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.lexical-code-tools-button:hover {
+  background: var(--color-bg-hover, #202024);
+  color: var(--color-text-primary);
+}
+
+/* TableActionsPlugin — row/column controls above the active table. */
+.lexical-table-actions {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-border-base);
+  border-radius: 7px;
+  background: var(--color-bg-menu, #1a1a1d);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.lexical-table-actions-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+.lexical-table-actions-button:hover {
+  background: var(--color-bg-hover, #202024);
+  color: var(--color-text-primary);
+}
+.lexical-table-actions-button.danger:hover {
+  background: rgba(220, 80, 80, 0.18);
+  color: #f0a0a0;
+}
+.lexical-table-actions-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--color-border-base);
+}
+.lexical-rotate-left {
+  transform: rotate(-90deg);
 }
