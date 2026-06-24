@@ -5,7 +5,7 @@ import { createFile, createFolder, defaultLocations, deletePath, pickFolder, rea
 import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { Sidebar, type SidebarMode } from "./features/explorer/components/Sidebar";
-import { ContextMenu, type ContextMenuAction, type ContextMenuTarget } from "./features/explorer/components/ContextMenu";
+import { ContextMenu, type ContextMenuAction, type ContextMenuTarget, type ContextMenuVariant } from "./features/explorer/components/ContextMenu";
 import { SavedContextMenu, type SavedMenuAction } from "./features/explorer/components/SavedContextMenu";
 import { IconPickerMenu } from "./features/explorer/components/IconPickerMenu";
 import type { InlineDraft } from "./features/explorer/components/TreeInlineInput";
@@ -20,9 +20,11 @@ import { markdown } from "./features/preview/markdown";
 import { slugify } from "./features/preview/slug";
 import { PreviewPanel } from "./features/preview/components/PreviewPanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
+import { HomeView } from "./features/home/components/HomeView";
+import { OnboardingView, type OnboardingResult } from "./features/home/components/OnboardingView";
 import type { Entry, FileSearchMatch, OpenFile } from "./shared/types/files";
 import { fileExtension, fileKindFromPath, fileName, isVisibleFileName, joinPath, parentName, parentPath, relativePath } from "./shared/utils/path";
-import { loadAppConfiguration, loadAppSession, saveAppConfiguration, saveAppSession, type AppConfigurationState, type AppTheme, type StoredWindowFrame } from "./shared/state/persistence";
+import { loadAppConfiguration, loadAppSession, recordRecentFile, removeRecent, saveAppConfiguration, saveAppSession, touchRecentRoot, type AppConfigurationState, type AppTheme, type RecentItem, type StoredWindowFrame } from "./shared/state/persistence";
 import "./App.css";
 
 const DEFAULT_SIDEBAR_WIDTH = 280;
@@ -116,6 +118,11 @@ function App() {
   );
   const [windowFrame, setWindowFrame] = useState<StoredWindowFrame | undefined>(() => initialConfiguration.windowFrame);
   const [contextMenu, setContextMenu] = useState<ContextMenuTarget | null>(null);
+  // When the context menu is opened from the Home screen, this captures the
+  // variant (trimmed action set) and the recent item it refers to (for the
+  // "Remove from Recent" action). null = opened from the explorer.
+  const [contextMenuVariant, setContextMenuVariant] = useState<ContextMenuVariant>("explorer");
+  const [contextMenuRecent, setContextMenuRecent] = useState<RecentItem | null>(null);
   const [savedMenu, setSavedMenu] = useState<{
     location: Entry;
     x: number;
@@ -128,6 +135,17 @@ function App() {
   } | null>(null);
   const [locationIcons, setLocationIcons] = useState<Record<string, string>>(
     () => initialConfiguration.locationIcons ?? {},
+  );
+  const [recents, setRecents] = useState<RecentItem[]>(() => initialConfiguration.recents ?? []);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(
+    () => initialConfiguration.onboardingCompleted ?? false,
+  );
+  const [userName, setUserName] = useState<string>(() => initialConfiguration.userName ?? "");
+  // Which overlay screen (if any) is showing. "onboarding" forces the setup
+  // flow; "home" is the default landing until the user opens a file/root.
+  // null = the normal preview/editor workspace.
+  const [overlay, setOverlay] = useState<"onboarding" | "home" | null>(
+    initialConfiguration.onboardingCompleted ? "home" : "onboarding",
   );
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
   const [draft, setDraft] = useState<InlineDraft | null>(null);
@@ -154,6 +172,17 @@ function App() {
       return next;
     });
   }, []);
+  // Record that a file was opened within a root (updates that root's lastFile).
+  const recordFileRecent = useCallback(
+    (root: { path: string; name: string }, file: { path: string; name: string; kind: Exclude<OpenFile["kind"], "folder"> }) => {
+      setRecents((current) => recordRecentFile(current, root, file));
+    },
+    [],
+  );
+  // Record that a root was selected (no file), moving it to the top.
+  const touchRootRecent = useCallback((root: { path: string; name: string }) => {
+    setRecents((current) => touchRecentRoot(current, root));
+  }, []);
   const configurationRef = useRef<AppConfigurationState>({
     explorerHidden,
     sidebarWidth,
@@ -164,6 +193,9 @@ function App() {
     pinnedLocations,
     removedDefaultPaths,
     locationIcons,
+    onboardingCompleted,
+    userName,
+    recents,
   });
 
   // Home is the first default location and can never be unpinned.
@@ -285,11 +317,14 @@ function App() {
       pinnedLocations,
       removedDefaultPaths,
       locationIcons,
+      onboardingCompleted,
+      userName,
+      recents,
     };
 
     configurationRef.current = nextConfiguration;
     saveAppConfiguration(nextConfiguration);
-  }, [barMerged, explorerHidden, mode, theme, sidebarWidth, windowFrame, pinnedLocations, removedDefaultPaths, locationIcons]);
+  }, [barMerged, explorerHidden, mode, theme, sidebarWidth, windowFrame, pinnedLocations, removedDefaultPaths, locationIcons, onboardingCompleted, userName, recents]);
 
   useEffect(() => {
     if (!sessionHydrated) {
@@ -519,9 +554,10 @@ function App() {
           await Promise.all(initialSession.expandedPaths.filter((path) => path !== first.path).map((path) => loadFolder(path, { quiet: true })));
         }
 
-        if (initialSession.openFilePath) {
-          await openFileAtPath(initialSession.openFilePath);
-        }
+        // The app always launches on the Home screen (or onboarding on first
+        // run). The tree is pre-loaded above so the explorer is ready, but we
+        // deliberately do NOT auto-open the last file: Home is the landing
+        // place, and opening anything from Home or the explorer dismisses it.
       } catch (cause) {
         if (!cancelled) {
           setError(`Unable to load default locations: ${String(cause)}`);
@@ -580,14 +616,24 @@ function App() {
     try {
       const content = await readFile(path);
       const draft = unsavedFileDraftsRef.current[comparablePath(path)];
+      const kind = fileKindFromPath(path);
       setOpenFile({
         path,
         name: fileName(path),
         content: draft?.content ?? content,
-        kind: fileKindFromPath(path),
+        kind,
       });
       if (options?.mode) {
         setMode(options.mode);
+      }
+      // Update the active root's Recent entry with this file as its last-opened
+      // file. Only one Recent entry exists per root. If there's no active root
+      // (shouldn't normally happen when opening a file), skip recording.
+      if (activeRoot) {
+        recordFileRecent(
+          { path: activeRoot.path, name: activeRoot.name },
+          { path, name: fileName(path), kind },
+        );
       }
       find.close();
     } catch (cause) {
@@ -693,11 +739,13 @@ function App() {
     setExpanded(new Set());
     setError(null);
     setMode("preview");
+    setOverlay(null);
     find.close();
     setSearchResults([]);
     setSearchedQuery("");
     setSearchError(null);
     setSearchTruncated(false);
+    touchRootRecent({ path: location.path, name: location.name });
     await loadFolder(location.path);
   }
 
@@ -723,6 +771,7 @@ function App() {
 
   async function selectFile(entry: Entry) {
     setFocusedEntry(entry);
+    setOverlay(null);
     await openFileAtPath(entry.path);
   }
 
@@ -794,7 +843,27 @@ function App() {
     event.stopPropagation();
     setDraft(null);
     setFocusedEntry(entry);
+    setContextMenuVariant("explorer");
+    setContextMenuRecent(null);
     setContextMenu(entryToTarget(entry, event.clientX, event.clientY));
+  }
+
+  // Right-click on a Recent item from the Home screen. Recents are always roots,
+  // so they use the trimmed "recent-root" menu (remove-from-recent, rename,
+  // delete, reveal, copy path).
+  function openRecentContextMenu(item: RecentItem, event: ReactMouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setSavedMenu(null);
+    setContextMenuRecent(item);
+    setContextMenuVariant("recent-root");
+    setContextMenu({
+      kind: "folder",
+      path: item.path,
+      name: item.name,
+      x: event.clientX,
+      y: event.clientY,
+    });
   }
 
   function openRootContextMenu(event: ReactMouseEvent) {
@@ -831,6 +900,54 @@ function App() {
     }
 
     setPinnedLocations((current) => (current.some((location) => comparablePath(location.path) === key) ? current : [...current, { ...entry, is_dir: true, kind: "folder" }]));
+  }
+
+  // Open a recent item (always a root) from the Home screen. Selects the root,
+  // then reopens its last-opened file if one was recorded. If no file was ever
+  // opened in that root, it just lands on the root.
+  async function openRecent(item: RecentItem) {
+    const location: Entry = { name: item.name, path: item.path, is_dir: true, kind: "folder" };
+    await selectLocation(location);
+
+    if (item.lastFile) {
+      await openFileAtPath(item.lastFile.path);
+    }
+  }
+
+  function removeRecentItem(item: RecentItem) {
+    setRecents((current) => removeRecent(current, item.path));
+  }
+
+  // Apply the onboarding result: pin starter folders, set the greeting name and
+  // default view mode, mark onboarding complete, and land on Home.
+  function completeOnboarding(result: OnboardingResult) {
+    setUserName(result.name);
+    setMode(result.viewMode);
+
+    // Pin every starter folder that isn't already a default/pin. The first entry
+    // is Home (or its re-pointed override) and is handled by the locations merge.
+    result.starterFolders.forEach((folder) => {
+      if (isPinnable(folder.path)) {
+        pinFolder(folder);
+      }
+    });
+
+    // Remove the default Documents pin if the user dropped it during setup.
+    const keptPaths = new Set(result.starterFolders.map((folder) => comparablePath(folder.path)));
+    defaultLocs.forEach((location) => {
+      const isHome = homePath ? comparablePath(homePath) === comparablePath(location.path) : false;
+      if (!isHome && !keptPaths.has(comparablePath(location.path))) {
+        unpinLocation(location);
+      }
+    });
+
+    setOnboardingCompleted(true);
+    setOverlay("home");
+  }
+
+  function skipOnboarding() {
+    setOnboardingCompleted(true);
+    setOverlay("home");
   }
 
   // Open a folder via the native picker and make it the explorer root, without
@@ -1098,9 +1215,22 @@ function App() {
 
   async function handleContextAction(action: ContextMenuAction, target: ContextMenuTarget) {
     setContextMenu(null);
+    const recentForAction = contextMenuRecent;
+    setContextMenuRecent(null);
+    setContextMenuVariant("explorer");
 
     try {
       switch (action) {
+        case "remove-recent":
+          if (recentForAction) {
+            removeRecentItem(recentForAction);
+          }
+          break;
+        case "open":
+          if (target.kind === "file") {
+            await openFileAtPath(target.path);
+          }
+          break;
         case "new-file":
           await startCreateDraft(target.path, "file");
           break;
@@ -1122,11 +1252,6 @@ function App() {
             is_dir: target.kind === "folder",
             kind: target.kind === "folder" ? "folder" : fileKindFromPath(target.path),
           });
-          break;
-        case "open":
-          if (target.kind === "file") {
-            await openFileAtPath(target.path);
-          }
           break;
         case "reveal":
           await revealInExplorer(target.path);
@@ -1178,6 +1303,18 @@ function App() {
             });
             return next;
           });
+
+          // Update recents: drop any root whose folder was deleted, and clear
+          // the lastFile of any root whose recorded file was deleted.
+          setRecents((current) =>
+            current
+              .filter((item) => !pathIsDeletedTarget(target, item.path))
+              .map((item) =>
+                item.lastFile && pathIsDeletedTarget(target, item.lastFile.path)
+                  ? { ...item, lastFile: undefined }
+                  : item,
+              ),
+          );
 
           if (pathIsDeletedTarget(target, activeRoot?.path)) {
             const fallbackRoot = locations.find((location) => !pathIsDeletedTarget(target, location.path)) ?? null;
@@ -1360,17 +1497,19 @@ function App() {
   });
 
   return (
-    <div className={`app-window ${explorerHidden ? "explorer-hidden" : ""} ${isMaximized ? "fullscreen" : ""} ${theme === "light" ? "theme-light" : ""}`}>
+    <div className={`app-window ${explorerHidden ? "explorer-hidden" : ""} ${isMaximized ? "fullscreen" : ""} ${theme === "light" ? "theme-light" : ""} ${overlay ? "overlay-active" : ""}`}>
       <TitleBar
         fileActionsSlot={barMerged ? fileActionControls : null}
-        explorerHidden={explorerHidden}
-        rootName={activeRoot?.name}
-        scopeName={breadcrumbScope}
-        title={title}
+        explorerHidden={explorerHidden || overlay !== null}
+        rootName={overlay ? undefined : activeRoot?.name}
+        scopeName={overlay ? null : breadcrumbScope}
+        title={overlay ? "Markdown Viewer" : title}
         onToggleExplorer={() => setExplorerHidden((hidden) => !hidden)}
+        hideExplorerToggle={overlay !== null}
       />
 
       <div className="workspace">
+        {overlay === null ? (
         <Sidebar
           width={explorerHidden ? 0 : sidebarWidth}
           locations={locations}
@@ -1420,50 +1559,85 @@ function App() {
           theme={theme}
           onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
         />
+        ) : null}
 
-        <SidebarResizeHandle onPointerDown={startSidebarResize} />
+        {overlay === null ? <SidebarResizeHandle onPointerDown={startSidebarResize} /> : null}
 
-        <PreviewPanel
-          actionBar={
-            openFile && (formatControls || !barMerged) ? (
-              <FileActionBar>
-                {formatControls}
-                <span className="file-action-spacer" aria-hidden="true" />
-                {!barMerged ? fileActionControls : null}
-              </FileActionBar>
-            ) : null
-          }
-          error={error}
-          findBar={
-            openFile ? (
-              <FindBar
-                current={find.current}
-                open={find.open}
-                query={find.query}
-                total={find.total}
-                onClose={find.close}
-                onNext={find.goToNext}
-                onPrevious={find.goToPrevious}
-                onQueryChange={find.setQuery}
-              />
-            ) : null
-          }
-          findTargetRef={findTargetRef}
-          mode={mode}
-          openFile={openFile}
-          onContentChange={updateOpenFileContent}
-          onLinkClick={(href) => void handleLinkClick(href)}
-          pendingFormatAction={pendingFormatAction}
-          renderedMarkdown={renderedMarkdown}
-        />
+        {overlay === "home" ? (
+          <HomeView
+            userName={userName}
+            locations={locations}
+            recents={recents}
+            homePath={homePath}
+            locationIcons={locationIcons}
+            onOpenFolder={() => void openFolderAsRoot()}
+            onSelectLocation={(location) => void selectLocation(location)}
+            onOpenRecent={(item) => void openRecent(item)}
+            onLocationContextMenu={openSavedContextMenu}
+            onRecentContextMenu={openRecentContextMenu}
+            onEditSetup={() => setOverlay("onboarding")}
+          />
+        ) : (
+          <PreviewPanel
+            actionBar={
+              openFile && (formatControls || !barMerged) ? (
+                <FileActionBar>
+                  {formatControls}
+                  <span className="file-action-spacer" aria-hidden="true" />
+                  {!barMerged ? fileActionControls : null}
+                </FileActionBar>
+              ) : null
+            }
+            error={error}
+            findBar={
+              openFile ? (
+                <FindBar
+                  current={find.current}
+                  open={find.open}
+                  query={find.query}
+                  total={find.total}
+                  onClose={find.close}
+                  onNext={find.goToNext}
+                  onPrevious={find.goToPrevious}
+                  onQueryChange={find.setQuery}
+                />
+              ) : null
+            }
+            findTargetRef={findTargetRef}
+            mode={mode}
+            openFile={openFile}
+            onContentChange={updateOpenFileContent}
+            onLinkClick={(href) => void handleLinkClick(href)}
+            pendingFormatAction={pendingFormatAction}
+            renderedMarkdown={renderedMarkdown}
+          />
+        )}
       </div>
+
+      {overlay === "onboarding" ? (
+        <OnboardingView
+          home={homePath ? { name: defaultLocs[0]?.name ?? "Home", path: homePath, is_dir: true, kind: "folder" } : undefined}
+          initialStarterFolders={locations.filter((location) => (homePath ? comparablePath(location.path) !== comparablePath(homePath) : true))}
+          initialName={userName}
+          initialViewMode={mode}
+          firstRun={!onboardingCompleted}
+          onPickFolder={pickFolder}
+          onComplete={completeOnboarding}
+          onSkip={skipOnboarding}
+        />
+      ) : null}
 
       {contextMenu ? (
         <ContextMenu
           target={contextMenu}
-          canPin={contextMenu.kind === "folder" && isPinnable(contextMenu.path)}
+          variant={contextMenuVariant}
+          canPin={contextMenuVariant === "explorer" && contextMenu.kind === "folder" && isPinnable(contextMenu.path)}
           onAction={(action, target) => void handleContextAction(action, target)}
-          onClose={() => setContextMenu(null)}
+          onClose={() => {
+            setContextMenu(null);
+            setContextMenuRecent(null);
+            setContextMenuVariant("explorer");
+          }}
         />
       ) : null}
 

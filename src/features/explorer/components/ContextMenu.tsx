@@ -12,6 +12,7 @@ import {
   SquareArrowOutUpRight,
   TerminalSquare,
   Trash2,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -35,7 +36,8 @@ export type ContextMenuAction =
   | "copy-path"
   | "copy-relative-path"
   | "rename"
-  | "delete";
+  | "delete"
+  | "remove-recent";
 
 interface MenuItem {
   id: ContextMenuAction;
@@ -89,7 +91,44 @@ const COMMON_TAIL: MenuEntry[] = [
   { id: "delete", label: "Delete", icon: Trash2, shortcut: "Del", danger: true },
 ];
 
-function entriesFor(kind: ContextMenuTargetKind, canPin: boolean): MenuEntry[] {
+/** Where the menu was opened from, which trims the available actions. */
+export type ContextMenuVariant = "explorer" | "recent-file" | "recent-root";
+
+const REMOVE_RECENT: MenuItem = {
+  id: "remove-recent",
+  label: "Remove from Recent",
+  icon: X,
+};
+
+function entriesFor(kind: ContextMenuTargetKind, canPin: boolean, variant: ContextMenuVariant): MenuEntry[] {
+  // Recent files: open, reveal, copy path, rename, delete, remove-from-recent.
+  if (variant === "recent-file") {
+    return [
+      { id: "open", label: "Open", icon: SquareArrowOutUpRight, shortcut: "Enter" },
+      { separator: true },
+      { id: "reveal", label: "Reveal in File Explorer", icon: CornerUpLeft },
+      { id: "copy-path", label: "Copy Path", icon: Link2 },
+      { separator: true },
+      { id: "rename", label: "Rename…", icon: Pencil },
+      { id: "delete", label: "Delete", icon: Trash2, danger: true },
+      { separator: true },
+      REMOVE_RECENT,
+    ];
+  }
+
+  // Recent roots: deliberately limited — remove-from-recent, rename, delete.
+  if (variant === "recent-root") {
+    return [
+      { id: "reveal", label: "Reveal in File Explorer", icon: CornerUpLeft },
+      { id: "copy-path", label: "Copy Path", icon: Link2 },
+      { separator: true },
+      { id: "rename", label: "Rename…", icon: Pencil },
+      { id: "delete", label: "Delete", icon: Trash2, danger: true },
+      { separator: true },
+      REMOVE_RECENT,
+    ];
+  }
+
   if (kind === "folder") {
     return [
       { id: "new-file", label: "New File…", icon: FilePlus },
@@ -123,13 +162,15 @@ interface ContextMenuProps {
   target: ContextMenuTarget;
   /** Whether the "Pin Folder" item should appear (folders not already pinned). */
   canPin?: boolean;
+  /** Origin of the menu, which trims the action set. Defaults to "explorer". */
+  variant?: ContextMenuVariant;
   onAction: (action: ContextMenuAction, target: ContextMenuTarget) => void;
   onClose: () => void;
 }
 
 const VIEWPORT_PADDING = 8;
 
-export function ContextMenu({ target, canPin = false, onAction, onClose }: ContextMenuProps) {
+export function ContextMenu({ target, canPin = false, variant = "explorer", onAction, onClose }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState({ x: target.x, y: target.y });
   const [ready, setReady] = useState(false);
@@ -183,7 +224,7 @@ export function ContextMenu({ target, canPin = false, onAction, onClose }: Conte
     };
   }, [onClose]);
 
-  const entries = entriesFor(target.kind, canPin);
+  const entries = entriesFor(target.kind, canPin, variant);
 
   return createPortal(
     <div

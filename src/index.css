@@ -57,6 +57,7 @@ body {
 
 /* The window shell — apply to the top-level app container */
 .app-window {
+  position: relative;
   height: 100%;
   background: var(--color-bg-window);
   border-radius: var(--radius-win);
