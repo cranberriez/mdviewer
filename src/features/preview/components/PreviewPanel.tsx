@@ -19,9 +19,9 @@ import { EmptyPreview } from "./EmptyPreview";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { PlainTextPreview } from "./PlainTextPreview";
 import {
-  VisualMarkdownEditor,
-  type VisualMarkdownEditorHandle,
-} from "./VisualMarkdownEditor";
+  LexicalMarkdownEditor,
+  type LexicalMarkdownEditorHandle,
+} from "./LexicalMarkdownEditor";
 
 interface PreviewPanelProps {
   actionBar: ReactNode;
@@ -73,7 +73,7 @@ export function PreviewPanel({
   const editorScrollRef = useRef<HTMLTextAreaElement | null>(null);
   const previewScrollRef = useRef<HTMLElement | null>(null);
   const visualEditorRootRef = useRef<HTMLDivElement | null>(null);
-  const visualEditorRef = useRef<VisualMarkdownEditorHandle | null>(null);
+  const visualEditorRef = useRef<LexicalMarkdownEditorHandle | null>(null);
   const centerRatioRef = useRef(0);
   const ignoredScrollPanelRef = useRef<ScrollPanel | null>(null);
   const lastScrolledPanelRef = useRef<ScrollPanel>("preview");
@@ -365,10 +365,9 @@ export function PreviewPanel({
                 className="document-panel rendered-panel visual-editor-panel"
                 aria-label="Markdown editor"
               >
-                <VisualMarkdownEditor
+                <LexicalMarkdownEditor
                   ref={visualEditorRef}
                   content={openFile.content}
-                  html={renderedMarkdown}
                   onChange={handleEditorContentChange}
                   onScroll={handlePreviewScroll}
                   rootRef={visualEditorRootRef}

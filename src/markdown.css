@@ -91,8 +91,22 @@
 }
 .md ul,
 .md ol {
+  /* Tailwind v4 preflight resets `list-style: none` on all ul/ol; restore the
+     markers here so rendered markdown shows bullets and numbers. */
   margin: 0.6em 0 0.6em 1.4em;
   color: #d6d6da;
+}
+.md ul {
+  list-style: disc outside;
+}
+.md ol {
+  list-style: decimal outside;
+}
+.md ul ul {
+  list-style: circle outside;
+}
+.md ul ul ul {
+  list-style: square outside;
 }
 .md li {
   margin: 0.25em 0;
