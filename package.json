@@ -12,7 +12,9 @@
     "bundle:debug": "tauri build --debug",
     "check:release-version": "node scripts/check-release-version.mjs",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\""
   },
   "dependencies": {
     "@lexical/code": "^0.45.0",
@@ -42,6 +44,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "prettier": "^3.8.4",
     "tailwindcss": "^4.3.1",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"

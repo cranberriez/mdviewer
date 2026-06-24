@@ -41,6 +41,8 @@ export const MAX_RECENTS = 5;
 
 export interface AppConfigurationState {
   explorerHidden: boolean;
+  /** Whether the floating left-side outline panel is shown. */
+  outlinePanelVisible?: boolean;
   sidebarWidth: number;
   barMerged: boolean;
   viewMode: StoredFileViewMode;
@@ -317,6 +319,7 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
 
   return {
     explorerHidden: readBoolean(record.explorerHidden),
+    outlinePanelVisible: readBoolean(record.outlinePanelVisible),
     sidebarWidth: readNumber(record.sidebarWidth),
     barMerged: readBoolean(record.barMerged),
     viewMode: readViewMode(record.viewMode),
