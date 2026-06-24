@@ -8,14 +8,26 @@
 
 .content {
   --zoom: 1;
+  /* Width of the readable content column, shared across all view modes. */
+  --content-width: 800px;
+  /* Minimum horizontal gutter when the panel is narrower than the column. */
+  --content-gutter: 30px;
+}
+
+/* Each mode's scroller fills the full panel width and is itself the element
+   that scrolls; the readable text is constrained and centered via symmetric
+   horizontal padding so the column width is identical across modes. */
+.editor,
+.preview-inner,
+.plain {
+  width: 100%;
+  padding-right: max(var(--content-gutter), (100% - var(--content-width)) / 2);
+  padding-left: max(var(--content-gutter), (100% - var(--content-width)) / 2);
 }
 
 /* editor textarea */
 .editor {
-  width: 100%;
-  max-width: 800px;
   height: 100%;
-  margin: 0 auto;
   resize: none;
   border: none;
   outline: none;
@@ -24,13 +36,13 @@
   font-family: var(--font-mono);
   font-size: calc(13px * var(--zoom));
   line-height: 1.7;
-  padding: 6px 24px 24px;
+  padding-top: 6px;
+  padding-bottom: 24px;
 }
 
 .preview-inner {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 6px 30px 56px;
+  padding-top: 6px;
+  padding-bottom: 56px;
 }
 
 .md {
@@ -404,15 +416,13 @@
 
 /* plain text files render in mono */
 .plain {
-  width: 100%;
-  max-width: 800px;
-  margin: 0 auto;
   font-family: var(--font-mono);
   font-size: calc(13px * var(--zoom));
   line-height: 1.7;
   color: #cfcfd6;
   white-space: pre-wrap;
-  padding: 6px 30px 56px;
+  padding-top: 6px;
+  padding-bottom: 56px;
 }
 
 .theme-light .plain {
