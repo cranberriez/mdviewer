@@ -863,6 +863,11 @@ body.theme-light .notice.error {
   width: 100%;
   outline: none;
   caret-color: var(--color-text-primary);
+  tab-size: 4;
+}
+
+.visual-markdown-editor .md-tab {
+  white-space: pre;
 }
 
 .visual-markdown-editor:empty::before {

@@ -3,6 +3,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  type KeyboardEvent,
   type ReactNode,
   type RefObject,
   type UIEvent,
@@ -175,6 +176,92 @@ export function PreviewPanel({
     [onContentChange],
   );
 
+  const handleEditorKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key !== "Tab" || event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+
+      const textarea = event.currentTarget;
+      const { selectionStart, selectionEnd, value } = textarea;
+      const indent = "\t";
+
+      event.preventDefault();
+
+      const hasLineSelection =
+        selectionStart !== selectionEnd &&
+        value.slice(selectionStart, selectionEnd).includes("\n");
+
+      if (hasLineSelection || event.shiftKey) {
+        const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
+        const before = value.slice(0, lineStart);
+        const region = value.slice(lineStart, selectionEnd);
+        const after = value.slice(selectionEnd);
+
+        let newRegion: string;
+        let firstLineDelta: number;
+        let totalDelta: number;
+
+        if (event.shiftKey) {
+          let removedFirst = 0;
+          let removedTotal = 0;
+          newRegion = region
+            .split("\n")
+            .map((line, index) => {
+              let removed = 0;
+              if (line.startsWith("\t")) {
+                removed = 1;
+              } else {
+                const spaces = line.match(/^ {1,2}/);
+                removed = spaces ? spaces[0].length : 0;
+              }
+              if (index === 0) {
+                removedFirst = removed;
+              }
+              removedTotal += removed;
+              return line.slice(removed);
+            })
+            .join("\n");
+          firstLineDelta = -removedFirst;
+          totalDelta = -removedTotal;
+        } else {
+          const lines = region.split("\n");
+          newRegion = lines.map((line) => indent + line).join("\n");
+          firstLineDelta = indent.length;
+          totalDelta = indent.length * lines.length;
+        }
+
+        const nextValue = before + newRegion + after;
+        const nextStart = Math.max(lineStart, selectionStart + firstLineDelta);
+        const nextEnd = selectionEnd + totalDelta;
+
+        handleEditorContentChange(nextValue);
+        window.requestAnimationFrame(() => {
+          const el = editorScrollRef.current;
+          if (el) {
+            el.selectionStart = nextStart;
+            el.selectionEnd = nextEnd;
+          }
+        });
+        return;
+      }
+
+      const nextValue =
+        value.slice(0, selectionStart) + indent + value.slice(selectionEnd);
+      const caret = selectionStart + indent.length;
+
+      handleEditorContentChange(nextValue);
+      window.requestAnimationFrame(() => {
+        const el = editorScrollRef.current;
+        if (el) {
+          el.selectionStart = caret;
+          el.selectionEnd = caret;
+        }
+      });
+    },
+    [handleEditorContentChange],
+  );
+
   const focusActiveEditor = useCallback(() => {
     window.requestAnimationFrame(() => {
       if (mode === "edit" && openFile?.kind === "md") {
@@ -234,7 +321,7 @@ export function PreviewPanel({
       return;
     }
 
-    function handleKeyDown(event: KeyboardEvent) {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
       const key = event.key.toLowerCase();
       const modifier = event.ctrlKey || event.metaKey;
 
@@ -384,6 +471,7 @@ export function PreviewPanel({
                   spellCheck={false}
                   value={openFile.content}
                   onScroll={handleEditorScroll}
+                  onKeyDown={handleEditorKeyDown}
                   onChange={(event) => handleEditorContentChange(event.target.value)}
                 />
               </section>
