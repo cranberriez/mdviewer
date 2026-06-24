@@ -20,6 +20,7 @@ interface SidebarProps {
   loadingPaths: Set<string>;
   selectedFolderPath?: string;
   activeFilePath?: string;
+  unsavedFilePathKeys: Set<string>;
   contextPath?: string;
   focusedPath?: string;
   draft: InlineDraft | null;
@@ -69,6 +70,7 @@ export function Sidebar({
   loadingPaths,
   selectedFolderPath,
   activeFilePath,
+  unsavedFilePathKeys,
   contextPath,
   focusedPath,
   draft,
@@ -276,6 +278,7 @@ export function Sidebar({
                     loadingPaths={loadingPaths}
                     selectedFolderPath={selectedFolderPath}
                     activeFilePath={activeFilePath}
+                    unsavedFilePathKeys={unsavedFilePathKeys}
                     contextPath={contextPath}
                     focusedPath={focusedPath}
                     draft={draft}

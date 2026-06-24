@@ -1234,6 +1234,7 @@ function App() {
   // isn't the root itself (otherwise the root name would appear twice).
   const breadcrumbScope = openFile && activeRoot && comparablePath(parentPath(openFile.path)) !== comparablePath(activeRoot.path) ? parentName(openFile.path) : null;
   const rootChildren = activeRoot ? childrenCache[activeRoot.path] : undefined;
+  const unsavedFilePathKeys = new Set(Object.values(unsavedFileDrafts).map((file) => comparablePath(file.path)));
   const fileActionControls = openFile ? (
     <FileActionControls
       dirty={dirty}
@@ -1388,6 +1389,7 @@ function App() {
           loadingPaths={loadingPaths}
           selectedFolderPath={selectedFolderPath ?? undefined}
           activeFilePath={openFilePath ?? undefined}
+          unsavedFilePathKeys={unsavedFilePathKeys}
           contextPath={contextMenu?.path}
           focusedPath={focusedEntry?.path ?? undefined}
           draft={draft}

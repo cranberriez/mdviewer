@@ -196,7 +196,9 @@
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
-  transition: background 0.1s ease, color 0.1s ease;
+  transition:
+    background 0.1s ease,
+    color 0.1s ease;
 }
 
 .sidebar-footer-button:hover {
@@ -601,6 +603,29 @@
   flex: 0 0 15px;
 }
 
+.tree-file-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+}
+
+.tree-file-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.tree-row.unsaved-file .tree-file-icon {
+  color: var(--color-accent-primary);
+}
+
+.tree-row.unsaved-file:hover .tree-file-icon,
+.tree-row.unsaved-file.active .tree-file-icon {
+  color: var(--color-accent-primary-strong);
+}
+
 .tree-loading,
 .sidebar-empty {
   color: var(--color-text-muted);
@@ -673,6 +698,12 @@ body.theme-light .notice.error {
 .save-action.save-action-dirty:active {
   background: var(--color-accent-primary-strong);
   color: #000000;
+}
+
+.app-window.theme-light .save-action.save-action-dirty,
+.app-window.theme-light .save-action.save-action-dirty:hover,
+.app-window.theme-light .save-action.save-action-dirty:active {
+  color: #ffffff;
 }
 
 .view-mode-toggle {
