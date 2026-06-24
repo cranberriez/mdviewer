@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { Folder, FolderOpen, Moon, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
+import { Folder, FolderOpen, List, Moon, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
 import type { Entry, FileSearchMatch } from "../../../shared/types/files";
 import type { AppTheme } from "../../../shared/state/persistence";
 import { EmptySidebar } from "./EmptySidebar";
@@ -7,8 +7,9 @@ import { TreeNode } from "./TreeNode";
 import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
 import { getIconComponent } from "./IconPickerMenu";
 import { CrossFileSearchPanel } from "./CrossFileSearchPanel";
+import { OutlineView } from "../../outline/components/OutlineView";
 
-export type SidebarMode = "explorer" | "search";
+export type SidebarMode = "explorer" | "search" | "outline";
 
 interface SidebarProps {
   width: number;
@@ -32,6 +33,13 @@ interface SidebarProps {
   searchError: string | null;
   searchTruncated: boolean;
   rootRefreshing: boolean;
+  /** Rendered markdown HTML for the open file, or null for non-markdown / none. */
+  outlineHtml: string | null;
+  /** Whether any file is open (drives the outline empty state). */
+  hasOpenFile: boolean;
+  /** Hide the outline tab (used when the floating outline panel is visible). */
+  showOutlineTab: boolean;
+  onSelectHeading: (id: string) => void;
   onSidebarModeChange: (mode: SidebarMode) => void;
   onSearchQueryChange: (query: string) => void;
   onSearchClear: () => void;
@@ -82,6 +90,10 @@ export function Sidebar({
   searchError,
   searchTruncated,
   rootRefreshing,
+  outlineHtml,
+  hasOpenFile,
+  showOutlineTab,
+  onSelectHeading,
   onSidebarModeChange,
   onSearchQueryChange,
   onSearchClear,
@@ -109,7 +121,12 @@ export function Sidebar({
     draft?.mode === "create" && activeRoot && draft.parentPath === activeRoot.path
       ? draft
       : null;
-  const showingSearchResults = sidebarMode === "search" && Boolean(searchedQuery.trim());
+  // If the outline tab is hidden (floating panel is up) but the sidebar was left
+  // on outline mode, fall back to the explorer view so the panel isn't empty.
+  const effectiveMode: SidebarMode =
+    sidebarMode === "outline" && !showOutlineTab ? "explorer" : sidebarMode;
+  const showingSearchResults = effectiveMode === "search" && Boolean(searchedQuery.trim());
+  const showingOutline = effectiveMode === "outline";
 
   return (
     <aside className="sidebar" style={{ width, flexBasis: width }} aria-label="File explorer">
@@ -118,9 +135,9 @@ export function Sidebar({
           <div className="sidebar-view-switch" role="tablist" aria-label="Sidebar view">
             <button
               type="button"
-              className={`sidebar-view-button ${sidebarMode === "explorer" ? "active" : ""}`}
+              className={`sidebar-view-button ${effectiveMode === "explorer" ? "active" : ""}`}
               role="tab"
-              aria-selected={sidebarMode === "explorer"}
+              aria-selected={effectiveMode === "explorer"}
               title="Explorer"
               aria-label="Explorer"
               onClick={() => onSidebarModeChange("explorer")}
@@ -129,15 +146,28 @@ export function Sidebar({
             </button>
             <button
               type="button"
-              className={`sidebar-view-button ${sidebarMode === "search" ? "active" : ""}`}
+              className={`sidebar-view-button ${effectiveMode === "search" ? "active" : ""}`}
               role="tab"
-              aria-selected={sidebarMode === "search"}
+              aria-selected={effectiveMode === "search"}
               title="Search files"
               aria-label="Search files"
               onClick={() => onSidebarModeChange("search")}
             >
               <Search size={14} />
             </button>
+            {showOutlineTab ? (
+              <button
+                type="button"
+                className={`sidebar-view-button ${effectiveMode === "outline" ? "active" : ""}`}
+                role="tab"
+                aria-selected={effectiveMode === "outline"}
+                title="Outline"
+                aria-label="Outline"
+                onClick={() => onSidebarModeChange("outline")}
+              >
+                <List size={14} />
+              </button>
+            ) : null}
           </div>
           <div className="saved-actions">
             <button
@@ -170,7 +200,7 @@ export function Sidebar({
             </button>
           </div>
         </div>
-        {sidebarMode === "search" ? (
+        {effectiveMode === "outline" ? null : effectiveMode === "search" ? (
           <CrossFileSearchPanel
             root={activeRoot?.path ?? null}
             query={searchQuery}
@@ -212,9 +242,11 @@ export function Sidebar({
       <section className="sidebar-section explorer-section">
         <div className="explorer-heading">
           <div>
-            <div className="section-label">{showingSearchResults ? "Search" : "Explorer"}</div>
+            <div className="section-label">
+              {showingOutline ? "Outline" : showingSearchResults ? "Search" : "Explorer"}
+            </div>
           </div>
-          {!showingSearchResults && activeRoot ? (
+          {!showingSearchResults && !showingOutline && activeRoot ? (
             <button
               type="button"
               className="explorer-refresh"
@@ -228,7 +260,13 @@ export function Sidebar({
           ) : null}
         </div>
 
-        {showingSearchResults ? (
+        {showingOutline ? (
+          <OutlineView
+            renderedHtml={outlineHtml}
+            hasOpenFile={hasOpenFile}
+            onSelect={onSelectHeading}
+          />
+        ) : showingSearchResults ? (
           <CrossFileSearchPanel
             root={activeRoot?.path ?? null}
             query={searchQuery}

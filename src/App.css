@@ -714,8 +714,135 @@
   line-height: 1.5;
 }
 
+/* --- Outline (shared by sidebar tab and floating panel) --- */
+
+.outline-list {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 6px 10px;
+}
+
+.outline-row {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--radius-ctl);
+  color: var(--color-text-secondary);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.outline-row:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+.outline-row.active {
+  color: var(--color-text-primary);
+  background: var(--color-bg-active);
+}
+
+/* Top-level headings read a touch stronger than nested ones. */
+.outline-row[data-level="1"] {
+  font-weight: 600;
+}
+
+.outline-row[data-level="3"],
+.outline-row[data-level="4"],
+.outline-row[data-level="5"],
+.outline-row[data-level="6"] {
+  color: var(--color-text-muted);
+}
+
+.outline-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 12px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.outline-empty p {
+  margin: 0;
+}
+
+/* --- Floating outline ---
+   A plain, chrome-less list floating in the content area's left gutter: no
+   background, border, header, or close button. Absolutely positioned so it
+   shares the content's space without pushing the preview around; the readable
+   column's left padding is widened (see the container query below) so text never
+   slides under it. Toggled from View ▸ Show Outline Panel. */
+
+.outline-float {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 14px;
+  z-index: 3;
+  width: var(--outline-panel-width, 232px);
+  max-width: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Plain text rows inside the floating outline: no row background, hover fill, or
+   active fill — just indentation and a subtle colour shift on hover. The sidebar
+   tab keeps its standard row affordances (defined above). */
+.outline-float .outline-list {
+  padding-bottom: 10px;
+}
+
+.outline-float .outline-row {
+  min-height: 0;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.outline-float .outline-row:hover,
+.outline-float .outline-row.active {
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+/* Widen the readable column's left padding to clear the overlaid outline, but
+   only once the content area is wide enough to fit it plus a usable column.
+   Below that the column stays centered and the text simply overlaps the gutter
+   area; `--outline-clearance` is the floor the editor and preview pick up via
+   max(...) so the column only shifts right when there's room. */
+@container contentArea (min-width: 720px) {
+  .content.has-outline-panel .preview-inner,
+  .content.has-outline-panel .plain,
+  .content.has-outline-panel .editor {
+    --outline-clearance: calc(var(--outline-panel-width, 232px) + 28px);
+  }
+}
+
 .content {
   position: relative;
+  container: contentArea / inline-size;
   min-width: 0;
   min-height: 0;
   flex: 1;
@@ -869,7 +996,16 @@ body.theme-light .notice.error {
   overflow: hidden;
 }
 
+.document-region {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
 .document-layout {
+  min-width: 0;
   min-height: 0;
   flex: 1;
   display: flex;

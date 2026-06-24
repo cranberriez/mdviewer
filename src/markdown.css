@@ -21,8 +21,14 @@
 .preview-inner,
 .plain {
   width: 100%;
+  /* `--outline-clearance` (0 unless the floating outline panel is shown and
+     there's room) raises the left padding floor so text clears the panel. */
   padding-right: max(var(--content-gutter), (100% - var(--content-width)) / 2);
-  padding-left: max(var(--content-gutter), (100% - var(--content-width)) / 2);
+  padding-left: max(
+    var(--outline-clearance, 0px),
+    var(--content-gutter),
+    (100% - var(--content-width)) / 2
+  );
 }
 
 /* editor textarea */
@@ -37,7 +43,8 @@
   font-family: var(--font-mono);
   font-size: calc(13px * var(--zoom));
   line-height: 1.7;
-  padding: 6px max(24px, calc((100% - 800px) / 2 + 24px)) 24px;
+  padding: 6px max(24px, calc((100% - 800px) / 2 + 24px)) 24px
+    max(var(--outline-clearance, 0px), 24px, calc((100% - 800px) / 2 + 24px));
 }
 
 .preview-inner {

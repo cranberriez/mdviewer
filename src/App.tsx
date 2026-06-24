@@ -32,6 +32,7 @@ import type { MarkdownAction } from "./features/preview/markdownActions";
 import { markdown } from "./features/preview/markdown";
 import { slugify } from "./features/preview/slug";
 import { PreviewPanel } from "./features/preview/components/PreviewPanel";
+import { FloatingOutlinePanel } from "./features/outline/components/FloatingOutlinePanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
 import { HomeView } from "./features/home/components/HomeView";
 import { OnboardingView, type OnboardingResult } from "./features/home/components/OnboardingView";
@@ -133,6 +134,7 @@ function App() {
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [explorerHidden, setExplorerHidden] = useState(() => initialConfiguration.explorerHidden ?? false);
+  const [outlinePanelVisible, setOutlinePanelVisible] = useState(() => initialConfiguration.outlinePanelVisible ?? false);
   const [sidebarWidth, setSidebarWidth] = useState(() => clampSidebarWidth(initialConfiguration.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH));
   const [mode, setMode] = useState<FileViewMode>(() => initialConfiguration.viewMode ?? "preview");
   const [pendingFormatAction, setPendingFormatAction] = useState<{
@@ -206,6 +208,7 @@ function App() {
   }, []);
   const configurationRef = useRef<AppConfigurationState>({
     explorerHidden,
+    outlinePanelVisible,
     sidebarWidth,
     barMerged,
     viewMode: mode,
@@ -327,6 +330,7 @@ function App() {
   useEffect(() => {
     const nextConfiguration: AppConfigurationState = {
       explorerHidden,
+      outlinePanelVisible,
       sidebarWidth,
       barMerged,
       viewMode: mode,
@@ -342,7 +346,7 @@ function App() {
 
     configurationRef.current = nextConfiguration;
     saveAppConfiguration(nextConfiguration);
-  }, [barMerged, explorerHidden, mode, theme, sidebarWidth, windowFrame, pinnedLocations, removedDefaultPaths, locationIcons, onboardingCompleted, userName, recents]);
+  }, [barMerged, explorerHidden, outlinePanelVisible, mode, theme, sidebarWidth, windowFrame, pinnedLocations, removedDefaultPaths, locationIcons, onboardingCompleted, userName, recents]);
 
   useEffect(() => {
     if (!sessionHydrated) {
@@ -1404,6 +1408,9 @@ function App() {
         case "toggle-explorer":
           setExplorerHidden((hidden) => !hidden);
           return;
+        case "toggle-outline-panel":
+          setOutlinePanelVisible((visible) => !visible);
+          return;
         case "mode-preview":
           setMode("preview");
           return;
@@ -1458,11 +1465,12 @@ function App() {
       isEditing: mode === "edit" || mode === "code",
       canCopy: Boolean(openFile),
       explorerHidden,
+      outlinePanelVisible,
       barMerged,
       theme,
       mode,
     }),
-    [openFile, dirty, mode, explorerHidden, barMerged, theme],
+    [openFile, dirty, mode, explorerHidden, outlinePanelVisible, barMerged, theme],
   );
 
   const title = openFile?.name ?? activeRoot?.name ?? "Markdown Viewer";
@@ -1629,6 +1637,10 @@ function App() {
             searchError={searchError}
             searchTruncated={searchTruncated}
             rootRefreshing={activeRoot ? loadingPaths.has(activeRoot.path) : false}
+            outlineHtml={openFile?.kind === "md" ? renderedMarkdown : null}
+            hasOpenFile={Boolean(openFile)}
+            showOutlineTab={!outlinePanelVisible}
+            onSelectHeading={(id) => scrollToAnchor(id)}
             onSidebarModeChange={setSidebarMode}
             onSearchQueryChange={setSearchQuery}
             onSearchClear={clearCrossFileSearch}
@@ -1676,6 +1688,15 @@ function App() {
           />
         ) : (
           <PreviewPanel
+            outlinePanel={
+              outlinePanelVisible ? (
+                <FloatingOutlinePanel
+                  renderedHtml={openFile?.kind === "md" ? renderedMarkdown : null}
+                  hasOpenFile={Boolean(openFile)}
+                  onSelectHeading={(id) => scrollToAnchor(id)}
+                />
+              ) : null
+            }
             actionBar={
               openFile && (formatControls || !barMerged) ? (
                 <FileActionBar>

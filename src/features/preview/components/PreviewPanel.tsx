@@ -25,6 +25,8 @@ import {
 } from "./LexicalMarkdownEditor";
 
 interface PreviewPanelProps {
+  /** Floating outline overlay, rendered into the content area's left gutter. */
+  outlinePanel: ReactNode;
   actionBar: ReactNode;
   error: string | null;
   findBar: ReactNode;
@@ -60,6 +62,7 @@ function scrollCenterRatio(element: HTMLElement) {
 }
 
 export function PreviewPanel({
+  outlinePanel,
   actionBar,
   error,
   findBar,
@@ -438,7 +441,10 @@ export function PreviewPanel({
   ) : null;
 
   return (
-    <main className="content" aria-label="Markdown preview">
+    <main
+      className={`content ${outlinePanel ? "has-outline-panel" : ""}`}
+      aria-label="Markdown preview"
+    >
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       {openFile ? (
@@ -446,7 +452,9 @@ export function PreviewPanel({
           {actionBar}
           {findBar}
 
-          <div className="document-layout">
+          <div className="document-region">
+            {outlinePanel}
+            <div className="document-layout">
             {mode === "edit" && openFile.kind === "md" ? (
               <section
                 className="document-panel rendered-panel visual-editor-panel"
@@ -481,6 +489,7 @@ export function PreviewPanel({
                 {previewContent}
               </section>
             ) : null}
+            </div>
           </div>
 
           <div className="file-meta">

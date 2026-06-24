@@ -19,6 +19,7 @@ import {
   FilePlus,
   FolderOpen,
   FolderPlus,
+  List,
   Menu as MenuIcon,
   Moon,
   Pencil,
@@ -71,6 +72,7 @@ export interface MenuBarState {
   /** Copy is available in every mode (incl. read-only preview) when a file is open. */
   canCopy: boolean;
   explorerHidden: boolean;
+  outlinePanelVisible: boolean;
   barMerged: boolean;
   theme: "dark" | "light";
   mode: "edit" | "preview" | "code";
@@ -174,6 +176,11 @@ function buildMenus(state: MenuBarState): TopMenuDef[] {
           label: state.explorerHidden ? "Show Explorer" : "Hide Explorer",
           icon: Search,
           shortcut: "Ctrl+B",
+        },
+        {
+          id: "toggle-outline-panel",
+          label: state.outlinePanelVisible ? "Hide Outline Panel" : "Show Outline Panel",
+          icon: List,
         },
         { separator: true },
         {
