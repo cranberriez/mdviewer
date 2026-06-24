@@ -1,10 +1,42 @@
 import MarkdownIt from "markdown-it";
+import hljs from "highlight.js/lib/common";
+import taskLists from "markdown-it-task-lists";
 import { createSlugTracker } from "./slug";
+
+const PLAIN_TEXT_LANGUAGES = new Set(["text", "txt", "plain", "plaintext", "nohighlight"]);
+
+function highlightCode(source: string, language: string) {
+  const normalizedLanguage = language.trim().toLowerCase();
+
+  if (PLAIN_TEXT_LANGUAGES.has(normalizedLanguage)) {
+    return markdown.utils.escapeHtml(source);
+  }
+
+  if (normalizedLanguage && hljs.getLanguage(normalizedLanguage)) {
+    try {
+      return hljs.highlight(source, {
+        language: normalizedLanguage,
+        ignoreIllegals: true,
+      }).value;
+    } catch {
+      return markdown.utils.escapeHtml(source);
+    }
+  }
+
+  try {
+    return hljs.highlightAuto(source).value;
+  } catch {
+    return markdown.utils.escapeHtml(source);
+  }
+}
 
 export const markdown = new MarkdownIt({
   html: false,
   linkify: true,
   typographer: true,
+  highlight: highlightCode,
+}).use(taskLists, {
+  enabled: false,
 });
 
 /**

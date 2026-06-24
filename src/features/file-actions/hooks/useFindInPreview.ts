@@ -205,6 +205,12 @@ export function useFindInPreview(
     setOpen(true);
   }, [close, open]);
 
+  const openWithQuery = useCallback((value: string) => {
+    queryRef.current = value;
+    setQuery(value);
+    setOpen(true);
+  }, []);
+
   const updateQuery = useCallback(
     (value: string) => {
       queryRef.current = value;
@@ -262,6 +268,7 @@ export function useFindInPreview(
     goToNext: useCallback(() => goTo(1), [goTo]),
     goToPrevious: useCallback(() => goTo(-1), [goTo]),
     open,
+    openWithQuery,
     query,
     setOpen,
     setQuery: updateQuery,

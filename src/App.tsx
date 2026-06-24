@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
-import { createFile, createFolder, defaultLocations, deletePath, pickFolder, readFile, readFolder, renamePath, resolveLinkPath, revealInExplorer, writeFile } from "./features/files/api/filesApi";
+import { createFile, createFolder, defaultLocations, deletePath, pickFolder, readFile, readFolder, renamePath, resolveLinkPath, revealInExplorer, searchFiles, writeFile } from "./features/files/api/filesApi";
+import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
-import { Sidebar } from "./features/explorer/components/Sidebar";
+import { Sidebar, type SidebarMode } from "./features/explorer/components/Sidebar";
 import { ContextMenu, type ContextMenuAction, type ContextMenuTarget } from "./features/explorer/components/ContextMenu";
 import { SavedContextMenu, type SavedMenuAction } from "./features/explorer/components/SavedContextMenu";
 import { IconPickerMenu } from "./features/explorer/components/IconPickerMenu";
@@ -19,7 +20,7 @@ import { markdown } from "./features/preview/markdown";
 import { slugify } from "./features/preview/slug";
 import { PreviewPanel } from "./features/preview/components/PreviewPanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
-import type { Entry, OpenFile } from "./shared/types/files";
+import type { Entry, FileSearchMatch, OpenFile } from "./shared/types/files";
 import { fileExtension, fileKindFromPath, fileName, isVisibleFileName, joinPath, parentName, parentPath, relativePath } from "./shared/utils/path";
 import { loadAppConfiguration, loadAppSession, saveAppConfiguration, saveAppSession, type AppConfigurationState, type AppTheme, type StoredWindowFrame } from "./shared/state/persistence";
 import "./App.css";
@@ -28,6 +29,8 @@ const DEFAULT_SIDEBAR_WIDTH = 280;
 const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
 const MIN_CONTENT_WIDTH = 420;
+
+type UnsavedFileDrafts = Record<string, OpenFile>;
 
 function clampSidebarWidth(width: number) {
   const availableMax = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, window.innerWidth - MIN_CONTENT_WIDTH));
@@ -54,6 +57,36 @@ function findContainingLocation(locations: Entry[], path?: string) {
   return locations.filter((location) => containsPath(location.path, path)).sort((left, right) => comparablePath(right.path).length - comparablePath(left.path).length)[0] ?? null;
 }
 
+function pathIsDeletedTarget(target: ContextMenuTarget, path?: string | null) {
+  if (!path) {
+    return false;
+  }
+
+  return target.kind === "folder"
+    ? containsPath(target.path, path)
+    : comparablePath(path) === comparablePath(target.path);
+}
+
+function rebasePath(path: string, fromRoot: string, toRoot: string) {
+  if (comparablePath(path) === comparablePath(fromRoot)) {
+    return toRoot;
+  }
+
+  return `${toRoot}${path.slice(fromRoot.length)}`;
+}
+
+function confirmDeleteTarget(target: ContextMenuTarget) {
+  const description =
+    target.kind === "folder"
+      ? `folder "${target.name}" and its contents`
+      : `file "${target.name}"`;
+
+  return confirmDialog(`Move ${description} to the Recycle Bin?`, {
+    title: "Move to Recycle Bin",
+    kind: "warning",
+  });
+}
+
 function App() {
   const initialConfiguration = useMemo(() => loadAppConfiguration(), []);
   const initialSession = useMemo(() => loadAppSession(), []);
@@ -74,7 +107,7 @@ function App() {
     action: MarkdownAction;
     id: number;
   } | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const [unsavedFileDrafts, setUnsavedFileDrafts] = useState<UnsavedFileDrafts>({});
   const [saving, setSaving] = useState(false);
   const [barMerged, setBarMerged] = useState(() => initialConfiguration.barMerged ?? false);
   const [theme, setTheme] = useState<AppTheme>(() => initialConfiguration.theme ?? "dark");
@@ -98,12 +131,29 @@ function App() {
   );
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
   const [draft, setDraft] = useState<InlineDraft | null>(null);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>("explorer");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchedQuery, setSearchedQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<FileSearchMatch[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchTruncated, setSearchTruncated] = useState(false);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const findTargetRef = useRef<HTMLElement | null>(null);
+  const unsavedFileDraftsRef = useRef<UnsavedFileDrafts>({});
+  const searchRequestRef = useRef(0);
+  const pendingFindQueryRef = useRef<string | null>(null);
   // A heading fragment to scroll to once the just-opened file has rendered
   // (set when following a cross-file link like `doc.md#section`).
   const pendingAnchorRef = useRef<string | null>(null);
+  const updateUnsavedFileDrafts = useCallback((updater: (current: UnsavedFileDrafts) => UnsavedFileDrafts) => {
+    setUnsavedFileDrafts((current) => {
+      const next = updater(current);
+      unsavedFileDraftsRef.current = next;
+      return next;
+    });
+  }, []);
   const configurationRef = useRef<AppConfigurationState>({
     explorerHidden,
     sidebarWidth,
@@ -163,6 +213,8 @@ function App() {
     return true;
   }
 
+  const dirty = openFile ? Boolean(unsavedFileDrafts[comparablePath(openFile.path)]) : false;
+
   const renderedMarkdown = useMemo(() => {
     if (!openFile || openFile.kind !== "md") {
       return "";
@@ -172,6 +224,20 @@ function App() {
   }, [openFile]);
 
   const find = useFindInPreview(findTargetRef, `${openFile?.path ?? ""}:${mode}:${openFile?.kind === "md" ? renderedMarkdown : (openFile?.content ?? "")}`);
+
+  useEffect(() => {
+    const query = pendingFindQueryRef.current;
+    if (!query || mode !== "preview") {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      find.openWithQuery(query);
+      pendingFindQueryRef.current = null;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [find, mode, openFile?.path, renderedMarkdown]);
 
   // After following a cross-file link with a #fragment, scroll to the heading
   // once the new document has rendered into the preview. The preview container
@@ -191,6 +257,18 @@ function App() {
     return () => window.cancelAnimationFrame(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openFile?.path, renderedMarkdown, mode]);
+
+  useEffect(() => {
+    document.body.classList.toggle("theme-light", theme === "light");
+
+    return () => {
+      document.body.classList.remove("theme-light");
+    };
+  }, [theme]);
+
+  useEffect(() => {
+    unsavedFileDraftsRef.current = unsavedFileDrafts;
+  }, [unsavedFileDrafts]);
 
   useEffect(() => {
     const nextConfiguration: AppConfigurationState = {
@@ -335,8 +413,29 @@ function App() {
       .catch(() => undefined);
 
     void appWindow
-      .onCloseRequested(async () => {
+      .onCloseRequested(async (event) => {
         await captureWindowFrame();
+
+        const draftCount = Object.keys(unsavedFileDraftsRef.current).length;
+        if (draftCount === 0) {
+          return;
+        }
+
+        const confirmed = await confirmDialog(
+          draftCount === 1
+            ? "There are unsaved changes in 1 file. Close without saving?"
+            : `There are unsaved changes in ${draftCount} files. Close without saving?`,
+          {
+            title: "Unsaved Changes",
+            kind: "warning",
+            okLabel: "Close Without Saving",
+            cancelLabel: "Cancel",
+          },
+        );
+
+        if (!confirmed) {
+          event.preventDefault();
+        }
       })
       .then((unlisten) => {
         if (cancelled) {
@@ -358,18 +457,30 @@ function App() {
       return;
     }
 
+    const fileToSave = openFile;
+    const draftKey = comparablePath(fileToSave.path);
+
     setSaving(true);
     setError(null);
 
     try {
-      await writeFile(openFile.path, openFile.content);
-      setDirty(false);
+      await writeFile(fileToSave.path, fileToSave.content);
+      updateUnsavedFileDrafts((current) => {
+        const currentDraft = current[draftKey];
+        if (currentDraft && currentDraft.content !== fileToSave.content) {
+          return current;
+        }
+
+        const next = { ...current };
+        delete next[draftKey];
+        return next;
+      });
     } catch (cause) {
       setError(`Unable to save file: ${String(cause)}`);
     } finally {
       setSaving(false);
     }
-  }, [openFile, saving]);
+  }, [openFile, saving, updateUnsavedFileDrafts]);
 
   useEffect(() => {
     let cancelled = false;
@@ -464,18 +575,20 @@ function App() {
 
     try {
       const content = await readFile(path);
+      const draft = unsavedFileDraftsRef.current[comparablePath(path)];
       setOpenFile({
         path,
         name: fileName(path),
-        content,
+        content: draft?.content ?? content,
         kind: fileKindFromPath(path),
       });
-      setDirty(false);
       if (options?.mode) {
         setMode(options.mode);
       }
       find.close();
     } catch (cause) {
+      setOpenFile(null);
+      setOpenFilePath(null);
       setError(`Unable to read file: ${String(cause)}`);
     }
   }
@@ -575,9 +688,12 @@ function App() {
     setOpenFilePath(null);
     setExpanded(new Set());
     setError(null);
-    setDirty(false);
     setMode("preview");
     find.close();
+    setSearchResults([]);
+    setSearchedQuery("");
+    setSearchError(null);
+    setSearchTruncated(false);
     await loadFolder(location.path);
   }
 
@@ -604,6 +720,59 @@ function App() {
   async function selectFile(entry: Entry) {
     setFocusedEntry(entry);
     await openFileAtPath(entry.path);
+  }
+
+  async function runCrossFileSearch() {
+    const root = activeRoot;
+    const query = searchQuery.trim();
+    setSidebarMode("search");
+    setSearchError(null);
+
+    if (!root || !query) {
+      setSearchedQuery(query);
+      setSearchResults([]);
+      setSearchTruncated(false);
+      return;
+    }
+
+    const requestId = searchRequestRef.current + 1;
+    searchRequestRef.current = requestId;
+    setSearchLoading(true);
+    setSearchedQuery(query);
+    setSearchResults([]);
+    setSearchTruncated(false);
+
+    try {
+      const response = await searchFiles(root.path, query);
+      if (searchRequestRef.current !== requestId) {
+        return;
+      }
+      setSearchResults(response.matches);
+      setSearchTruncated(response.truncated);
+    } catch (cause) {
+      if (searchRequestRef.current === requestId) {
+        setSearchError(`Unable to search files: ${String(cause)}`);
+      }
+    } finally {
+      if (searchRequestRef.current === requestId) {
+        setSearchLoading(false);
+      }
+    }
+  }
+
+  async function openSearchResult(result: FileSearchMatch) {
+    pendingFindQueryRef.current = searchedQuery || searchQuery.trim();
+    await openFileAtPath(result.path, { mode: "preview" });
+  }
+
+  function clearCrossFileSearch() {
+    searchRequestRef.current += 1;
+    setSearchQuery("");
+    setSearchedQuery("");
+    setSearchResults([]);
+    setSearchError(null);
+    setSearchTruncated(false);
+    setSearchLoading(false);
   }
 
   function entryToTarget(entry: Entry, x = 0, y = 0): ContextMenuTarget {
@@ -860,14 +1029,59 @@ function App() {
       await renamePath(originalPath, targetPath);
       await refreshFolder(current.parentPath);
 
+      updateUnsavedFileDrafts((drafts) => {
+        const next = { ...drafts };
+
+        Object.entries(drafts).forEach(([key, fileDraft]) => {
+          const draftIsAffected =
+            current.kind === "folder"
+              ? containsPath(originalPath, fileDraft.path)
+              : comparablePath(fileDraft.path) === comparablePath(originalPath);
+
+          if (!draftIsAffected) {
+            return;
+          }
+
+          delete next[key];
+
+          const nextPath =
+            current.kind === "folder"
+              ? rebasePath(fileDraft.path, originalPath, targetPath)
+              : targetPath;
+
+          if (!isVisibleFileName(nextPath)) {
+            return;
+          }
+
+          next[comparablePath(nextPath)] = {
+            ...fileDraft,
+            path: nextPath,
+            name: fileName(nextPath),
+            kind: fileKindFromPath(nextPath) as OpenFile["kind"],
+          };
+        });
+
+        return next;
+      });
+
       // Keep keyboard focus on the renamed entry at its new path.
       setFocusedEntry((focused) => (focused?.path === originalPath ? { ...focused, name, path: targetPath } : focused));
 
-      // If the renamed file is the open one, follow it (or close it when it is
-      // no longer a visible kind).
-      if (openFilePath === originalPath) {
-        if (current.kind === "file" && isVisibleFileName(name)) {
-          await openFileAtPath(targetPath);
+      // If the open file was renamed directly or inside a renamed folder, follow
+      // it (or close it when it is no longer a visible kind).
+      if (
+        openFilePath &&
+        (current.kind === "folder"
+          ? containsPath(originalPath, openFilePath)
+          : comparablePath(openFilePath) === comparablePath(originalPath))
+      ) {
+        const nextOpenPath =
+          current.kind === "folder"
+            ? rebasePath(openFilePath, originalPath, targetPath)
+            : targetPath;
+
+        if (isVisibleFileName(nextOpenPath)) {
+          await openFileAtPath(nextOpenPath);
         } else {
           setOpenFile(null);
           setOpenFilePath(null);
@@ -920,17 +1134,57 @@ function App() {
           await navigator.clipboard?.writeText(activeRoot ? relativePath(activeRoot.path, target.path) : target.path);
           break;
         case "delete": {
-          const confirmed = window.confirm(`Move "${target.name}" to the Recycle Bin?`);
+          const confirmed = await confirmDeleteTarget(target);
           if (!confirmed) {
             break;
           }
+
           await deletePath(target.path);
-          if (openFilePath === target.path) {
+
+          if (pathIsDeletedTarget(target, openFilePath)) {
             setOpenFile(null);
             setOpenFilePath(null);
           }
-          setFocusedEntry((current) => (current?.path === target.path ? null : current));
-          await refreshFolder(parentPath(target.path));
+          updateUnsavedFileDrafts((current) => {
+            const next: UnsavedFileDrafts = {};
+            Object.entries(current).forEach(([key, draft]) => {
+              if (!pathIsDeletedTarget(target, draft.path)) {
+                next[key] = draft;
+              }
+            });
+            return next;
+          });
+          setSelectedFolderPath((current) => (pathIsDeletedTarget(target, current) ? parentPath(target.path) : current));
+          setFocusedEntry((current) => (pathIsDeletedTarget(target, current?.path) ? null : current));
+          setExpanded((current) => {
+            const next = new Set<string>();
+            current.forEach((path) => {
+              if (!pathIsDeletedTarget(target, path)) {
+                next.add(path);
+              }
+            });
+            return next;
+          });
+          setChildrenCache((current) => {
+            const next: Record<string, Entry[]> = {};
+            Object.entries(current).forEach(([path, entries]) => {
+              if (!pathIsDeletedTarget(target, path)) {
+                next[path] = entries;
+              }
+            });
+            return next;
+          });
+
+          if (pathIsDeletedTarget(target, activeRoot?.path)) {
+            const fallbackRoot = locations.find((location) => !pathIsDeletedTarget(target, location.path)) ?? null;
+            setActiveRoot(fallbackRoot);
+            setSelectedFolderPath(fallbackRoot?.path ?? null);
+            if (fallbackRoot) {
+              await loadFolder(fallbackRoot.path, { force: true });
+            }
+          } else {
+            await refreshFolder(parentPath(target.path));
+          }
           break;
         }
         default:
@@ -942,8 +1196,18 @@ function App() {
   }
 
   function updateOpenFileContent(content: string) {
-    setOpenFile((current) => (current ? { ...current, content } : current));
-    setDirty(true);
+    if (!openFile) {
+      return;
+    }
+
+    const nextFile = { ...openFile, content };
+    const draftKey = comparablePath(openFile.path);
+
+    setOpenFile(nextFile);
+    updateUnsavedFileDrafts((current) => ({
+      ...current,
+      [draftKey]: nextFile,
+    }));
   }
 
   function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
@@ -970,6 +1234,7 @@ function App() {
   // isn't the root itself (otherwise the root name would appear twice).
   const breadcrumbScope = openFile && activeRoot && comparablePath(parentPath(openFile.path)) !== comparablePath(activeRoot.path) ? parentName(openFile.path) : null;
   const rootChildren = activeRoot ? childrenCache[activeRoot.path] : undefined;
+  const unsavedFilePathKeys = new Set(Object.values(unsavedFileDrafts).map((file) => comparablePath(file.path)));
   const fileActionControls = openFile ? (
     <FileActionControls
       dirty={dirty}
@@ -1011,6 +1276,13 @@ function App() {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         void saveOpenFile();
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setExplorerHidden(false);
+        setSidebarMode("search");
+        return;
       }
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
@@ -1117,9 +1389,28 @@ function App() {
           loadingPaths={loadingPaths}
           selectedFolderPath={selectedFolderPath ?? undefined}
           activeFilePath={openFilePath ?? undefined}
+          unsavedFilePathKeys={unsavedFilePathKeys}
           contextPath={contextMenu?.path}
           focusedPath={focusedEntry?.path ?? undefined}
           draft={draft}
+          sidebarMode={sidebarMode}
+          searchQuery={searchQuery}
+          searchedQuery={searchedQuery}
+          searchResults={searchResults}
+          searchLoading={searchLoading}
+          searchError={searchError}
+          searchTruncated={searchTruncated}
+          rootRefreshing={activeRoot ? loadingPaths.has(activeRoot.path) : false}
+          onSidebarModeChange={setSidebarMode}
+          onSearchQueryChange={setSearchQuery}
+          onSearchClear={clearCrossFileSearch}
+          onSearchSubmit={() => void runCrossFileSearch()}
+          onOpenSearchResult={(result) => void openSearchResult(result)}
+          onRefreshRoot={() => {
+            if (activeRoot) {
+              void refreshFolder(activeRoot.path);
+            }
+          }}
           onSelectLocation={selectLocation}
           onToggleFolder={toggleFolder}
           onSelectFile={selectFile}

@@ -8,6 +8,10 @@ const TREE_BASE_INDENT = 10;
 const TREE_DEPTH_INDENT = 8;
 const TREE_LOADING_OFFSET = 24;
 
+function comparablePath(path: string) {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
 interface TreeNodeProps {
   entry: Entry;
   depth: number;
@@ -16,6 +20,7 @@ interface TreeNodeProps {
   loadingPaths: Set<string>;
   selectedFolderPath?: string;
   activeFilePath?: string;
+  unsavedFilePathKeys: Set<string>;
   contextPath?: string;
   focusedPath?: string;
   draft: InlineDraft | null;
@@ -34,6 +39,7 @@ export function TreeNode({
   loadingPaths,
   selectedFolderPath,
   activeFilePath,
+  unsavedFilePathKeys,
   contextPath,
   focusedPath,
   draft,
@@ -50,6 +56,7 @@ export function TreeNode({
   const hasActiveFile = Boolean(activeFilePath);
   const isSelectedFolder = selectedFolderPath === entry.path;
   const isActiveFile = activeFilePath === entry.path;
+  const isUnsavedFile = !entry.is_dir && unsavedFilePathKeys.has(comparablePath(entry.path));
   const isFolderContext = entry.is_dir && isSelectedFolder && hasActiveFile;
   const isActive =
     isActiveFile || (entry.is_dir && isSelectedFolder && (!hasActiveFile || !isExpanded));
@@ -106,7 +113,9 @@ export function TreeNode({
         type="button"
         className={`tree-row ${isActive ? "active" : ""} ${
           isContextOnly ? "active-context" : ""
-        } ${isContextTarget ? "context-target" : ""}`}
+        } ${isContextTarget ? "context-target" : ""} ${
+          isUnsavedFile ? "unsaved-file" : ""
+        }`}
         style={{ paddingLeft: TREE_BASE_INDENT + depth * TREE_DEPTH_INDENT }}
         tabIndex={isFocused ? 0 : -1}
         onClick={() =>
@@ -131,7 +140,9 @@ export function TreeNode({
             <Folder size={15} />
           )
         ) : (
-          <FileText size={15} />
+          <span className="tree-file-icon" aria-hidden="true">
+            <FileText size={15} />
+          </span>
         )}
         <span className="tree-name">{entry.name}</span>
       </button>
@@ -169,6 +180,7 @@ export function TreeNode({
                 loadingPaths={loadingPaths}
                 selectedFolderPath={selectedFolderPath}
                 activeFilePath={activeFilePath}
+                unsavedFilePathKeys={unsavedFilePathKeys}
                 contextPath={contextPath}
                 focusedPath={focusedPath}
                 draft={draft}

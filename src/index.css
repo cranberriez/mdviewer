@@ -18,6 +18,8 @@
   --color-text-secondary: #9a9aa2;
   --color-text-muted: #5f5f68;
   --color-text-on-active: #ffffff;
+  --color-accent-primary: #8bc5ff;
+  --color-accent-primary-strong: #4aa8ff;
 
   --radius-win: 12px;
   --radius-card: 12px;
@@ -73,7 +75,8 @@ body {
 }
 
 /* ---------- Light theme ---------- */
-.app-window.theme-light {
+.app-window.theme-light,
+body.theme-light {
   --color-bg-desktop: #e8e8ec;
   --color-bg-window: #f0f0f4;
   --color-bg-sidebar: #e8e8ec;
@@ -86,6 +89,8 @@ body {
   --color-text-secondary: #5a5a66;
   --color-text-muted: #9898a6;
   --color-text-on-active: #000000;
+  --color-accent-primary: #1677d2;
+  --color-accent-primary-strong: #0069c9;
 }
 
 /* Custom scrollbars to match the dark, flat aesthetic */
@@ -107,11 +112,13 @@ body {
   background: transparent;
 }
 
-.app-window.theme-light ::-webkit-scrollbar-thumb {
+.app-window.theme-light ::-webkit-scrollbar-thumb,
+body.theme-light ::-webkit-scrollbar-thumb {
   background: #c4c4cc;
   background-clip: content-box;
 }
-.app-window.theme-light ::-webkit-scrollbar-thumb:hover {
+.app-window.theme-light ::-webkit-scrollbar-thumb:hover,
+body.theme-light ::-webkit-scrollbar-thumb:hover {
   background: #adadb8;
   background-clip: content-box;
 }

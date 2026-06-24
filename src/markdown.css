@@ -101,14 +101,55 @@
 .md li.task-list-item {
   list-style: none;
   margin-left: -1.2em;
-  display: flex;
-  gap: 0.5em;
-  align-items: flex-start;
+  position: relative;
+  padding-left: 1.8em;
 }
 .md li.task input,
 .md li.task-list-item input {
+  position: absolute;
+  top: 0.22em;
+  left: 0;
+  width: 1.15em;
+  height: 1.15em;
+  margin: 0;
+  appearance: none;
+  border: 1px solid #8a8a94;
+  border-radius: 4px;
+  background: #2b2b30;
+  color: #f4f4f6;
+  cursor: pointer;
+}
+.md li.task input:checked,
+.md li.task-list-item input:checked {
+  border-color: #c8c8d0;
+  background: #d6d6dc;
+}
+.md li.task input:checked::after,
+.md li.task-list-item input:checked::after {
+  position: absolute;
+  top: 0.07em;
+  left: 0.35em;
+  width: 0.34em;
+  height: 0.68em;
+  border: solid #202024;
+  border-width: 0 0.15em 0.15em 0;
+  content: "";
+  transform: rotate(45deg);
+}
+.md li.task input:disabled,
+.md li.task-list-item input:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+.md li.task input:disabled:checked,
+.md li.task-list-item input:disabled:checked {
+  opacity: 0.9;
+}
+.md li.task > ul,
+.md li.task > ol,
+.md li.task-list-item > ul,
+.md li.task-list-item > ol {
   margin-top: 0.35em;
-  accent-color: #6b6b72;
 }
 .md blockquote {
   margin: 0.8em 0;
@@ -140,6 +181,67 @@
   padding: 0;
   font-size: 0.86em;
   color: #cfcfd6;
+}
+.md pre code.hljs {
+  display: block;
+  overflow-x: auto;
+}
+.md .hljs-comment,
+.md .hljs-quote {
+  color: #777781;
+  font-style: italic;
+}
+.md .hljs-keyword,
+.md .hljs-selector-tag,
+.md .hljs-subst {
+  color: #d7b7ff;
+}
+.md .hljs-literal,
+.md .hljs-number,
+.md .hljs-symbol,
+.md .hljs-variable.constant_ {
+  color: #f0b585;
+}
+.md .hljs-string,
+.md .hljs-doctag,
+.md .hljs-regexp {
+  color: #a9d9a7;
+}
+.md .hljs-title,
+.md .hljs-section,
+.md .hljs-name,
+.md .hljs-selector-id,
+.md .hljs-selector-class {
+  color: #8ecbf0;
+}
+.md .hljs-attribute,
+.md .hljs-attr,
+.md .hljs-property,
+.md .hljs-variable,
+.md .hljs-template-variable {
+  color: #f0d38c;
+}
+.md .hljs-type,
+.md .hljs-class .hljs-title,
+.md .hljs-built_in,
+.md .hljs-builtin-name {
+  color: #7fd0c5;
+}
+.md .hljs-meta,
+.md .hljs-link {
+  color: #b8b8c4;
+}
+.md .hljs-deletion {
+  color: #ef9a9a;
+}
+.md .hljs-addition {
+  color: #9bd49b;
+}
+.md .hljs-emphasis {
+  font-style: italic;
+}
+.md .hljs-strong {
+  font-weight: 600;
 }
 .md table {
   border-collapse: collapse;
@@ -219,12 +321,77 @@
 .theme-light .md pre code {
   color: #2e2e36;
 }
+.theme-light .md .hljs-comment,
+.theme-light .md .hljs-quote {
+  color: #74747e;
+}
+.theme-light .md .hljs-keyword,
+.theme-light .md .hljs-selector-tag,
+.theme-light .md .hljs-subst {
+  color: #7c3fb0;
+}
+.theme-light .md .hljs-literal,
+.theme-light .md .hljs-number,
+.theme-light .md .hljs-symbol,
+.theme-light .md .hljs-variable.constant_ {
+  color: #9a4f14;
+}
+.theme-light .md .hljs-string,
+.theme-light .md .hljs-doctag,
+.theme-light .md .hljs-regexp {
+  color: #317235;
+}
+.theme-light .md .hljs-title,
+.theme-light .md .hljs-section,
+.theme-light .md .hljs-name,
+.theme-light .md .hljs-selector-id,
+.theme-light .md .hljs-selector-class {
+  color: #1d65a6;
+}
+.theme-light .md .hljs-attribute,
+.theme-light .md .hljs-attr,
+.theme-light .md .hljs-property,
+.theme-light .md .hljs-variable,
+.theme-light .md .hljs-template-variable {
+  color: #7a5a12;
+}
+.theme-light .md .hljs-type,
+.theme-light .md .hljs-class .hljs-title,
+.theme-light .md .hljs-built_in,
+.theme-light .md .hljs-builtin-name {
+  color: #19736a;
+}
+.theme-light .md .hljs-meta,
+.theme-light .md .hljs-link {
+  color: #555562;
+}
+.theme-light .md .hljs-deletion {
+  color: #b42323;
+}
+.theme-light .md .hljs-addition {
+  color: #26722b;
+}
 .theme-light .md th {
   background: #e8e8ec;
   color: #18181c;
 }
 .theme-light .md td {
   color: #2e2e36;
+}
+.theme-light .md li.task input,
+.theme-light .md li.task-list-item input {
+  border-color: #7b7b84;
+  background: #f7f7fa;
+  color: #18181c;
+}
+.theme-light .md li.task input:checked,
+.theme-light .md li.task-list-item input:checked {
+  border-color: #4a4a50;
+  background: #4d4d56;
+}
+.theme-light .md li.task input:checked::after,
+.theme-light .md li.task-list-item input:checked::after {
+  border-color: #ffffff;
 }
 .theme-light ::highlight(find-matches) {
   background-color: #fde68a;
