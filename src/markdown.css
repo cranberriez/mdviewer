@@ -13,9 +13,7 @@
 /* editor textarea */
 .editor {
   width: 100%;
-  max-width: 800px;
   height: 100%;
-  margin: 0 auto;
   resize: none;
   border: none;
   outline: none;
@@ -24,7 +22,7 @@
   font-family: var(--font-mono);
   font-size: calc(13px * var(--zoom));
   line-height: 1.7;
-  padding: 6px 24px 24px;
+  padding: 6px max(24px, calc((100% - 800px) / 2 + 24px)) 24px;
 }
 
 .preview-inner {
@@ -194,6 +192,7 @@
   border: none;
   padding: 0;
   font-size: 0.86em;
+  line-height: 1.5;
   color: #cfcfd6;
 }
 .md pre code.hljs {

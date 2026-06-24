@@ -848,8 +848,8 @@ body.theme-light .notice.error {
   white-space: nowrap;
 }
 
-.preview-inner,
-.plain {
+.preview-scroll,
+.plain-scroll {
   min-height: 0;
   flex: 1;
   overflow: auto;
