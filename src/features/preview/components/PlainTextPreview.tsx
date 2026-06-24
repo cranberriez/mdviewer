@@ -2,20 +2,20 @@ import { forwardRef, type UIEventHandler } from "react";
 
 interface PlainTextPreviewProps {
   content: string;
-  onScroll: UIEventHandler<HTMLPreElement>;
+  onScroll: UIEventHandler<HTMLDivElement>;
 }
 
-export const PlainTextPreview = forwardRef<HTMLPreElement, PlainTextPreviewProps>(
+export const PlainTextPreview = forwardRef<HTMLDivElement, PlainTextPreviewProps>(
   function PlainTextPreview({ content, onScroll }, ref) {
     return (
-      <pre
+      <div
         ref={ref}
-        className="plain"
+        className="plain-scroll"
         data-find-content="true"
         onScroll={onScroll}
       >
-        {content}
-      </pre>
+        <pre className="plain">{content}</pre>
+      </div>
     );
   },
 );

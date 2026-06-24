@@ -848,8 +848,8 @@ body.theme-light .notice.error {
   white-space: nowrap;
 }
 
-.preview-inner,
-.plain {
+.preview-scroll,
+.plain-scroll {
   min-height: 0;
   flex: 1;
   overflow: auto;
@@ -857,17 +857,6 @@ body.theme-light .notice.error {
 
 .visual-editor-panel {
   flex-basis: 100%;
-}
-
-.visual-markdown-editor {
-  width: 100%;
-  outline: none;
-  caret-color: var(--color-text-primary);
-}
-
-.visual-markdown-editor:empty::before {
-  color: var(--color-text-muted);
-  content: "Start writing markdown...";
 }
 
 .empty-state {
