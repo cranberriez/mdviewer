@@ -87,6 +87,20 @@ function confirmDeleteTarget(target: ContextMenuTarget) {
   });
 }
 
+// Run a built-in editing command (undo/redo/cut/copy/paste) on the focused
+// editor. document.execCommand is formally deprecated, but inside a
+// contentEditable it remains the only API that performs these actions from a
+// programmatic trigger — synthetic keyboard events are untrusted and won't drive
+// the webview's native clipboard/history, and an Electron-style native menu role
+// (how VS Code does this) isn't available under Tauri. The existing markdown
+// editor already relies on execCommand for the same reason. The cast keeps the
+// deprecation off the call site without disabling type-checking.
+const execEditCommand = document.execCommand.bind(document) as (
+  commandId: string,
+  showUI?: boolean,
+  value?: string,
+) => boolean;
+
 function App() {
   const initialConfiguration = useMemo(() => loadAppConfiguration(), []);
   const initialSession = useMemo(() => loadAppSession(), []);
@@ -1233,6 +1247,114 @@ function App() {
     window.addEventListener("pointerup", stopResize);
   }
 
+  // Dispatch a menu-bar action to the matching existing handler. Edit clipboard
+  // / history actions defer to the browser's built-in commands so they behave
+  // exactly like the native Ctrl+Z / Ctrl+X / … keybinds on the focused editor.
+  const handleMenuAction = useCallback(
+    (id: string) => {
+      const targetFolder = selectedFolderPath ?? activeRoot?.path ?? null;
+
+      switch (id) {
+        case "new-file":
+          if (targetFolder) {
+            void startCreateDraft(targetFolder, "file");
+          }
+          return;
+        case "new-folder":
+          if (targetFolder) {
+            void startCreateDraft(targetFolder, "folder");
+          }
+          return;
+        case "open-folder":
+          void openFolderAsRoot();
+          return;
+        case "save":
+          void saveOpenFile();
+          return;
+        case "reveal":
+          if (openFilePath) {
+            void revealInExplorer(openFilePath);
+          }
+          return;
+        case "find":
+          if (openFile) {
+            find.setOpen(true);
+          }
+          return;
+        case "find-in-files":
+          setExplorerHidden(false);
+          setSidebarMode("search");
+          return;
+        case "toggle-explorer":
+          setExplorerHidden((hidden) => !hidden);
+          return;
+        case "mode-preview":
+          setMode("preview");
+          return;
+        case "mode-edit":
+          setMode("edit");
+          return;
+        case "mode-code":
+          setMode("code");
+          return;
+        case "toggle-bar":
+          setBarMerged((merged) => !merged);
+          return;
+        case "toggle-theme":
+          setTheme((t) => (t === "dark" ? "light" : "dark"));
+          return;
+        // Editor clipboard / history — run the webview's built-in editing
+        // commands on the focused editor (see execEditCommand above).
+        case "undo":
+          execEditCommand("undo");
+          return;
+        case "redo":
+          execEditCommand("redo");
+          return;
+        case "cut":
+          execEditCommand("cut");
+          return;
+        case "copy":
+          execEditCommand("copy");
+          return;
+        case "paste":
+          // execCommand("paste") is a no-op in some engines; fall back to the
+          // async Clipboard API and insert the text at the caret.
+          if (!execEditCommand("paste")) {
+            void navigator.clipboard
+              ?.readText()
+              .then((text) => execEditCommand("insertText", false, text))
+              .catch(() => undefined);
+          }
+          return;
+        default:
+          return;
+      }
+    },
+    [
+      activeRoot?.path,
+      find,
+      openFile,
+      openFilePath,
+      saveOpenFile,
+      selectedFolderPath,
+    ],
+  );
+
+  const menuState = useMemo(
+    () => ({
+      hasOpenFile: Boolean(openFile),
+      dirty,
+      isMarkdown: openFile?.kind === "md",
+      isEditing: mode === "edit" || mode === "code",
+      explorerHidden,
+      barMerged,
+      theme,
+      mode,
+    }),
+    [openFile, dirty, mode, explorerHidden, barMerged, theme],
+  );
+
   const title = openFile?.name ?? activeRoot?.name ?? "Markdown Viewer";
   // Show the open file's parent folder as a middle crumb, but only when it
   // isn't the root itself (otherwise the root name would appear twice).
@@ -1364,9 +1486,11 @@ function App() {
       <TitleBar
         fileActionsSlot={barMerged ? fileActionControls : null}
         explorerHidden={explorerHidden}
+        menuState={menuState}
         rootName={activeRoot?.name}
         scopeName={breadcrumbScope}
         title={title}
+        onMenuAction={handleMenuAction}
         onToggleExplorer={() => setExplorerHidden((hidden) => !hidden)}
       />
 

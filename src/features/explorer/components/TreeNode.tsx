@@ -53,14 +53,10 @@ export function TreeNode({
   const isExpanded = expanded.has(entry.path);
   const children = childrenCache[entry.path];
   const isLoading = loadingPaths.has(entry.path);
-  const hasActiveFile = Boolean(activeFilePath);
   const isSelectedFolder = selectedFolderPath === entry.path;
   const isActiveFile = activeFilePath === entry.path;
   const isUnsavedFile = !entry.is_dir && unsavedFilePathKeys.has(comparablePath(entry.path));
-  const isFolderContext = entry.is_dir && isSelectedFolder && hasActiveFile;
-  const isActive =
-    isActiveFile || (entry.is_dir && isSelectedFolder && (!hasActiveFile || !isExpanded));
-  const isContextOnly = isFolderContext && isExpanded;
+  const isActive = isActiveFile;
   const isContextTarget = contextPath === entry.path;
   const isFocused = focusedPath === entry.path;
 
@@ -111,11 +107,7 @@ export function TreeNode({
       <button
         ref={rowRef}
         type="button"
-        className={`tree-row ${isActive ? "active" : ""} ${
-          isContextOnly ? "active-context" : ""
-        } ${isContextTarget ? "context-target" : ""} ${
-          isUnsavedFile ? "unsaved-file" : ""
-        }`}
+        className={`tree-row ${isActive ? "active" : ""} ${isContextTarget ? "context-target" : ""} ${isUnsavedFile ? "unsaved-file" : ""}`}
         style={{ paddingLeft: TREE_BASE_INDENT + depth * TREE_DEPTH_INDENT }}
         tabIndex={isFocused ? 0 : -1}
         onClick={() =>
