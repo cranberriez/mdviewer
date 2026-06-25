@@ -38,6 +38,19 @@ interface PreviewPanelProps {
 
 type ScrollPanel = 'editor' | 'preview';
 
+interface ScrollSnapshot {
+	scrollTop: number;
+	topRatio: number;
+	centerRatio: number;
+	clientHeight: number;
+	scrollHeight: number;
+}
+
+interface TextSelectionSnapshot {
+	start: number;
+	end: number;
+}
+
 /**
  * Minimum content-area width (px) at which the floating outline can be shown
  */
@@ -63,6 +76,14 @@ function scrollCenterRatio(element: HTMLElement) {
 	);
 }
 
+function scrollTopRatio(element: HTMLElement) {
+	if (element.scrollHeight <= element.clientHeight) {
+		return 0;
+	}
+
+	return Math.max(0, Math.min(1, element.scrollTop / element.scrollHeight));
+}
+
 export function PreviewPanel({
 	outlinePanel,
 	dropOverlay,
@@ -82,9 +103,15 @@ export function PreviewPanel({
 	const previewScrollRef = useRef<HTMLElement | null>(null);
 	const visualEditorRootRef = useRef<HTMLDivElement | null>(null);
 	const visualEditorRef = useRef<LexicalMarkdownEditorHandle | null>(null);
+	const topRatioRef = useRef(0);
 	const centerRatioRef = useRef(0);
-	const ignoredScrollPanelRef = useRef<ScrollPanel | null>(null);
+	const ignoredScrollPanelsRef = useRef<Set<ScrollPanel>>(new Set());
 	const lastScrolledPanelRef = useRef<ScrollPanel>('preview');
+	const scrollSnapshotsRef = useRef<Record<string, ScrollSnapshot>>({});
+	const sharedFileTopRatioRef = useRef<Record<string, number>>({});
+	const sharedFileRatioRef = useRef<Record<string, number>>({});
+	const selectionSnapshotsRef = useRef<Record<string, TextSelectionSnapshot>>({});
+	const lastFocusRestoreKeyRef = useRef('');
 	const appliedFormatActionIdRef = useRef(0);
 	const undoStackRef = useRef<ToolbarHistoryEntry[]>([]);
 	const redoStackRef = useRef<ToolbarHistoryEntry[]>([]);
@@ -128,6 +155,134 @@ export function PreviewPanel({
 		previewScrollRef.current = node;
 	}, []);
 
+	const filePositionKey = openFile?.path ?? '';
+
+	const scrollSnapshotKey = useCallback(
+		(panel: ScrollPanel) => `${filePositionKey}:${mode}:${panel}`,
+		[filePositionKey, mode]
+	);
+
+	const selectionSnapshotKey = useCallback(
+		(targetMode: FileViewMode) => `${filePositionKey}:${targetMode}`,
+		[filePositionKey]
+	);
+
+	const rememberSelectionSnapshot = useCallback(
+		(targetMode: FileViewMode, selection: TextSelectionSnapshot) => {
+			selectionSnapshotsRef.current[selectionSnapshotKey(targetMode)] = selection;
+		},
+		[selectionSnapshotKey]
+	);
+
+	const getPanelElement = useCallback(
+		(panel: ScrollPanel): HTMLElement | null => {
+			if (panel === 'editor') {
+				return editorScrollRef.current;
+			}
+
+			if (mode === 'edit' && openFile?.kind === 'md') {
+				return visualEditorRootRef.current;
+			}
+
+			return previewScrollRef.current;
+		},
+		[mode, openFile?.kind]
+	);
+
+	const rememberScrollSnapshot = useCallback(
+		(panel: ScrollPanel, element: HTMLElement) => {
+			if (!openFile) {
+				return;
+			}
+
+			const topRatio = scrollTopRatio(element);
+			const centerRatio = scrollCenterRatio(element);
+			topRatioRef.current = topRatio;
+			centerRatioRef.current = centerRatio;
+			sharedFileTopRatioRef.current[filePositionKey] = topRatio;
+			sharedFileRatioRef.current[filePositionKey] = centerRatio;
+			scrollSnapshotsRef.current[scrollSnapshotKey(panel)] = {
+				scrollTop: element.scrollTop,
+				topRatio,
+				centerRatio,
+				clientHeight: element.clientHeight,
+				scrollHeight: element.scrollHeight,
+			};
+		},
+		[filePositionKey, openFile, scrollSnapshotKey]
+	);
+
+	const activeScrollPanels = useCallback((): ScrollPanel[] => {
+		if (!openFile) {
+			return [];
+		}
+
+		if (mode === 'code') {
+			return ['editor', 'preview'];
+		}
+
+		if (mode === 'edit' && openFile.kind !== 'md') {
+			return ['editor'];
+		}
+
+		return ['preview'];
+	}, [mode, openFile]);
+
+	const rememberTextareaSelection = useCallback(() => {
+		const editor = editorScrollRef.current;
+		if (!openFile || !editor) {
+			return;
+		}
+
+		rememberSelectionSnapshot(mode, {
+			start: editor.selectionStart,
+			end: editor.selectionEnd,
+		});
+	}, [mode, openFile, rememberSelectionSnapshot]);
+
+	const selectionForMode = useCallback(
+		(targetMode: FileViewMode): TextSelectionSnapshot | null => {
+			if (!openFile) {
+				return null;
+			}
+
+			if (targetMode === 'preview') {
+				return null;
+			}
+
+			return selectionSnapshotsRef.current[selectionSnapshotKey(targetMode)] ?? null;
+		},
+		[openFile, selectionSnapshotKey]
+	);
+
+	const restoreScrollSnapshots = useCallback(() => {
+		if (!openFile) {
+			return;
+		}
+
+		for (const panel of activeScrollPanels()) {
+			const element = getPanelElement(panel);
+			if (!element || element.clientHeight === 0 || element.scrollHeight === 0) {
+				continue;
+			}
+
+			const snapshot = scrollSnapshotsRef.current[scrollSnapshotKey(panel)];
+			const restoreRatio = sharedFileTopRatioRef.current[filePositionKey] ?? snapshot?.topRatio ?? 0;
+			const nextScrollTop = clampScrollTop(restoreRatio * element.scrollHeight, element);
+
+			if (Math.abs(element.scrollTop - nextScrollTop) < 1) {
+				continue;
+			}
+
+			ignoredScrollPanelsRef.current.add(panel);
+			element.scrollTop = nextScrollTop;
+		}
+
+		window.requestAnimationFrame(() => {
+			ignoredScrollPanelsRef.current.clear();
+		});
+	}, [activeScrollPanels, filePositionKey, getPanelElement, openFile, scrollSnapshotKey]);
+
 	useLayoutEffect(() => {
 		if (!openFile) {
 			findTargetRef.current = null;
@@ -148,7 +303,7 @@ export function PreviewPanel({
 	}, [findTargetRef, mode, openFile]);
 
 	const applyCenterRatio = useCallback((panel: ScrollPanel, ratio: number) => {
-		const element = panel === 'editor' ? editorScrollRef.current : previewScrollRef.current;
+		const element = getPanelElement(panel);
 
 		if (!element || element.clientHeight === 0 || element.scrollHeight === 0) {
 			return;
@@ -163,29 +318,52 @@ export function PreviewPanel({
 			return;
 		}
 
-		ignoredScrollPanelRef.current = panel;
+		ignoredScrollPanelsRef.current.add(panel);
 		element.scrollTop = nextScrollTop;
 
 		window.requestAnimationFrame(() => {
-			if (ignoredScrollPanelRef.current === panel) {
-				ignoredScrollPanelRef.current = null;
-			}
+			ignoredScrollPanelsRef.current.delete(panel);
 		});
-	}, []);
+	}, [getPanelElement]);
+
+	const applyTopRatio = useCallback((panel: ScrollPanel, ratio: number) => {
+		const element = getPanelElement(panel);
+
+		if (!element || element.clientHeight === 0 || element.scrollHeight === 0) {
+			return;
+		}
+
+		const nextScrollTop = clampScrollTop(ratio * element.scrollHeight, element);
+
+		if (Math.abs(element.scrollTop - nextScrollTop) < 1) {
+			return;
+		}
+
+		ignoredScrollPanelsRef.current.add(panel);
+		element.scrollTop = nextScrollTop;
+
+		window.requestAnimationFrame(() => {
+			ignoredScrollPanelsRef.current.delete(panel);
+		});
+	}, [getPanelElement]);
 
 	const syncFromPanel = useCallback(
 		(panel: ScrollPanel, element: HTMLElement) => {
-			if (ignoredScrollPanelRef.current === panel) {
-				ignoredScrollPanelRef.current = null;
+			if (ignoredScrollPanelsRef.current.has(panel)) {
+				ignoredScrollPanelsRef.current.delete(panel);
 				return;
 			}
 
 			const ratio = scrollCenterRatio(element);
+			rememberScrollSnapshot(panel, element);
+			topRatioRef.current = scrollTopRatio(element);
 			centerRatioRef.current = ratio;
 			lastScrolledPanelRef.current = panel;
-			applyCenterRatio(panel === 'editor' ? 'preview' : 'editor', ratio);
+			if (mode === 'code') {
+				applyCenterRatio(panel === 'editor' ? 'preview' : 'editor', ratio);
+			}
 		},
-		[applyCenterRatio]
+		[applyCenterRatio, mode, rememberScrollSnapshot]
 	);
 
 	const handleEditorScroll = useCallback(
@@ -205,18 +383,22 @@ export function PreviewPanel({
 	const handleEditorContentChange = useCallback(
 		(content: string) => {
 			if (editorScrollRef.current) {
+				rememberScrollSnapshot('editor', editorScrollRef.current);
+				rememberTextareaSelection();
+				topRatioRef.current = scrollTopRatio(editorScrollRef.current);
 				centerRatioRef.current = scrollCenterRatio(editorScrollRef.current);
 				lastScrolledPanelRef.current = 'editor';
 			}
 
 			onContentChange(content);
 		},
-		[onContentChange]
+		[onContentChange, rememberScrollSnapshot, rememberTextareaSelection]
 	);
 
 	const handleEditorKeyDown = useCallback(
 		(event: KeyboardEvent<HTMLTextAreaElement>) => {
 			if (event.key !== 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {
+				window.requestAnimationFrame(rememberTextareaSelection);
 				return;
 			}
 
@@ -278,6 +460,10 @@ export function PreviewPanel({
 					if (el) {
 						el.selectionStart = nextStart;
 						el.selectionEnd = nextEnd;
+						rememberSelectionSnapshot(mode, {
+							start: nextStart,
+							end: nextEnd,
+						});
 					}
 				});
 				return;
@@ -290,12 +476,16 @@ export function PreviewPanel({
 			window.requestAnimationFrame(() => {
 				const el = editorScrollRef.current;
 				if (el) {
-					el.selectionStart = caret;
-					el.selectionEnd = caret;
-				}
-			});
+						el.selectionStart = caret;
+						el.selectionEnd = caret;
+						rememberSelectionSnapshot(mode, {
+							start: caret,
+							end: caret,
+						});
+					}
+				});
 		},
-		[handleEditorContentChange]
+		[handleEditorContentChange, mode, rememberSelectionSnapshot, rememberTextareaSelection]
 	);
 
 	const focusActiveEditor = useCallback(() => {
@@ -305,7 +495,7 @@ export function PreviewPanel({
 				return;
 			}
 
-			editorScrollRef.current?.focus();
+			editorScrollRef.current?.focus({ preventScroll: true });
 		});
 	}, [mode, openFile?.kind]);
 
@@ -345,12 +535,19 @@ export function PreviewPanel({
 	}, [focusActiveEditor, onContentChange]);
 
 	useEffect(() => {
-		centerRatioRef.current = 0;
-		ignoredScrollPanelRef.current = null;
+		topRatioRef.current = openFile ? (sharedFileTopRatioRef.current[filePositionKey] ?? 0) : 0;
+		centerRatioRef.current = openFile ? (sharedFileRatioRef.current[filePositionKey] ?? 0) : 0;
+		ignoredScrollPanelsRef.current.clear();
 		lastScrolledPanelRef.current = 'preview';
 		undoStackRef.current = [];
 		redoStackRef.current = [];
-	}, [openFile?.path]);
+	}, [filePositionKey, openFile]);
+
+	useLayoutEffect(() => {
+		return () => {
+			rememberTextareaSelection();
+		};
+	}, [mode, openFile?.path, rememberTextareaSelection]);
 
 	useEffect(() => {
 		if (!openFile || openFile.kind !== 'md') {
@@ -383,31 +580,69 @@ export function PreviewPanel({
 		};
 	}, [openFile, redoToolbarAction, undoToolbarAction]);
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (!openFile) {
 			return;
 		}
 
+		restoreScrollSnapshots();
+		const frame = window.requestAnimationFrame(restoreScrollSnapshots);
+
+		return () => window.cancelAnimationFrame(frame);
+	}, [mode, openFile?.path, renderedMarkdown, restoreScrollSnapshots]);
+
+	useEffect(() => {
+		if (!openFile || mode === 'preview') {
+			lastFocusRestoreKeyRef.current = '';
+			return;
+		}
+
+		const target = lastScrolledPanelRef.current === 'editor' ? 'preview' : 'editor';
 		const frame = window.requestAnimationFrame(() => {
-			applyCenterRatio('editor', centerRatioRef.current);
-			applyCenterRatio('preview', centerRatioRef.current);
+			if (mode === 'code') {
+				applyTopRatio(target, topRatioRef.current);
+			}
 		});
 
 		return () => window.cancelAnimationFrame(frame);
-	}, [applyCenterRatio, mode, openFile?.path]);
+	}, [applyTopRatio, mode, openFile?.content, openFile?.path, renderedMarkdown]);
 
 	useEffect(() => {
 		if (!openFile || mode === 'preview') {
 			return;
 		}
 
-		const target = lastScrolledPanelRef.current === 'editor' ? 'preview' : 'editor';
+		const focusRestoreKey = `${openFile.path}:${openFile.kind}:${mode}`;
+		if (lastFocusRestoreKeyRef.current === focusRestoreKey) {
+			return;
+		}
+		lastFocusRestoreKeyRef.current = focusRestoreKey;
+
 		const frame = window.requestAnimationFrame(() => {
-			applyCenterRatio(target, centerRatioRef.current);
+			const selection = selectionForMode(mode);
+
+			if (mode === 'edit' && openFile.kind === 'md') {
+				visualEditorRef.current?.focus();
+				return;
+			}
+
+			const editor = editorScrollRef.current;
+			if (!editor) {
+				return;
+			}
+
+			editor.focus({ preventScroll: true });
+			if (!selection) {
+				return;
+			}
+
+			const start = Math.max(0, Math.min(selection.start, editor.value.length));
+			const end = Math.max(0, Math.min(selection.end, editor.value.length));
+			editor.setSelectionRange(start, end);
 		});
 
 		return () => window.cancelAnimationFrame(frame);
-	}, [applyCenterRatio, mode, openFile?.content, openFile?.path, renderedMarkdown]);
+	}, [mode, openFile?.kind, openFile?.path, selectionForMode]);
 
 	useEffect(() => {
 		if (
@@ -448,10 +683,11 @@ export function PreviewPanel({
 				return;
 			}
 
-			currentEditor.focus();
+			currentEditor.focus({ preventScroll: true });
 			currentEditor.setSelectionRange(result.selection.start, result.selection.end);
+			rememberSelectionSnapshot(mode, result.selection);
 		});
-	}, [mode, onContentChange, openFile, pendingFormatAction, pushToolbarHistory]);
+	}, [mode, onContentChange, openFile, pendingFormatAction, pushToolbarHistory, rememberSelectionSnapshot]);
 
 	const previewContent = openFile ? (
 		openFile.kind === 'md' ? (
@@ -512,6 +748,10 @@ export function PreviewPanel({
 										value={openFile.content}
 										onScroll={handleEditorScroll}
 										onKeyDown={handleEditorKeyDown}
+										onKeyUp={rememberTextareaSelection}
+										onClick={rememberTextareaSelection}
+										onSelect={rememberTextareaSelection}
+										onBlur={rememberTextareaSelection}
 										onChange={(event) => handleEditorContentChange(event.target.value)}
 									/>
 								</section>

@@ -12,6 +12,8 @@
   --content-width: 800px;
   /* Minimum horizontal gutter when the panel is narrower than the column. */
   --content-gutter: 30px;
+  /* Shared top offset for preview, edit and code surfaces. */
+  --document-top-padding: clamp(28px, 10vh, 96px);
 }
 
 /* Each mode's scroller fills the full panel width and is itself the element
@@ -43,12 +45,12 @@
   font-family: var(--font-mono);
   font-size: calc(13px * var(--zoom));
   line-height: 1.7;
-  padding: 6px max(24px, calc((100% - 800px) / 2 + 24px)) 24px
+  padding: var(--document-top-padding) max(24px, calc((100% - 800px) / 2 + 24px)) 24px
     max(var(--outline-clearance, 0px), 24px, calc((100% - 800px) / 2 + 24px));
 }
 
 .preview-inner {
-  padding-top: 6px;
+  padding-top: var(--document-top-padding);
   padding-bottom: 56px;
 }
 
@@ -446,7 +448,7 @@
   line-height: 1.7;
   color: #cfcfd6;
   white-space: pre-wrap;
-  padding-top: 6px;
+  padding-top: var(--document-top-padding);
   padding-bottom: 56px;
 }
 

@@ -34,7 +34,10 @@ import {
   TableNode,
   TableRowNode,
 } from "@lexical/table";
-import { $getRoot, type EditorState } from "lexical";
+import {
+  $getRoot,
+  type EditorState,
+} from "lexical";
 import {
   type MarkdownAction,
   type MarkdownActionResult,
