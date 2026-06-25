@@ -29,11 +29,16 @@ jobs:
           CURRENT=$(grep -m1 '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
 
-          if [[ "$TARGET_BRANCH" =~ ^v([0-9]+)\.([0-9]+)$ ]]; then
+          if [[ "$TARGET_BRANCH" =~ ^v([0-9]+)\.([0-9]+)(\.([0-9]+))?$ ]]; then
             BRANCH_MAJOR="${BASH_REMATCH[1]}"
             BRANCH_MINOR="${BASH_REMATCH[2]}"
-            if [[ "$BRANCH_MAJOR" != "$MAJOR" || "$BRANCH_MINOR" != "$MINOR" ]]; then
-              # Moved to a new major.minor branch — reset patch to 1
+            BRANCH_PATCH="${BASH_REMATCH[4]}"
+            if [[ -n "$BRANCH_PATCH" ]]; then
+              MAJOR="$BRANCH_MAJOR"
+              MINOR="$BRANCH_MINOR"
+              PATCH=$((BRANCH_PATCH + 1))
+            elif [[ "$BRANCH_MAJOR" != "$MAJOR" || "$BRANCH_MINOR" != "$MINOR" ]]; then
+              # Moved to a new major.minor branch; reset patch to 1
               MAJOR="$BRANCH_MAJOR"
               MINOR="$BRANCH_MINOR"
               PATCH=1
@@ -41,10 +46,9 @@ jobs:
               PATCH=$((PATCH + 1))
             fi
           else
-            # Non-versioned branch (e.g. main) — just bump patch
+            # Non-versioned branch (e.g. main); just bump patch
             PATCH=$((PATCH + 1))
           fi
-
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "new=$NEW_VERSION"  >> "$GITHUB_OUTPUT"

@@ -20,20 +20,38 @@ export interface RecentFile {
 }
 
 /**
- * A recently used root folder, surfaced on the Home screen. There is at most one
- * entry per root: opening files within a root updates that root's `lastFile`
- * rather than creating new entries.
+ * A recent entry surfaced on the Home screen. Two shapes share one list:
+ *
+ * - **Root** (`kind` omitted or `"root"`) — a recently used root folder. There
+ *   is at most one entry per root: opening files within a root updates that
+ *   root's `lastFile` rather than creating new entries.
+ * - **File** (`kind: "file"`) — a single file opened *without* a root (only via
+ *   dropping a lone file onto the Home screen). `path` is the file itself,
+ *   `fileKind` drives its icon, and `lastFile` is unused. Clicking it just
+ *   reopens that file; no root is selected.
+ *
+ * `kind` is optional for backward compatibility: entries persisted before this
+ * field existed are roots, and `recentItemKind` treats a missing value as such.
  */
 export interface RecentItem {
-  /** Absolute path of the root folder. */
+  /** "root" (default) or "file". Optional so pre-existing data reads as a root. */
+  kind?: "root" | "file";
+  /** Absolute path of the root folder, or of the file for `kind: "file"`. */
   path: string;
-  /** Display name of the root folder. */
+  /** Display name of the folder, or of the file for `kind: "file"`. */
   name: string;
+  /** For `kind: "file"`, the file's kind (drives its icon). */
+  fileKind?: Exclude<EntryKind, "folder">;
   /** The most-recently-opened file within this root, or undefined if the root
-   *  was selected but no file was ever opened. */
+   *  was selected but no file was ever opened. Unused for `kind: "file"`. */
   lastFile?: RecentFile;
   /** Epoch millis when this root was last touched; drives ordering. */
   openedAt: number;
+}
+
+/** A recent entry's effective kind, treating legacy (missing) values as roots. */
+export function recentItemKind(item: RecentItem): "root" | "file" {
+  return item.kind === "file" ? "file" : "root";
 }
 
 /** Maximum number of recent roots kept. */
@@ -206,10 +224,16 @@ function readRecent(value: unknown): RecentItem | null {
     return null;
   }
 
+  // A persisted "file" recent carries kind:"file" and a fileKind; anything else
+  // (including legacy data with no kind) is a root.
+  const isFile = value.kind === "file";
+
   return {
+    kind: isFile ? "file" : "root",
     path,
     name,
-    lastFile: readRecentFile(value.lastFile),
+    fileKind: isFile ? readRecentKind(value.fileKind) : undefined,
+    lastFile: isFile ? undefined : readRecentFile(value.lastFile),
     openedAt,
   };
 }
@@ -240,14 +264,43 @@ export function touchRecentRoot(
   root: { path: string; name: string },
 ): RecentItem[] {
   const key = recentKey(root.path);
-  const existing = current.find((item) => recentKey(item.path) === key);
+  const existing = current.find(
+    (item) => recentItemKind(item) === "root" && recentKey(item.path) === key,
+  );
   const next: RecentItem = {
+    kind: "root",
     path: root.path,
     name: root.name,
     lastFile: existing?.lastFile,
     openedAt: Date.now(),
   };
-  const rest = current.filter((item) => recentKey(item.path) !== key);
+  const rest = current.filter(
+    (item) => !(recentItemKind(item) === "root" && recentKey(item.path) === key),
+  );
+  return [next, ...rest].slice(0, MAX_RECENTS);
+}
+
+/**
+ * Record a lone file opened with no root (only happens when a single file is
+ * dropped onto the Home screen). Upserts a `kind: "file"` entry keyed by the
+ * file path and moves it to the top. This is the only path that adds a single
+ * file to the recents list. Pure.
+ */
+export function recordRecentSingleFile(
+  current: RecentItem[],
+  file: { path: string; name: string; kind: Exclude<EntryKind, "folder"> },
+): RecentItem[] {
+  const key = recentKey(file.path);
+  const next: RecentItem = {
+    kind: "file",
+    path: file.path,
+    name: file.name,
+    fileKind: file.kind,
+    openedAt: Date.now(),
+  };
+  const rest = current.filter(
+    (item) => !(recentItemKind(item) === "file" && recentKey(item.path) === key),
+  );
   return [next, ...rest].slice(0, MAX_RECENTS);
 }
 
@@ -262,19 +315,30 @@ export function recordRecentFile(
 ): RecentItem[] {
   const key = recentKey(root.path);
   const next: RecentItem = {
+    kind: "root",
     path: root.path,
     name: root.name,
     lastFile: file,
     openedAt: Date.now(),
   };
-  const rest = current.filter((item) => recentKey(item.path) !== key);
+  const rest = current.filter(
+    (item) => !(recentItemKind(item) === "root" && recentKey(item.path) === key),
+  );
   return [next, ...rest].slice(0, MAX_RECENTS);
 }
 
-/** Remove a recent root by path, returning a new list. */
-export function removeRecent(current: RecentItem[], rootPath: string): RecentItem[] {
-  const key = recentKey(rootPath);
-  return current.filter((item) => recentKey(item.path) !== key);
+/**
+ * Remove a recent entry, returning a new list. Matches on both path and kind so
+ * a file recent and a root recent that happen to share a path don't collide.
+ */
+export function removeRecent(
+  current: RecentItem[],
+  target: { path: string; kind: "root" | "file" },
+): RecentItem[] {
+  const key = recentKey(target.path);
+  return current.filter(
+    (item) => !(recentItemKind(item) === target.kind && recentKey(item.path) === key),
+  );
 }
 
 function readViewMode(value: unknown): StoredFileViewMode | undefined {

@@ -2,6 +2,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { Folder, FolderOpen, List, Moon, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
 import type { Entry, FileSearchMatch } from "../../../shared/types/files";
 import type { AppTheme } from "../../../shared/state/persistence";
+import type { InternalDragStart } from "../../dnd/dropTypes";
 import { EmptySidebar } from "./EmptySidebar";
 import { TreeNode } from "./TreeNode";
 import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
@@ -60,6 +61,12 @@ interface SidebarProps {
   onToggleRootPin: () => void;
   onDraftSubmit: (value: string) => void;
   onDraftCancel: () => void;
+  /** Folder path currently highlighted as the active drop target, if any. */
+  dropTargetPath?: string | null;
+  /** True while files are being dragged over blank tree space (root drop). */
+  rootDropActive?: boolean;
+  /** Start an in-app pointer drag of a tree entry. */
+  onEntryPointerDown: InternalDragStart;
   /** Custom icon name per saved-location path. */
   locationIcons?: Record<string, string>;
   /** Path of Home (first default location) — its icon is always Home and can't be changed. */
@@ -112,6 +119,9 @@ export function Sidebar({
   onToggleRootPin,
   onDraftSubmit,
   onDraftCancel,
+  dropTargetPath,
+  rootDropActive,
+  onEntryPointerDown,
   locationIcons,
   homePath,
   theme,
@@ -284,8 +294,10 @@ export function Sidebar({
           />
         ) : (
           <div
-            className="tree"
+            className={`tree ${rootDropActive ? "drop-target-root" : ""}`}
             role="tree"
+            data-drop-zone="tree-blank"
+            data-drop-path={activeRoot?.path ?? ""}
             onContextMenu={(event) => {
               // Only handle right-clicks on empty tree space; rows stop propagation
               // by handling their own contextmenu.
@@ -319,6 +331,8 @@ export function Sidebar({
                     unsavedFilePathKeys={unsavedFilePathKeys}
                     contextPath={contextPath}
                     focusedPath={focusedPath}
+                    dropTargetPath={dropTargetPath}
+                    onEntryPointerDown={onEntryPointerDown}
                     draft={draft}
                     onToggleFolder={onToggleFolder}
                     onSelectFile={onSelectFile}
