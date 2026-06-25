@@ -1,7 +1,22 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { Folder, FolderOpen, List, Moon, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
+import {
+  FilePlus,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  List,
+  Moon,
+  Pin,
+  PinOff,
+  RefreshCw,
+  Search,
+  Sun,
+} from "lucide-react";
 import type { Entry, FileSearchMatch } from "../../../shared/types/files";
-import type { AppTheme } from "../../../shared/state/persistence";
+import type {
+  AppTheme,
+  ExplorerHeaderActionsVisibility,
+} from "../../../shared/state/persistence";
 import type { InternalDragStart } from "../../dnd/dropTypes";
 import { EmptySidebar } from "./EmptySidebar";
 import { TreeNode } from "./TreeNode";
@@ -34,6 +49,7 @@ interface SidebarProps {
   searchError: string | null;
   searchTruncated: boolean;
   rootRefreshing: boolean;
+  explorerHeaderActionsVisible: ExplorerHeaderActionsVisibility;
   /** Rendered markdown HTML for the open file, or null for non-markdown / none. */
   outlineHtml: string | null;
   /** Whether any file is open (drives the outline empty state). */
@@ -47,6 +63,9 @@ interface SidebarProps {
   onSearchSubmit: () => void;
   onOpenSearchResult: (result: FileSearchMatch) => void;
   onRefreshRoot: () => void;
+  onCreateRootFile: () => void;
+  onCreateRootFolder: () => void;
+  onExplorerHeaderContextMenu: (event: ReactMouseEvent) => void;
   onSelectLocation: (location: Entry) => Promise<void>;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
@@ -97,6 +116,7 @@ export function Sidebar({
   searchError,
   searchTruncated,
   rootRefreshing,
+  explorerHeaderActionsVisible,
   outlineHtml,
   hasOpenFile,
   showOutlineTab,
@@ -107,6 +127,9 @@ export function Sidebar({
   onSearchSubmit,
   onOpenSearchResult,
   onRefreshRoot,
+  onCreateRootFile,
+  onCreateRootFolder,
+  onExplorerHeaderContextMenu,
   onSelectLocation,
   onToggleFolder,
   onSelectFile,
@@ -250,23 +273,56 @@ export function Sidebar({
       </section>
 
       <section className="sidebar-section explorer-section">
-        <div className="explorer-heading">
+        <div
+          className="explorer-heading"
+          onContextMenu={
+            !showingSearchResults && !showingOutline && activeRoot
+              ? onExplorerHeaderContextMenu
+              : undefined
+          }
+        >
           <div>
             <div className="section-label">
               {showingOutline ? "Outline" : showingSearchResults ? "Search" : "Explorer"}
             </div>
           </div>
           {!showingSearchResults && !showingOutline && activeRoot ? (
-            <button
-              type="button"
-              className="explorer-refresh"
-              title="Refresh explorer"
-              aria-label="Refresh explorer"
-              disabled={rootRefreshing}
-              onClick={onRefreshRoot}
-            >
-              <RefreshCw className={rootRefreshing ? "search-spinner" : undefined} size={14} />
-            </button>
+            <div className="explorer-actions">
+              {explorerHeaderActionsVisible.newFile ? (
+                <button
+                  type="button"
+                  className="explorer-header-action"
+                  title="Add file"
+                  aria-label="Add file"
+                  onClick={onCreateRootFile}
+                >
+                  <FilePlus size={14} />
+                </button>
+              ) : null}
+              {explorerHeaderActionsVisible.newFolder ? (
+                <button
+                  type="button"
+                  className="explorer-header-action"
+                  title="Add folder"
+                  aria-label="Add folder"
+                  onClick={onCreateRootFolder}
+                >
+                  <FolderPlus size={14} />
+                </button>
+              ) : null}
+              {explorerHeaderActionsVisible.refresh ? (
+                <button
+                  type="button"
+                  className="explorer-header-action"
+                  title="Refresh explorer"
+                  aria-label="Refresh explorer"
+                  disabled={rootRefreshing}
+                  onClick={onRefreshRoot}
+                >
+                  <RefreshCw className={rootRefreshing ? "search-spinner" : undefined} size={14} />
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
 

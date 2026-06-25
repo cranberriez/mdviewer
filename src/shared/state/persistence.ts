@@ -12,6 +12,18 @@ export interface StoredWindowFrame {
 
 export type AppTheme = "dark" | "light";
 
+export interface ExplorerHeaderActionsVisibility {
+  newFile: boolean;
+  newFolder: boolean;
+  refresh: boolean;
+}
+
+export const DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE: ExplorerHeaderActionsVisibility = {
+  newFile: true,
+  newFolder: true,
+  refresh: true,
+};
+
 /** The last file opened within a recent root, if any. */
 export interface RecentFile {
   path: string;
@@ -78,6 +90,8 @@ export interface AppConfigurationState {
   userName?: string;
   /** Recently opened files and roots, newest first, capped at MAX_RECENTS. */
   recents?: RecentItem[];
+  /** Visibility of compact action buttons in the Explorer section header. */
+  explorerHeaderActionsVisible?: ExplorerHeaderActionsVisibility;
 }
 
 export interface AppSessionState {
@@ -189,6 +203,20 @@ function readEntryArray(value: unknown): Entry[] {
 
 function readBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function readExplorerHeaderActionsVisibility(
+  value: unknown,
+): ExplorerHeaderActionsVisibility | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    newFile: readBoolean(value.newFile) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFile,
+    newFolder: readBoolean(value.newFolder) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFolder,
+    refresh: readBoolean(value.refresh) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.refresh,
+  };
 }
 
 function readRecentKind(value: unknown): Exclude<EntryKind, "folder"> | undefined {
@@ -395,6 +423,9 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
     onboardingCompleted: readBoolean(record.onboardingCompleted),
     userName: readString(record.userName),
     recents: readRecents(record.recents),
+    explorerHeaderActionsVisible: readExplorerHeaderActionsVisibility(
+      record.explorerHeaderActionsVisible,
+    ),
   };
 }
 

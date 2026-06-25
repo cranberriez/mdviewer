@@ -27,6 +27,10 @@ import {
 	type ContextMenuVariant,
 } from './features/explorer/components/ContextMenu';
 import {
+	ExplorerHeaderContextMenu,
+	type ExplorerHeaderMenuAction,
+} from './features/explorer/components/context-menu/ExplorerHeaderContextMenu';
+import {
 	SavedContextMenu,
 	type SavedMenuAction,
 } from './features/explorer/components/SavedContextMenu';
@@ -76,8 +80,10 @@ import {
 	saveAppConfiguration,
 	saveAppSession,
 	touchRecentRoot,
+	DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE,
 	type AppConfigurationState,
 	type AppTheme,
+	type ExplorerHeaderActionsVisibility,
 	type RecentItem,
 	type StoredWindowFrame,
 } from './shared/state/persistence';
@@ -206,6 +212,12 @@ function App() {
 	const [saving, setSaving] = useState(false);
 	const [barMerged, setBarMerged] = useState(() => initialConfiguration.barMerged ?? false);
 	const [theme, setTheme] = useState<AppTheme>(() => initialConfiguration.theme ?? 'dark');
+	const [explorerHeaderActionsVisible, setExplorerHeaderActionsVisible] =
+		useState<ExplorerHeaderActionsVisibility>(
+			() =>
+				initialConfiguration.explorerHeaderActionsVisible ??
+				DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE
+		);
 	const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(
 		() =>
 			initialSession.selectedFolderPath ??
@@ -222,6 +234,10 @@ function App() {
 	const [contextMenuRecent, setContextMenuRecent] = useState<RecentItem | null>(null);
 	const [savedMenu, setSavedMenu] = useState<{
 		location: Entry;
+		x: number;
+		y: number;
+	} | null>(null);
+	const [explorerHeaderMenu, setExplorerHeaderMenu] = useState<{
 		x: number;
 		y: number;
 	} | null>(null);
@@ -293,6 +309,7 @@ function App() {
 		barMerged,
 		viewMode: mode,
 		theme,
+		explorerHeaderActionsVisible,
 		windowFrame,
 		pinnedLocations,
 		removedDefaultPaths,
@@ -416,6 +433,7 @@ function App() {
 			barMerged,
 			viewMode: mode,
 			theme,
+			explorerHeaderActionsVisible,
 			windowFrame,
 			pinnedLocations,
 			removedDefaultPaths,
@@ -433,6 +451,7 @@ function App() {
 		outlinePanelVisible,
 		mode,
 		theme,
+		explorerHeaderActionsVisible,
 		sidebarWidth,
 		windowFrame,
 		pinnedLocations,
@@ -1184,6 +1203,7 @@ function App() {
 		event.preventDefault();
 		event.stopPropagation();
 		setDraft(null);
+		setExplorerHeaderMenu(null);
 		setFocusedEntry(entry);
 		setContextMenuVariant('explorer');
 		setContextMenuRecent(null);
@@ -1197,6 +1217,7 @@ function App() {
 	function openRecentContextMenu(item: RecentItem, event: ReactMouseEvent) {
 		event.preventDefault();
 		event.stopPropagation();
+		setExplorerHeaderMenu(null);
 		setSavedMenu(null);
 		setContextMenuRecent(item);
 		const isFile = recentItemKind(item) === 'file';
@@ -1217,6 +1238,7 @@ function App() {
 		event.preventDefault();
 		event.stopPropagation();
 		setDraft(null);
+		setExplorerHeaderMenu(null);
 		setContextMenuVariant('explorer');
 		setContextMenuRecent(null);
 		setContextMenu({
@@ -1232,7 +1254,66 @@ function App() {
 		event.preventDefault();
 		event.stopPropagation();
 		setContextMenu(null);
+		setExplorerHeaderMenu(null);
 		setSavedMenu({ location, x: event.clientX, y: event.clientY });
+	}
+
+	function openExplorerHeaderContextMenu(event: ReactMouseEvent) {
+		if (!activeRoot) {
+			return;
+		}
+		event.preventDefault();
+		event.stopPropagation();
+		setDraft(null);
+		setContextMenu(null);
+		setContextMenuRecent(null);
+		setContextMenuVariant('explorer');
+		setSavedMenu(null);
+		setExplorerHeaderMenu({ x: event.clientX, y: event.clientY });
+	}
+
+	function toggleExplorerHeaderAction(action: keyof ExplorerHeaderActionsVisibility) {
+		setExplorerHeaderActionsVisible((current) => ({
+			...current,
+			[action]: !current[action],
+		}));
+	}
+
+	async function handleExplorerHeaderMenuAction(action: ExplorerHeaderMenuAction) {
+		setExplorerHeaderMenu(null);
+
+		try {
+			switch (action) {
+				case 'new-file':
+					if (activeRoot) {
+						await startCreateDraft(activeRoot.path, 'file');
+					}
+					break;
+				case 'new-folder':
+					if (activeRoot) {
+						await startCreateDraft(activeRoot.path, 'folder');
+					}
+					break;
+				case 'refresh':
+					if (activeRoot) {
+						await refreshFolder(activeRoot.path);
+					}
+					break;
+				case 'toggle-new-file':
+					toggleExplorerHeaderAction('newFile');
+					break;
+				case 'toggle-new-folder':
+					toggleExplorerHeaderAction('newFolder');
+					break;
+				case 'toggle-refresh':
+					toggleExplorerHeaderAction('refresh');
+					break;
+				default:
+					break;
+			}
+		} catch (cause) {
+			setError(`${String(cause)}`);
+		}
 	}
 
 	// Add a folder to the Saved list. Re-pinning a previously removed default
@@ -2030,6 +2111,7 @@ function App() {
 						searchError={searchError}
 						searchTruncated={searchTruncated}
 						rootRefreshing={activeRoot ? loadingPaths.has(activeRoot.path) : false}
+						explorerHeaderActionsVisible={explorerHeaderActionsVisible}
 						outlineHtml={openFile?.kind === 'md' ? renderedMarkdown : null}
 						hasOpenFile={Boolean(openFile)}
 						showOutlineTab={!outlinePanelVisible}
@@ -2044,6 +2126,17 @@ function App() {
 								void refreshFolder(activeRoot.path);
 							}
 						}}
+						onCreateRootFile={() => {
+							if (activeRoot) {
+								void startCreateDraft(activeRoot.path, 'file');
+							}
+						}}
+						onCreateRootFolder={() => {
+							if (activeRoot) {
+								void startCreateDraft(activeRoot.path, 'folder');
+							}
+						}}
+						onExplorerHeaderContextMenu={openExplorerHeaderContextMenu}
 						onSelectLocation={selectLocation}
 						onToggleFolder={toggleFolder}
 						onSelectFile={selectFile}
@@ -2183,6 +2276,16 @@ function App() {
 						setContextMenuRecent(null);
 						setContextMenuVariant('explorer');
 					}}
+				/>
+			) : null}
+
+			{explorerHeaderMenu ? (
+				<ExplorerHeaderContextMenu
+					x={explorerHeaderMenu.x}
+					y={explorerHeaderMenu.y}
+					visibleActions={explorerHeaderActionsVisible}
+					onAction={(action) => void handleExplorerHeaderMenuAction(action)}
+					onClose={() => setExplorerHeaderMenu(null)}
 				/>
 			) : null}
 
