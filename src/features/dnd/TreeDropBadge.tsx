@@ -1,36 +1,29 @@
 import { Copy, CornerDownRight } from "lucide-react";
-import type { DropMode, DropTarget } from "./useFileDrop";
+import type { DragRenderHint, DropMode, DropZone } from "./dropTypes";
 
 interface TreeDropBadgeProps {
-  /** The resolved tree drop target, or null when not over the tree. */
-  target: DropTarget | null;
-  /** Resolved action (copy/move). */
+  target: DropZone | null;
+  hint: DragRenderHint | null;
   mode: DropMode;
-  /** Number of items being dragged. */
   count: number;
 }
 
-/**
- * A small fixed pill near the cursor's drop zone that states what will happen:
- * the action (Copy / Move), the destination folder, and a reminder that Shift
- * flips the action. Only renders when hovering a tree drop target.
- */
-export function TreeDropBadge({ target, mode, count }: TreeDropBadgeProps) {
+export function TreeDropBadge({ target, hint, mode, count }: TreeDropBadgeProps) {
   const isTree = target?.kind === "tree-folder" || target?.kind === "tree-root";
-  if (!isTree) {
+  if (!isTree || !hint || (hint.operation !== "move" && hint.operation !== "copy")) {
     return null;
   }
 
-  const verb = mode === "copy" ? "Copy" : "Move";
+  const verb = hint.operation === "copy" ? "Copy" : "Move";
   const noun = count > 1 ? `${count} items` : "item";
 
   return (
-    <div className={`tree-drop-badge ${mode}`} role="status" aria-live="polite">
+    <div className={`tree-drop-badge ${hint.operation}`} role="status" aria-live="polite">
       <span className="tree-drop-badge-action">
-        {mode === "copy" ? <Copy size={13} /> : <CornerDownRight size={13} />}
+        {hint.operation === "copy" ? <Copy size={13} /> : <CornerDownRight size={13} />}
         {verb} {noun}
       </span>
-      <span className="tree-drop-badge-dest">into {target.label}</span>
+      <span className="tree-drop-badge-dest">into {hint.label}</span>
       <span className="tree-drop-badge-hint">{mode === "copy" ? "Release Shift to move" : "Hold Shift to copy"}</span>
     </div>
   );

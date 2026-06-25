@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
+import type { InternalDragStart } from "../../dnd/dropTypes";
 import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
 
 const TREE_BASE_INDENT = 10;
@@ -25,8 +26,8 @@ interface TreeNodeProps {
   focusedPath?: string;
   /** Folder path currently highlighted as the active drop target, if any. */
   dropTargetPath?: string | null;
-  /** Start an in-app drag of this entry (drives overlays, escalates to OS). */
-  onEntryDragStart: (items: { path: string; isDir: boolean }[], event: ReactPointerEvent) => void;
+  /** Start an in-app pointer drag of this entry. */
+  onEntryPointerDown: InternalDragStart;
   draft: InlineDraft | null;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
@@ -47,7 +48,7 @@ export function TreeNode({
   contextPath,
   focusedPath,
   dropTargetPath,
-  onEntryDragStart,
+  onEntryPointerDown,
   draft,
   onToggleFolder,
   onSelectFile,
@@ -69,13 +70,8 @@ export function TreeNode({
   // don't show the ring themselves.
   const isDropTarget = entry.is_dir && dropTargetPath != null && dropTargetPath === entry.path;
 
-  // Begin an in-app drag of this entry on pointer-down. The controller waits for
-  // the pointer to move past a threshold before treating it as a drag (so a
-  // plain click still opens the file), drives the app's drop overlays while the
-  // pointer stays in the window, and escalates to a native OS drag (real files
-  // for Explorer/other apps) once it leaves.
   function handlePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
-    onEntryDragStart([{ path: entry.path, isDir: entry.is_dir }], event);
+    onEntryPointerDown([{ path: entry.path, name: entry.name, isDir: entry.is_dir }], event);
   }
 
   const isRenaming = draft?.mode === "rename" && draft.targetPath === entry.path;
@@ -198,7 +194,7 @@ export function TreeNode({
                 contextPath={contextPath}
                 focusedPath={focusedPath}
                 dropTargetPath={dropTargetPath}
-                onEntryDragStart={onEntryDragStart}
+                onEntryPointerDown={onEntryPointerDown}
                 draft={draft}
                 onToggleFolder={onToggleFolder}
                 onSelectFile={onSelectFile}

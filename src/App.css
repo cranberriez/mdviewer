@@ -1358,6 +1358,73 @@ button {
 	background: color-mix(in srgb, var(--color-warning) 18%, transparent);
 }
 
+/* --- Internal drag preview --- */
+
+.drag-layer {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 90;
+	max-width: min(300px, calc(100vw - 24px));
+	display: inline-flex;
+	align-items: center;
+	gap: 9px;
+	padding: 7px 10px;
+	border: 1px solid var(--color-border-base);
+	border-radius: 7px;
+	background: var(--color-bg-menu);
+	box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+	color: var(--color-text-primary);
+	pointer-events: none;
+	user-select: none;
+	will-change: transform;
+}
+
+.drag-layer.blocked {
+	opacity: 0.82;
+}
+
+.drag-layer-icon {
+	width: 26px;
+	height: 26px;
+	flex: 0 0 26px;
+	display: grid;
+	place-items: center;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--color-accent-primary) 14%, transparent);
+	color: var(--color-accent-primary);
+}
+
+.drag-layer.blocked .drag-layer-icon {
+	background: color-mix(in srgb, var(--color-warning) 16%, transparent);
+	color: var(--color-warning-text);
+}
+
+.drag-layer-copy {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.drag-layer-copy strong {
+	max-width: 210px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.drag-layer-copy span {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	color: var(--color-text-secondary);
+	font-size: 11px;
+	white-space: nowrap;
+}
+
 /* Home screen accepting an OS file/folder drop: a dashed accent inset that
    matches the tree-root and main-area drop affordances, so the whole Home area
    reads as a target (drop a folder = open as root, a file = open for viewing). */
