@@ -366,6 +366,15 @@ function App() {
 		return true;
 	}
 
+	function getCreateTargetFolder() {
+		return (
+			selectedFolderPath ??
+			(openFilePath ? parentPath(openFilePath) : null) ??
+			activeRoot?.path ??
+			null
+		);
+	}
+
 	const dirty = openFile ? Boolean(unsavedFileDrafts[comparablePath(openFile.path)]) : false;
 
 	const renderedMarkdown = useMemo(() => {
@@ -1281,17 +1290,18 @@ function App() {
 
 	async function handleExplorerHeaderMenuAction(action: ExplorerHeaderMenuAction) {
 		setExplorerHeaderMenu(null);
+		const targetFolder = getCreateTargetFolder();
 
 		try {
 			switch (action) {
 				case 'new-file':
-					if (activeRoot) {
-						await startCreateDraft(activeRoot.path, 'file');
+					if (targetFolder) {
+						await startCreateDraft(targetFolder, 'file');
 					}
 					break;
 				case 'new-folder':
-					if (activeRoot) {
-						await startCreateDraft(activeRoot.path, 'folder');
+					if (targetFolder) {
+						await startCreateDraft(targetFolder, 'folder');
 					}
 					break;
 				case 'refresh':
@@ -1550,16 +1560,24 @@ function App() {
 		);
 	}
 
+	function defaultCreateName(rawName: string, kind: 'file' | 'folder') {
+		if (kind === 'folder') {
+			return rawName || 'New Folder';
+		}
+		return !rawName || rawName.toLowerCase() === '.md' ? 'New File.md' : rawName;
+	}
+
 	async function submitDraft(rawValue: string) {
 		const current = draft;
 		if (!current) {
 			return;
 		}
 
-		const name = rawValue.trim();
+		const rawName = rawValue.trim();
+		const name = current.mode === 'create' ? defaultCreateName(rawName, current.kind) : rawName;
 		setDraft(null);
 
-		// Empty or unchanged-on-rename: treat as cancel.
+		// Empty rename remains a cancel; empty creates use the default name above.
 		if (!name) {
 			return;
 		}
@@ -2127,13 +2145,15 @@ function App() {
 							}
 						}}
 						onCreateRootFile={() => {
-							if (activeRoot) {
-								void startCreateDraft(activeRoot.path, 'file');
+							const targetFolder = getCreateTargetFolder();
+							if (targetFolder) {
+								void startCreateDraft(targetFolder, 'file');
 							}
 						}}
 						onCreateRootFolder={() => {
-							if (activeRoot) {
-								void startCreateDraft(activeRoot.path, 'folder');
+							const targetFolder = getCreateTargetFolder();
+							if (targetFolder) {
+								void startCreateDraft(targetFolder, 'folder');
 							}
 						}}
 						onExplorerHeaderContextMenu={openExplorerHeaderContextMenu}
