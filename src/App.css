@@ -39,9 +39,33 @@
 	color: var(--color-text-primary);
 }
 
+.titlebar-button:disabled {
+	color: var(--color-text-muted);
+	opacity: 0.42;
+	cursor: default;
+}
+
+.titlebar-button:disabled:hover {
+	background: transparent;
+	color: var(--color-text-muted);
+}
+
 .titlebar-button.bright {
 	background: var(--color-bg-active);
 	color: var(--color-text-on-active);
+}
+
+.titlebar-history {
+	display: flex;
+	align-items: center;
+	gap: 1px;
+	margin-left: -6px;
+}
+
+.titlebar-history-button {
+	min-width: 24px;
+	width: 24px;
+	padding: 0;
 }
 
 .titlebar-crumb {
@@ -329,6 +353,17 @@
 	padding: 0;
 }
 
+.sources-section {
+	flex: 0 0 auto;
+	min-height: 0;
+}
+
+.sidebar.recent-expanded .sources-section {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+}
+
 .explorer-section {
 	min-height: 0;
 	flex: 1;
@@ -502,6 +537,122 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.recent-source {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-height: 0;
+	padding: 0 2px 6px 0;
+}
+
+.sidebar.recent-expanded .recent-source {
+	flex: 1 1 auto;
+}
+
+.recent-source-list {
+	max-height: 190px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	overflow-y: auto;
+	padding-right: 2px;
+}
+
+.sidebar.recent-expanded .recent-source-list {
+	max-height: none;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.recent-source-row {
+	width: 100%;
+	min-width: 0;
+	min-height: 36px;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 4px 8px;
+	border: 0;
+	border-radius: var(--radius-ctl);
+	background: transparent;
+	color: var(--color-text-secondary);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.recent-source-row:hover {
+	color: var(--color-text-primary);
+	background: var(--color-bg-hover);
+}
+
+.recent-source-row.active {
+	color: var(--color-text-primary);
+	background: var(--color-bg-active);
+}
+
+.recent-source-ico {
+	display: grid;
+	place-items: center;
+	width: 16px;
+	flex: 0 0 16px;
+	color: var(--color-text-muted);
+}
+
+.recent-source-text {
+	min-width: 0;
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.recent-source-name,
+.recent-source-sub {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.recent-source-name {
+	color: inherit;
+	font-size: 12.5px;
+}
+
+.recent-source-sub {
+	color: var(--color-text-muted);
+	font-size: 10.5px;
+}
+
+.recent-source-toggle {
+	height: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	margin: 0 6px;
+	border: 0;
+	border-radius: var(--radius-ctl);
+	background: transparent;
+	color: var(--color-text-muted);
+	font: inherit;
+	font-size: 11.5px;
+	cursor: pointer;
+}
+
+.recent-source-toggle:hover {
+	background: var(--color-bg-hover);
+	color: var(--color-text-primary);
+}
+
+.recent-source-empty {
+	padding: 8px 10px 12px;
+	color: var(--color-text-muted);
+	font-size: 12px;
+	line-height: 1.4;
 }
 
 .explorer-heading {

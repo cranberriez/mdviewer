@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, PanelLeft, Square, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, PanelLeft, Square, X } from "lucide-react";
 import { MenuBar, type MenuBarState } from "./MenuBar";
 
 // Below this titlebar width the File/Edit/View row collapses to a single
@@ -18,6 +18,10 @@ interface TitleBarProps {
   /** Hide the explorer toggle (e.g. on the Home/onboarding overlay). */
   hideExplorerToggle?: boolean;
   onToggleExplorer: () => void;
+  canNavigateBack: boolean;
+  canNavigateForward: boolean;
+  onNavigateBack: () => void;
+  onNavigateForward: () => void;
 }
 
 export function TitleBar({
@@ -30,6 +34,10 @@ export function TitleBar({
   onMenuAction,
   hideExplorerToggle = false,
   onToggleExplorer,
+  canNavigateBack,
+  canNavigateForward,
+  onNavigateBack,
+  onNavigateForward,
 }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
@@ -90,17 +98,41 @@ export function TitleBar({
   return (
     <header className="titlebar" data-tauri-drag-region ref={headerRef}>
       {hideExplorerToggle ? null : (
-        <button
-          type="button"
-          className={`titlebar-button titlebar-explorer ${
-            explorerHidden ? "bright" : ""
-          }`}
-          aria-label="Toggle explorer"
-          title="Toggle explorer"
-          onClick={onToggleExplorer}
-        >
-          <PanelLeft size={15} />
-        </button>
+        <>
+          <button
+            type="button"
+            className={`titlebar-button titlebar-explorer ${
+              explorerHidden ? "bright" : ""
+            }`}
+            aria-label="Toggle explorer"
+            title="Toggle explorer"
+            onClick={onToggleExplorer}
+          >
+            <PanelLeft size={15} />
+          </button>
+          <div className="titlebar-history" role="group" aria-label="Navigation history">
+            <button
+              type="button"
+              className="titlebar-button titlebar-history-button"
+              aria-label="Back"
+              title="Back (Alt+Left)"
+              disabled={!canNavigateBack}
+              onClick={onNavigateBack}
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              className="titlebar-button titlebar-history-button"
+              aria-label="Forward"
+              title="Forward (Alt+Right)"
+              disabled={!canNavigateForward}
+              onClick={onNavigateForward}
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </>
       )}
 
       <MenuBar state={menuState} compact={menuCompact} onAction={onMenuAction} />

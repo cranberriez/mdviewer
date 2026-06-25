@@ -12,6 +12,35 @@ export interface StoredWindowFrame {
 
 export type AppTheme = "dark" | "light";
 
+export interface SourceHeaderActionsVisible {
+  search: boolean;
+  outline: boolean;
+  recent: boolean;
+  pin: boolean;
+}
+
+export interface NavigationHistoryRoot {
+  path: string;
+  name: string;
+}
+
+export interface NavigationHistoryFile {
+  path: string;
+  name: string;
+  kind: Exclude<EntryKind, "folder">;
+}
+
+export type NavigationHistoryItem =
+  | {
+      kind: "root";
+      root: NavigationHistoryRoot;
+    }
+  | {
+      kind: "file";
+      root?: NavigationHistoryRoot;
+      file: NavigationHistoryFile;
+    };
+
 /** The last file opened within a recent root, if any. */
 export interface RecentFile {
   path: string;
@@ -54,8 +83,11 @@ export function recentItemKind(item: RecentItem): "root" | "file" {
   return item.kind === "file" ? "file" : "root";
 }
 
-/** Maximum number of recent roots kept. */
+/** Maximum number of recent roots kept on the Home screen. */
 export const MAX_RECENTS = 5;
+
+/** Maximum number of source navigation history entries kept. */
+export const MAX_NAVIGATION_HISTORY = 50;
 
 export interface AppConfigurationState {
   explorerHidden: boolean;
@@ -72,6 +104,8 @@ export interface AppConfigurationState {
   removedDefaultPaths?: string[];
   /** Custom icon name per saved-location path. Home icon is never stored here. */
   locationIcons?: Record<string, string>;
+  /** Optional Sources header action button visibility. */
+  sourcesHeaderActionsVisible?: SourceHeaderActionsVisible;
   /** True once the user has completed (or skipped) first-run onboarding. */
   onboardingCompleted?: boolean;
   /** Optional display name from onboarding, used to greet on the Home screen. */
@@ -85,6 +119,8 @@ export interface AppSessionState {
   selectedFolderPath?: string;
   openFilePath?: string;
   expandedPaths: string[];
+  navigationHistory?: NavigationHistoryItem[];
+  navigationHistoryIndex?: number;
 }
 
 const CONFIGURATION_KEY = "mdviewer.configuration.v1";
@@ -191,6 +227,19 @@ function readBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
 }
 
+function readSourceHeaderActionsVisible(value: unknown): SourceHeaderActionsVisible | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    search: readBoolean(value.search) ?? true,
+    outline: readBoolean(value.outline) ?? true,
+    recent: readBoolean(value.recent) ?? true,
+    pin: readBoolean(value.pin) ?? true,
+  };
+}
+
 function readRecentKind(value: unknown): Exclude<EntryKind, "folder"> | undefined {
   return value === "md" || value === "text" ? value : undefined;
 }
@@ -236,6 +285,67 @@ function readRecent(value: unknown): RecentItem | null {
     lastFile: isFile ? undefined : readRecentFile(value.lastFile),
     openedAt,
   };
+}
+
+function readNavigationHistoryRoot(value: unknown): NavigationHistoryRoot | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const path = readString(value.path);
+  const name = readString(value.name);
+
+  if (path === undefined || name === undefined) {
+    return undefined;
+  }
+
+  return { path, name };
+}
+
+function readNavigationHistoryFile(value: unknown): NavigationHistoryFile | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const path = readString(value.path);
+  const name = readString(value.name);
+  const kind = readRecentKind(value.kind);
+
+  if (path === undefined || name === undefined || kind === undefined) {
+    return undefined;
+  }
+
+  return { path, name, kind };
+}
+
+function readNavigationHistoryItem(value: unknown): NavigationHistoryItem | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (value.kind === "root") {
+    const root = readNavigationHistoryRoot(value.root);
+    return root ? { kind: "root", root } : null;
+  }
+
+  if (value.kind === "file") {
+    const file = readNavigationHistoryFile(value.file);
+    const root = readNavigationHistoryRoot(value.root);
+    return file ? { kind: "file", file, root } : null;
+  }
+
+  return null;
+}
+
+function readNavigationHistory(value: unknown): NavigationHistoryItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(readNavigationHistoryItem)
+    .filter((item): item is NavigationHistoryItem => item !== null)
+    .slice(-MAX_NAVIGATION_HISTORY);
 }
 
 function readRecents(value: unknown): RecentItem[] {
@@ -392,6 +502,7 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
     pinnedLocations: readEntryArray(record.pinnedLocations),
     removedDefaultPaths: readStringArray(record.removedDefaultPaths),
     locationIcons: readStringRecord(record.locationIcons),
+    sourcesHeaderActionsVisible: readSourceHeaderActionsVisible(record.sourcesHeaderActionsVisible),
     onboardingCompleted: readBoolean(record.onboardingCompleted),
     userName: readString(record.userName),
     recents: readRecents(record.recents),
@@ -413,6 +524,8 @@ export function loadAppSession(): AppSessionState {
     selectedFolderPath: readString(record.selectedFolderPath),
     openFilePath: readString(record.openFilePath),
     expandedPaths: readStringArray(record.expandedPaths),
+    navigationHistory: readNavigationHistory(record.navigationHistory),
+    navigationHistoryIndex: readNumber(record.navigationHistoryIndex),
   };
 }
 

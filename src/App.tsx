@@ -30,6 +30,10 @@ import {
 	SavedContextMenu,
 	type SavedMenuAction,
 } from './features/explorer/components/SavedContextMenu';
+import {
+	SourcesHeaderContextMenu,
+	type SourcesHeaderMenuAction,
+} from './features/explorer/components/SourcesHeaderContextMenu';
 import { IconPickerMenu } from './features/explorer/components/IconPickerMenu';
 import type { InlineDraft } from './features/explorer/components/TreeInlineInput';
 import { SidebarResizeHandle } from './features/explorer/components/SidebarResizeHandle';
@@ -69,6 +73,7 @@ import {
 import {
 	loadAppConfiguration,
 	loadAppSession,
+	MAX_NAVIGATION_HISTORY,
 	recordRecentFile,
 	recordRecentSingleFile,
 	recentItemKind,
@@ -78,6 +83,8 @@ import {
 	touchRecentRoot,
 	type AppConfigurationState,
 	type AppTheme,
+	type NavigationHistoryItem,
+	type SourceHeaderActionsVisible,
 	type RecentItem,
 	type StoredWindowFrame,
 } from './shared/state/persistence';
@@ -88,6 +95,12 @@ const MIN_SIDEBAR_WIDTH = 240;
 const MAX_SIDEBAR_WIDTH = 420;
 const MIN_CONTENT_WIDTH = 420;
 const TREE_HOVER_EXPAND_DELAY_MS = 800;
+const DEFAULT_SOURCE_HEADER_ACTIONS_VISIBLE: SourceHeaderActionsVisible = {
+	search: true,
+	outline: true,
+	recent: true,
+	pin: true,
+};
 
 type UnsavedFileDrafts = Record<string, OpenFile>;
 
@@ -123,6 +136,34 @@ function findContainingLocation(locations: Entry[], path?: string) {
 				(left, right) => comparablePath(right.path).length - comparablePath(left.path).length
 			)[0] ?? null
 	);
+}
+
+function navigationItemMatches(left: NavigationHistoryItem, right: NavigationHistoryItem) {
+	if (left.kind !== right.kind) {
+		return false;
+	}
+
+	if (left.kind === 'root' && right.kind === 'root') {
+		return comparablePath(left.root.path) === comparablePath(right.root.path);
+	}
+
+	if (left.kind === 'file' && right.kind === 'file') {
+		return comparablePath(left.file.path) === comparablePath(right.file.path);
+	}
+
+	return false;
+}
+
+function normalizeNavigationIndex(items: NavigationHistoryItem[], index?: number) {
+	if (items.length === 0) {
+		return -1;
+	}
+
+	if (typeof index !== 'number' || !Number.isFinite(index)) {
+		return items.length - 1;
+	}
+
+	return Math.min(items.length - 1, Math.max(0, Math.trunc(index)));
 }
 
 function pathIsDeletedTarget(target: ContextMenuTarget, path?: string | null) {
@@ -230,10 +271,28 @@ function App() {
 		x: number;
 		y: number;
 	} | null>(null);
+	const [sourcesHeaderMenu, setSourcesHeaderMenu] = useState<{ x: number; y: number } | null>(
+		null
+	);
 	const [locationIcons, setLocationIcons] = useState<Record<string, string>>(
 		() => initialConfiguration.locationIcons ?? {}
 	);
+	const [sourcesHeaderActionsVisible, setSourcesHeaderActionsVisible] =
+		useState<SourceHeaderActionsVisible>(
+			() =>
+				initialConfiguration.sourcesHeaderActionsVisible ??
+				DEFAULT_SOURCE_HEADER_ACTIONS_VISIBLE
+		);
 	const [recents, setRecents] = useState<RecentItem[]>(() => initialConfiguration.recents ?? []);
+	const [navigationHistory, setNavigationHistory] = useState<NavigationHistoryItem[]>(
+		() => initialSession.navigationHistory ?? []
+	);
+	const [navigationHistoryIndex, setNavigationHistoryIndex] = useState(() =>
+		normalizeNavigationIndex(
+			initialSession.navigationHistory ?? [],
+			initialSession.navigationHistoryIndex
+		)
+	);
 	const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(
 		() => initialConfiguration.onboardingCompleted ?? false
 	);
@@ -257,6 +316,7 @@ function App() {
 	const [isMaximized, setIsMaximized] = useState(false);
 	const findTargetRef = useRef<HTMLElement | null>(null);
 	const unsavedFileDraftsRef = useRef<UnsavedFileDrafts>({});
+	const navigationHistoryIndexRef = useRef(navigationHistoryIndex);
 	const searchRequestRef = useRef(0);
 	const pendingFindQueryRef = useRef<string | null>(null);
 	// A heading fragment to scroll to once the just-opened file has rendered
@@ -282,6 +342,32 @@ function App() {
 		},
 		[]
 	);
+	const pushNavigationHistory = useCallback((item: NavigationHistoryItem) => {
+		setNavigationHistory((current) => {
+			const currentIndex = normalizeNavigationIndex(current, navigationHistoryIndexRef.current);
+			const retained =
+				currentIndex >= 0 && currentIndex < current.length
+					? current.slice(0, currentIndex + 1)
+					: current;
+
+			if (
+				retained.length > 0 &&
+				navigationItemMatches(retained[retained.length - 1], item)
+			) {
+				const nextIndex = retained.length - 1;
+				navigationHistoryIndexRef.current = nextIndex;
+				setNavigationHistoryIndex(nextIndex);
+				return retained;
+			}
+
+			const appended = [...retained, item];
+			const trimmed = appended.slice(-MAX_NAVIGATION_HISTORY);
+			const nextIndex = trimmed.length - 1;
+			navigationHistoryIndexRef.current = nextIndex;
+			setNavigationHistoryIndex(nextIndex);
+			return trimmed;
+		});
+	}, []);
 	// Record that a root was selected (no file), moving it to the top.
 	const touchRootRecent = useCallback((root: { path: string; name: string }) => {
 		setRecents((current) => touchRecentRoot(current, root));
@@ -297,6 +383,7 @@ function App() {
 		pinnedLocations,
 		removedDefaultPaths,
 		locationIcons,
+		sourcesHeaderActionsVisible,
 		onboardingCompleted,
 		userName,
 		recents,
@@ -409,6 +496,10 @@ function App() {
 	}, [unsavedFileDrafts]);
 
 	useEffect(() => {
+		navigationHistoryIndexRef.current = navigationHistoryIndex;
+	}, [navigationHistoryIndex]);
+
+	useEffect(() => {
 		const nextConfiguration: AppConfigurationState = {
 			explorerHidden,
 			outlinePanelVisible,
@@ -420,6 +511,7 @@ function App() {
 			pinnedLocations,
 			removedDefaultPaths,
 			locationIcons,
+			sourcesHeaderActionsVisible,
 			onboardingCompleted,
 			userName,
 			recents,
@@ -438,6 +530,7 @@ function App() {
 		pinnedLocations,
 		removedDefaultPaths,
 		locationIcons,
+		sourcesHeaderActionsVisible,
 		onboardingCompleted,
 		userName,
 		recents,
@@ -453,8 +546,18 @@ function App() {
 			selectedFolderPath: selectedFolderPath ?? undefined,
 			openFilePath: openFilePath ?? undefined,
 			expandedPaths: Array.from(expanded),
+			navigationHistory,
+			navigationHistoryIndex,
 		});
-	}, [activeRoot?.path, expanded, openFilePath, selectedFolderPath, sessionHydrated]);
+	}, [
+		activeRoot?.path,
+		expanded,
+		navigationHistory,
+		navigationHistoryIndex,
+		openFilePath,
+		selectedFolderPath,
+		sessionHydrated,
+	]);
 
 	useEffect(() => {
 		const appWindow = getCurrentWindow();
@@ -744,11 +847,17 @@ function App() {
 
 	async function openFileAtPath(
 		path: string,
-		options?: { mode?: FileViewMode; skipRecent?: boolean }
+		options?: {
+			mode?: FileViewMode;
+			root?: Entry | null;
+			skipHistory?: boolean;
+			skipRecent?: boolean;
+		}
 	) {
 		setError(null);
 		setOpenFilePath(path);
 		setSelectedFolderPath(parentPath(path));
+		const historyRoot = options?.root !== undefined ? options.root : activeRoot;
 
 		try {
 			const content = await readFile(path);
@@ -767,11 +876,18 @@ function App() {
 			// file. Only one Recent entry exists per root. Skipped when there's no
 			// active root, or when the caller records its own Recent (e.g. a rootless
 			// file dropped on Home).
-			if (activeRoot && !options?.skipRecent) {
+			if (historyRoot && !options?.skipRecent) {
 				recordFileRecent(
-					{ path: activeRoot.path, name: activeRoot.name },
+					{ path: historyRoot.path, name: historyRoot.name },
 					{ path, name: fileName(path), kind }
 				);
+			}
+			if (!options?.skipHistory) {
+				pushNavigationHistory({
+					kind: 'file',
+					root: historyRoot ? { path: historyRoot.path, name: historyRoot.name } : undefined,
+					file: { path, name: fileName(path), kind },
+				});
 			}
 			find.close();
 		} catch (cause) {
@@ -993,7 +1109,7 @@ function App() {
 			setActiveRoot(null);
 			setExpanded(new Set());
 			setOverlay(null);
-			await openFileAtPath(firstPath, { mode: 'preview', skipRecent: true });
+			await openFileAtPath(firstPath, { mode: 'preview', root: null, skipRecent: true });
 			const kind = fileKindFromPath(firstPath);
 			setRecents((current) =>
 				recordRecentSingleFile(current, { path: firstPath, name: fileName(firstPath), kind })
@@ -1073,7 +1189,10 @@ function App() {
 		return () => window.clearTimeout(timer);
 	}, [expanded, hoverExpandPath, loadingPaths]);
 
-	async function selectLocation(location: Entry) {
+	async function selectLocation(
+		location: Entry,
+		options?: { skipHistory?: boolean; skipRecent?: boolean }
+	) {
 		setActiveRoot(location);
 		setSelectedFolderPath(location.path);
 		setOpenFile(null);
@@ -1087,7 +1206,15 @@ function App() {
 		setSearchedQuery('');
 		setSearchError(null);
 		setSearchTruncated(false);
-		touchRootRecent({ path: location.path, name: location.name });
+		if (!options?.skipRecent) {
+			touchRootRecent({ path: location.path, name: location.name });
+		}
+		if (!options?.skipHistory) {
+			pushNavigationHistory({
+				kind: 'root',
+				root: { path: location.path, name: location.name },
+			});
+		}
 		await loadFolder(location.path);
 	}
 
@@ -1232,6 +1359,60 @@ function App() {
 		setSavedMenu({ location, x: event.clientX, y: event.clientY });
 	}
 
+	function openSourcesHeaderContextMenu(event: ReactMouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+		setContextMenu(null);
+		setSavedMenu(null);
+		setSourcesHeaderMenu({ x: event.clientX, y: event.clientY });
+	}
+
+	function handleSourcesHeaderAction(action: SourcesHeaderMenuAction) {
+		switch (action) {
+			case 'mode-explorer':
+				setSidebarMode('explorer');
+				return;
+			case 'mode-recent':
+				setSidebarMode('recent');
+				return;
+			case 'mode-search':
+				setSidebarMode('search');
+				return;
+			case 'mode-outline':
+				if (outlinePanelVisible) {
+					return;
+				}
+				setSidebarMode('outline');
+				return;
+			case 'toggle-recent':
+				setSourcesHeaderActionsVisible((current) => ({
+					...current,
+					recent: !current.recent,
+				}));
+				return;
+			case 'toggle-search':
+				setSourcesHeaderActionsVisible((current) => ({
+					...current,
+					search: !current.search,
+				}));
+				return;
+			case 'toggle-outline':
+				setSourcesHeaderActionsVisible((current) => ({
+					...current,
+					outline: !current.outline,
+				}));
+				return;
+			case 'toggle-pin':
+				setSourcesHeaderActionsVisible((current) => ({
+					...current,
+					pin: !current.pin,
+				}));
+				return;
+			default:
+				return;
+		}
+	}
+
 	// Add a folder to the Saved list. Re-pinning a previously removed default
 	// simply clears it from the removed set rather than duplicating it.
 	function pinFolder(entry: Entry) {
@@ -1259,7 +1440,7 @@ function App() {
 			setActiveRoot(null);
 			setExpanded(new Set());
 			setOverlay(null);
-			await openFileAtPath(item.path, { mode: 'preview', skipRecent: true });
+			await openFileAtPath(item.path, { mode: 'preview', root: null, skipRecent: true });
 			const kind = fileKindFromPath(item.path);
 			setRecents((current) =>
 				recordRecentSingleFile(current, { path: item.path, name: item.name, kind })
@@ -1271,8 +1452,64 @@ function App() {
 		await selectLocation(location);
 
 		if (item.lastFile) {
-			await openFileAtPath(item.lastFile.path);
+			await openFileAtPath(item.lastFile.path, { root: location });
 		}
+	}
+
+	async function applyNavigationHistoryItem(item: NavigationHistoryItem) {
+		if (item.kind === 'root') {
+			await selectLocation(
+				{ name: item.root.name, path: item.root.path, is_dir: true, kind: 'folder' },
+				{ skipHistory: true, skipRecent: true }
+			);
+			return;
+		}
+
+		if (item.root) {
+			const root: Entry = {
+				name: item.root.name,
+				path: item.root.path,
+				is_dir: true,
+				kind: 'folder',
+			};
+			await selectLocation(root, { skipHistory: true, skipRecent: true });
+			await openFileAtPath(item.file.path, {
+				root,
+				skipHistory: true,
+				skipRecent: true,
+			});
+			return;
+		}
+
+		setActiveRoot(null);
+		setExpanded(new Set());
+		setOverlay(null);
+		await openFileAtPath(item.file.path, {
+			root: null,
+			skipHistory: true,
+			skipRecent: true,
+		});
+	}
+
+	async function navigateToHistoryIndex(index: number) {
+		const target = navigationHistory[index];
+		if (!target) {
+			return;
+		}
+
+		const nextIndex = normalizeNavigationIndex(navigationHistory, index);
+		navigationHistoryIndexRef.current = nextIndex;
+		setNavigationHistoryIndex(nextIndex);
+		await applyNavigationHistoryItem(target);
+	}
+
+	function navigateHistory(direction: -1 | 1) {
+		const nextIndex = navigationHistoryIndex + direction;
+		if (nextIndex < 0 || nextIndex >= navigationHistory.length) {
+			return;
+		}
+
+		void navigateToHistoryIndex(nextIndex);
 	}
 
 	function removeRecentItem(item: RecentItem) {
@@ -1893,9 +2130,49 @@ function App() {
 				}
 			/>
 		) : null;
+	const canNavigateBack = navigationHistoryIndex > 0;
+	const canNavigateForward =
+		navigationHistoryIndex >= 0 && navigationHistoryIndex < navigationHistory.length - 1;
 
 	useEffect(() => {
+		function isHistoryMouseButton(event: MouseEvent) {
+			return event.button === 3 || event.button === 4;
+		}
+
+		function handleHistoryMouseDown(event: MouseEvent) {
+			if (isHistoryMouseButton(event)) {
+				event.preventDefault();
+			}
+		}
+
+		function handleHistoryMouseUp(event: MouseEvent) {
+			if (!isHistoryMouseButton(event)) {
+				return;
+			}
+
+			event.preventDefault();
+			navigateHistory(event.button === 3 ? -1 : 1);
+		}
+
+		function handleHistoryAuxClick(event: MouseEvent) {
+			if (isHistoryMouseButton(event)) {
+				event.preventDefault();
+			}
+		}
+
 		function handleKeyDown(event: KeyboardEvent) {
+			if (
+				event.altKey &&
+				!event.ctrlKey &&
+				!event.metaKey &&
+				!event.shiftKey &&
+				(event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+			) {
+				event.preventDefault();
+				navigateHistory(event.key === 'ArrowLeft' ? -1 : 1);
+				return;
+			}
+
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
 				event.preventDefault();
 				void saveOpenFile();
@@ -1914,12 +2191,18 @@ function App() {
 			}
 		}
 
+		window.addEventListener('mousedown', handleHistoryMouseDown);
+		window.addEventListener('mouseup', handleHistoryMouseUp);
+		window.addEventListener('auxclick', handleHistoryAuxClick);
 		window.addEventListener('keydown', handleKeyDown);
 
 		return () => {
+			window.removeEventListener('mousedown', handleHistoryMouseDown);
+			window.removeEventListener('mouseup', handleHistoryMouseUp);
+			window.removeEventListener('auxclick', handleHistoryAuxClick);
 			window.removeEventListener('keydown', handleKeyDown);
 		};
-	}, [find, saveOpenFile]);
+	}, [find, navigationHistory, navigationHistoryIndex, saveOpenFile]);
 
 	// Explorer keyboard shortcuts: act on the focused tree item, mirroring the
 	// context menu. Only fire when focus is inside the explorer and not typing in
@@ -2001,6 +2284,10 @@ function App() {
 				onMenuAction={handleMenuAction}
 				onToggleExplorer={() => setExplorerHidden((hidden) => !hidden)}
 				hideExplorerToggle={overlay !== null}
+				canNavigateBack={canNavigateBack}
+				canNavigateForward={canNavigateForward}
+				onNavigateBack={() => navigateHistory(-1)}
+				onNavigateForward={() => navigateHistory(1)}
 			/>
 
 			<div className="workspace">
@@ -2026,6 +2313,9 @@ function App() {
 						searchLoading={searchLoading}
 						searchError={searchError}
 						searchTruncated={searchTruncated}
+						navigationHistory={navigationHistory}
+						navigationHistoryIndex={navigationHistoryIndex}
+						sourceHeaderActionsVisible={sourcesHeaderActionsVisible}
 						rootRefreshing={activeRoot ? loadingPaths.has(activeRoot.path) : false}
 						outlineHtml={openFile?.kind === 'md' ? renderedMarkdown : null}
 						hasOpenFile={Boolean(openFile)}
@@ -2036,6 +2326,7 @@ function App() {
 						onSearchClear={clearCrossFileSearch}
 						onSearchSubmit={() => void runCrossFileSearch()}
 						onOpenSearchResult={(result) => void openSearchResult(result)}
+						onOpenHistoryItem={(index) => void navigateToHistoryIndex(index)}
 						onRefreshRoot={() => {
 							if (activeRoot) {
 								void refreshFolder(activeRoot.path);
@@ -2047,6 +2338,7 @@ function App() {
 						onEntryContextMenu={openEntryContextMenu}
 						onRootContextMenu={openRootContextMenu}
 						onSavedContextMenu={openSavedContextMenu}
+						onSourcesHeaderContextMenu={openSourcesHeaderContextMenu}
 						onOpenFolder={() => void openFolderAsRoot()}
 						rootPinned={activeRoot ? !isPinnable(activeRoot.path) : false}
 						rootPinDisabled={!activeRoot || !isUnpinnable(activeRoot)}
@@ -2191,6 +2483,18 @@ function App() {
 					canUnpin={isUnpinnable(savedMenu.location)}
 					onAction={(action, location) => void handleSavedAction(action, location)}
 					onClose={() => setSavedMenu(null)}
+				/>
+			) : null}
+
+			{sourcesHeaderMenu ? (
+				<SourcesHeaderContextMenu
+					x={sourcesHeaderMenu.x}
+					y={sourcesHeaderMenu.y}
+					mode={sidebarMode}
+					showOutlineTab={!outlinePanelVisible}
+					visibleActions={sourcesHeaderActionsVisible}
+					onAction={handleSourcesHeaderAction}
+					onClose={() => setSourcesHeaderMenu(null)}
 				/>
 			) : null}
 

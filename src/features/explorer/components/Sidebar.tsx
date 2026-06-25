@@ -1,7 +1,22 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
-import { Folder, FolderOpen, List, Moon, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
+import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  Folder,
+  FolderOpen,
+  History,
+  List,
+  Moon,
+  Pin,
+  PinOff,
+  RefreshCw,
+  Search,
+  Sun,
+} from "lucide-react";
 import type { Entry, FileSearchMatch } from "../../../shared/types/files";
-import type { AppTheme } from "../../../shared/state/persistence";
+import type {
+  AppTheme,
+  NavigationHistoryItem,
+  SourceHeaderActionsVisible,
+} from "../../../shared/state/persistence";
 import type { InternalDragStart } from "../../dnd/dropTypes";
 import { EmptySidebar } from "./EmptySidebar";
 import { TreeNode } from "./TreeNode";
@@ -9,8 +24,9 @@ import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
 import { getIconComponent } from "./IconPickerMenu";
 import { CrossFileSearchPanel } from "./CrossFileSearchPanel";
 import { OutlineView } from "../../outline/components/OutlineView";
+import { RecentSourcePanel } from "./RecentSourcePanel";
 
-export type SidebarMode = "explorer" | "search" | "outline";
+export type SidebarMode = "explorer" | "recent" | "search" | "outline";
 
 interface SidebarProps {
   width: number;
@@ -33,6 +49,9 @@ interface SidebarProps {
   searchLoading: boolean;
   searchError: string | null;
   searchTruncated: boolean;
+  navigationHistory: NavigationHistoryItem[];
+  navigationHistoryIndex: number;
+  sourceHeaderActionsVisible: SourceHeaderActionsVisible;
   rootRefreshing: boolean;
   /** Rendered markdown HTML for the open file, or null for non-markdown / none. */
   outlineHtml: string | null;
@@ -46,6 +65,7 @@ interface SidebarProps {
   onSearchClear: () => void;
   onSearchSubmit: () => void;
   onOpenSearchResult: (result: FileSearchMatch) => void;
+  onOpenHistoryItem: (index: number) => void;
   onRefreshRoot: () => void;
   onSelectLocation: (location: Entry) => Promise<void>;
   onToggleFolder: (entry: Entry) => Promise<void>;
@@ -53,6 +73,7 @@ interface SidebarProps {
   onEntryContextMenu: (entry: Entry, event: ReactMouseEvent) => void;
   onRootContextMenu: (event: ReactMouseEvent) => void;
   onSavedContextMenu: (location: Entry, event: ReactMouseEvent) => void;
+  onSourcesHeaderContextMenu: (event: ReactMouseEvent) => void;
   onOpenFolder: () => void;
   /** Whether the current explorer root is already pinned. */
   rootPinned: boolean;
@@ -96,6 +117,9 @@ export function Sidebar({
   searchLoading,
   searchError,
   searchTruncated,
+  navigationHistory,
+  navigationHistoryIndex,
+  sourceHeaderActionsVisible,
   rootRefreshing,
   outlineHtml,
   hasOpenFile,
@@ -106,6 +130,7 @@ export function Sidebar({
   onSearchClear,
   onSearchSubmit,
   onOpenSearchResult,
+  onOpenHistoryItem,
   onRefreshRoot,
   onSelectLocation,
   onToggleFolder,
@@ -113,6 +138,7 @@ export function Sidebar({
   onEntryContextMenu,
   onRootContextMenu,
   onSavedContextMenu,
+  onSourcesHeaderContextMenu,
   onOpenFolder,
   rootPinned,
   rootPinDisabled,
@@ -127,6 +153,7 @@ export function Sidebar({
   theme,
   onToggleTheme,
 }: SidebarProps) {
+  const [recentExpanded, setRecentExpanded] = useState(false);
   const rootDraft =
     draft?.mode === "create" && activeRoot && draft.parentPath === activeRoot.path
       ? draft
@@ -137,11 +164,17 @@ export function Sidebar({
     sidebarMode === "outline" && !showOutlineTab ? "explorer" : sidebarMode;
   const showingSearchResults = effectiveMode === "search" && Boolean(searchedQuery.trim());
   const showingOutline = effectiveMode === "outline";
+  const showingRecent = effectiveMode === "recent";
+  const recentFillsSidebar = showingRecent && recentExpanded;
 
   return (
-    <aside className="sidebar" style={{ width, flexBasis: width }} aria-label="File explorer">
-      <section className="sidebar-section">
-        <div className="saved-heading">
+    <aside
+      className={`sidebar ${recentFillsSidebar ? "recent-expanded" : ""}`}
+      style={{ width, flexBasis: width }}
+      aria-label="File explorer"
+    >
+      <section className="sidebar-section sources-section">
+        <div className="saved-heading" onContextMenu={onSourcesHeaderContextMenu}>
           <div className="sidebar-view-switch" role="tablist" aria-label="Sidebar view">
             <button
               type="button"
@@ -154,18 +187,33 @@ export function Sidebar({
             >
               <Folder size={14} />
             </button>
-            <button
-              type="button"
-              className={`sidebar-view-button ${effectiveMode === "search" ? "active" : ""}`}
-              role="tab"
-              aria-selected={effectiveMode === "search"}
-              title="Search files"
-              aria-label="Search files"
-              onClick={() => onSidebarModeChange("search")}
-            >
-              <Search size={14} />
-            </button>
-            {showOutlineTab ? (
+            {sourceHeaderActionsVisible.recent ? (
+              <button
+                type="button"
+                className={`sidebar-view-button ${effectiveMode === "recent" ? "active" : ""}`}
+                role="tab"
+                aria-selected={effectiveMode === "recent"}
+                title="Recent"
+                aria-label="Recent"
+                onClick={() => onSidebarModeChange("recent")}
+              >
+                <History size={14} />
+              </button>
+            ) : null}
+            {sourceHeaderActionsVisible.search ? (
+              <button
+                type="button"
+                className={`sidebar-view-button ${effectiveMode === "search" ? "active" : ""}`}
+                role="tab"
+                aria-selected={effectiveMode === "search"}
+                title="Search files"
+                aria-label="Search files"
+                onClick={() => onSidebarModeChange("search")}
+              >
+                <Search size={14} />
+              </button>
+            ) : null}
+            {sourceHeaderActionsVisible.outline && showOutlineTab ? (
               <button
                 type="button"
                 className={`sidebar-view-button ${effectiveMode === "outline" ? "active" : ""}`}
@@ -180,25 +228,27 @@ export function Sidebar({
             ) : null}
           </div>
           <div className="saved-actions">
-            <button
-              type="button"
-              className={`saved-add ${rootPinned ? "is-pinned" : ""}`}
-              disabled={rootPinDisabled}
-              title={
-                rootPinDisabled
-                  ? "Home is always pinned"
-                  : rootPinned
-                    ? "Unpin the current root folder"
-                    : "Pin the current root folder"
-              }
-              aria-label={
-                rootPinned ? "Unpin current root folder" : "Pin current root folder"
-              }
-              aria-pressed={rootPinned}
-              onClick={onToggleRootPin}
-            >
-              {rootPinned ? <PinOff size={15} /> : <Pin size={15} />}
-            </button>
+            {sourceHeaderActionsVisible.pin ? (
+              <button
+                type="button"
+                className={`saved-add ${rootPinned ? "is-pinned" : ""}`}
+                disabled={rootPinDisabled}
+                title={
+                  rootPinDisabled
+                    ? "Home is always pinned"
+                    : rootPinned
+                      ? "Unpin the current root folder"
+                      : "Pin the current root folder"
+                }
+                aria-label={
+                  rootPinned ? "Unpin current root folder" : "Pin current root folder"
+                }
+                aria-pressed={rootPinned}
+                onClick={onToggleRootPin}
+              >
+                {rootPinned ? <PinOff size={15} /> : <Pin size={15} />}
+              </button>
+            ) : null}
             <button
               type="button"
               className="saved-add"
@@ -210,7 +260,15 @@ export function Sidebar({
             </button>
           </div>
         </div>
-        {effectiveMode === "outline" ? null : effectiveMode === "search" ? (
+        {effectiveMode === "outline" ? null : effectiveMode === "recent" ? (
+          <RecentSourcePanel
+            items={navigationHistory}
+            currentIndex={navigationHistoryIndex}
+            expanded={recentExpanded}
+            onOpenHistoryItem={onOpenHistoryItem}
+            onExpandedChange={setRecentExpanded}
+          />
+        ) : effectiveMode === "search" ? (
           <CrossFileSearchPanel
             root={activeRoot?.path ?? null}
             query={searchQuery}
@@ -249,11 +307,18 @@ export function Sidebar({
         )}
       </section>
 
+      {recentFillsSidebar ? null : (
       <section className="sidebar-section explorer-section">
         <div className="explorer-heading">
           <div>
             <div className="section-label">
-              {showingOutline ? "Outline" : showingSearchResults ? "Search" : "Explorer"}
+              {showingOutline
+                ? "Outline"
+                : showingSearchResults
+                  ? "Search"
+                  : showingRecent
+                    ? "Explorer"
+                    : "Explorer"}
             </div>
           </div>
           {!showingSearchResults && !showingOutline && activeRoot ? (
@@ -350,6 +415,7 @@ export function Sidebar({
           </div>
         )}
       </section>
+      )}
 
       <div className="sidebar-footer">
         <button
