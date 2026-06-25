@@ -25,12 +25,16 @@
 /* Placeholder is absolutely positioned over the empty editor. */
 .lexical-placeholder {
   position: absolute;
-  top: 6px;
+  top: var(--document-top-padding);
   left: 0;
   right: 0;
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 6px 30px 0;
+  width: 100%;
+  padding-right: max(var(--content-gutter), (100% - var(--content-width)) / 2);
+  padding-left: max(
+    var(--outline-clearance, 0px),
+    var(--content-gutter),
+    (100% - var(--content-width)) / 2
+  );
   color: var(--color-text-muted);
   pointer-events: none;
   user-select: none;

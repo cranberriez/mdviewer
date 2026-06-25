@@ -34,7 +34,17 @@ import {
   TableNode,
   TableRowNode,
 } from "@lexical/table";
-import { $getRoot, type EditorState } from "lexical";
+import {
+  $createRangeSelection,
+  $getRoot,
+  $getSelection,
+  $isElementNode,
+  $isRangeSelection,
+  $isTextNode,
+  $setSelection,
+  type EditorState,
+  type LexicalNode,
+} from "lexical";
 import {
   type MarkdownAction,
   type MarkdownActionResult,
@@ -52,13 +62,21 @@ import { MARKDOWN_TRANSFORMERS } from "./lexical/transformers";
 interface LexicalMarkdownEditorProps {
   content: string;
   onChange: (content: string) => void;
+  onSelectionChange?: () => void;
   onScroll: UIEventHandler<HTMLDivElement>;
   rootRef?: RefObject<HTMLDivElement | null>;
 }
 
 export interface LexicalMarkdownEditorHandle {
   applyAction: (action: MarkdownAction) => MarkdownActionResult | null;
+  getSelection: () => TextSelectionRange | null;
   focus: () => void;
+  restoreSelection: (selection: TextSelectionRange) => void;
+}
+
+export interface TextSelectionRange {
+  start: number;
+  end: number;
 }
 
 const EDITOR_NODES = [
@@ -105,6 +123,71 @@ function $readMarkdown(): string {
     undefined,
     PRESERVE_NEWLINES,
   );
+}
+
+function $textOffsetForPoint(nodeKey: string, pointOffset: number): number | null {
+  const root = $getRoot();
+  let offset = 0;
+  let found: number | null = null;
+
+  function visit(node: LexicalNode) {
+    if (found !== null) {
+      return;
+    }
+
+    if ($isTextNode(node)) {
+      if (node.getKey() === nodeKey) {
+        found = offset + pointOffset;
+        return;
+      }
+      offset += node.getTextContentSize();
+      return;
+    }
+
+    if ($isElementNode(node)) {
+      for (const child of node.getChildren()) {
+        visit(child);
+      }
+    }
+  }
+
+  visit(root);
+  return found;
+}
+
+function $nodePointForTextOffset(targetOffset: number): { key: string; offset: number } | null {
+  const root = $getRoot();
+  const clampedOffset = Math.max(0, Math.min(targetOffset, root.getTextContentSize()));
+  let offset = 0;
+  let point: { key: string; offset: number } | null = null;
+
+  function visit(node: LexicalNode) {
+    if (point) {
+      return;
+    }
+
+    if ($isTextNode(node)) {
+      const size = node.getTextContentSize();
+      if (clampedOffset <= offset + size) {
+        point = {
+          key: node.getKey(),
+          offset: Math.max(0, Math.min(size, clampedOffset - offset)),
+        };
+        return;
+      }
+      offset += size;
+      return;
+    }
+
+    if ($isElementNode(node)) {
+      for (const child of node.getChildren()) {
+        visit(child);
+      }
+    }
+  }
+
+  visit(root);
+  return point;
 }
 
 /**
@@ -155,7 +238,46 @@ const EditorBridge = forwardRef<
         const cursor = nextContent.length;
         return { content: nextContent, selection: { start: cursor, end: cursor } };
       },
+      getSelection() {
+        let range: TextSelectionRange | null = null;
+        editor.getEditorState().read(() => {
+          const selection = $getSelection();
+          if (!$isRangeSelection(selection)) {
+            return;
+          }
+
+          const anchor = $textOffsetForPoint(selection.anchor.key, selection.anchor.offset);
+          const focus = $textOffsetForPoint(selection.focus.key, selection.focus.offset);
+          if (anchor === null || focus === null) {
+            return;
+          }
+
+          range = {
+            start: Math.min(anchor, focus),
+            end: Math.max(anchor, focus),
+          };
+        });
+        return range;
+      },
       focus() {
+        editor.focus();
+      },
+      restoreSelection(selection) {
+        editor.update(
+          () => {
+            const start = $nodePointForTextOffset(selection.start);
+            const end = $nodePointForTextOffset(selection.end);
+            if (!start || !end) {
+              return;
+            }
+
+            const nextSelection = $createRangeSelection();
+            nextSelection.anchor.set(start.key, start.offset, "text");
+            nextSelection.focus.set(end.key, end.offset, "text");
+            $setSelection(nextSelection);
+          },
+          { discrete: true },
+        );
         editor.focus();
       },
     }),
@@ -169,7 +291,7 @@ export const LexicalMarkdownEditor = forwardRef<
   LexicalMarkdownEditorHandle,
   LexicalMarkdownEditorProps
 >(function LexicalMarkdownEditor(
-  { content, onChange, onScroll, rootRef },
+  { content, onChange, onSelectionChange, onScroll, rootRef },
   ref,
 ) {
   const lastIngestedRef = useRef<string>(content);
@@ -225,6 +347,9 @@ export const LexicalMarkdownEditor = forwardRef<
         ref={setRootRef}
         className="lexical-editor-shell"
         data-find-content="true"
+        onBlur={onSelectionChange}
+        onKeyUp={onSelectionChange}
+        onMouseUp={onSelectionChange}
         onScroll={onScroll}
       >
         <RichTextPlugin
