@@ -16,7 +16,6 @@ export interface SourceHeaderActionsVisible {
   search: boolean;
   outline: boolean;
   recent: boolean;
-  pin: boolean;
 }
 
 export interface NavigationHistoryRoot {
@@ -236,7 +235,6 @@ function readSourceHeaderActionsVisible(value: unknown): SourceHeaderActionsVisi
     search: readBoolean(value.search) ?? true,
     outline: readBoolean(value.outline) ?? true,
     recent: readBoolean(value.recent) ?? true,
-    pin: readBoolean(value.pin) ?? true,
   };
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Folder, History, List, Pin, Search } from "lucide-react";
+import { Check, Folder, History, List, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { SourceHeaderActionsVisible } from "../../../shared/state/persistence";
 import type { SidebarMode } from "./Sidebar";
@@ -12,8 +12,7 @@ export type SourcesHeaderMenuAction =
   | "mode-outline"
   | "toggle-recent"
   | "toggle-search"
-  | "toggle-outline"
-  | "toggle-pin";
+  | "toggle-outline";
 
 interface MenuItem {
   id: SourcesHeaderMenuAction;
@@ -132,11 +131,6 @@ export function SourcesHeaderContextMenu({
       id: "toggle-outline",
       label: visibleActions.outline ? "Hide Outline Button" : "Show Outline Button",
       icon: List,
-    },
-    {
-      id: "toggle-pin",
-      label: visibleActions.pin ? "Hide Pin Button" : "Show Pin Button",
-      icon: Pin,
     },
   ];
 

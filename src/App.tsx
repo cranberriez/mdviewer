@@ -99,7 +99,6 @@ const DEFAULT_SOURCE_HEADER_ACTIONS_VISIBLE: SourceHeaderActionsVisible = {
 	search: true,
 	outline: true,
 	recent: true,
-	pin: true,
 };
 
 type UnsavedFileDrafts = Record<string, OpenFile>;
@@ -1402,12 +1401,6 @@ function App() {
 					outline: !current.outline,
 				}));
 				return;
-			case 'toggle-pin':
-				setSourcesHeaderActionsVisible((current) => ({
-					...current,
-					pin: !current.pin,
-				}));
-				return;
 			default:
 				return;
 		}
@@ -1510,6 +1503,12 @@ function App() {
 		}
 
 		void navigateToHistoryIndex(nextIndex);
+	}
+
+	function clearNavigationHistory() {
+		navigationHistoryIndexRef.current = -1;
+		setNavigationHistory([]);
+		setNavigationHistoryIndex(-1);
 	}
 
 	function removeRecentItem(item: RecentItem) {
@@ -2327,6 +2326,7 @@ function App() {
 						onSearchSubmit={() => void runCrossFileSearch()}
 						onOpenSearchResult={(result) => void openSearchResult(result)}
 						onOpenHistoryItem={(index) => void navigateToHistoryIndex(index)}
+						onClearHistory={clearNavigationHistory}
 						onRefreshRoot={() => {
 							if (activeRoot) {
 								void refreshFolder(activeRoot.path);

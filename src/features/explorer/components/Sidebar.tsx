@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Search,
   Sun,
+  Trash2,
 } from "lucide-react";
 import type { Entry, FileSearchMatch } from "../../../shared/types/files";
 import type {
@@ -66,6 +67,7 @@ interface SidebarProps {
   onSearchSubmit: () => void;
   onOpenSearchResult: (result: FileSearchMatch) => void;
   onOpenHistoryItem: (index: number) => void;
+  onClearHistory: () => void;
   onRefreshRoot: () => void;
   onSelectLocation: (location: Entry) => Promise<void>;
   onToggleFolder: (entry: Entry) => Promise<void>;
@@ -131,6 +133,7 @@ export function Sidebar({
   onSearchSubmit,
   onOpenSearchResult,
   onOpenHistoryItem,
+  onClearHistory,
   onRefreshRoot,
   onSelectLocation,
   onToggleFolder,
@@ -228,7 +231,7 @@ export function Sidebar({
             ) : null}
           </div>
           <div className="saved-actions">
-            {sourceHeaderActionsVisible.pin ? (
+            {effectiveMode === "explorer" ? (
               <button
                 type="button"
                 className={`saved-add ${rootPinned ? "is-pinned" : ""}`}
@@ -249,6 +252,7 @@ export function Sidebar({
                 {rootPinned ? <PinOff size={15} /> : <Pin size={15} />}
               </button>
             ) : null}
+            {effectiveMode === "explorer" ? (
             <button
               type="button"
               className="saved-add"
@@ -258,6 +262,19 @@ export function Sidebar({
             >
               <FolderOpen size={15} />
             </button>
+            ) : null}
+            {effectiveMode === "recent" ? (
+              <button
+                type="button"
+                className="saved-add"
+                title="Clear history"
+                aria-label="Clear history"
+                disabled={navigationHistory.length === 0}
+                onClick={onClearHistory}
+              >
+                <Trash2 size={15} />
+              </button>
+            ) : null}
           </div>
         </div>
         {effectiveMode === "outline" ? null : effectiveMode === "recent" ? (
