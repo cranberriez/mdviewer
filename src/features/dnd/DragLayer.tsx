@@ -1,4 +1,4 @@
-import { Ban, Copy, FileText, Folder, MousePointer2, Plus } from "lucide-react";
+import { Copy, FileText, Folder, MousePointer2, Plus } from "lucide-react";
 import type { InternalDragState } from "./dropTypes";
 
 interface DragLayerProps {
@@ -34,22 +34,8 @@ export function DragLayer({ state }: DragLayerProps) {
   const first = state.items[0];
   const hint = state.renderHint;
   const variant = hint?.previewVariant ?? (first.isDir ? "folder" : "file");
-  const Icon =
-    hint?.operation === "blocked"
-      ? Ban
-      : variant === "folder"
-        ? Folder
-        : variant === "multi"
-          ? Copy
-          : FileText;
-  const actionIcon =
-    hint?.operation === "copy" ? (
-      <Plus size={12} />
-    ) : hint?.operation === "blocked" ? (
-      <Ban size={12} />
-    ) : (
-      <MousePointer2 size={12} />
-    );
+  const Icon = variant === "folder" ? Folder : variant === "multi" ? Copy : FileText;
+  const actionIcon = hint?.operation === "copy" ? <Plus size={12} /> : <MousePointer2 size={12} />;
 
   return (
     <div
@@ -62,10 +48,12 @@ export function DragLayer({ state }: DragLayerProps) {
       </div>
       <div className="drag-layer-copy">
         <strong>{state.items.length > 1 ? `${state.items.length} items` : first.name}</strong>
-        <span>
-          {actionIcon}
-          {operationLabel(state)}
-        </span>
+        {hint ? (
+          <span>
+            {actionIcon}
+            {operationLabel(state)}
+          </span>
+        ) : null}
       </div>
     </div>
   );

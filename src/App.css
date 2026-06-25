@@ -1380,10 +1380,6 @@ button {
 	will-change: transform;
 }
 
-.drag-layer.blocked {
-	opacity: 0.82;
-}
-
 .drag-layer-icon {
 	width: 26px;
 	height: 26px;
@@ -1393,11 +1389,6 @@ button {
 	border-radius: 6px;
 	background: color-mix(in srgb, var(--color-accent-primary) 14%, transparent);
 	color: var(--color-accent-primary);
-}
-
-.drag-layer.blocked .drag-layer-icon {
-	background: color-mix(in srgb, var(--color-warning) 16%, transparent);
-	color: var(--color-warning-text);
 }
 
 .drag-layer-copy {

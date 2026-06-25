@@ -8,7 +8,7 @@ interface MainDropOverlayProps {
 }
 
 export function MainDropOverlay({ target, hint, count }: MainDropOverlayProps) {
-  if (target?.kind !== "main" || !hint || hint.operation === "blocked") {
+  if (target?.kind !== "main" || !hint) {
     return null;
   }
 

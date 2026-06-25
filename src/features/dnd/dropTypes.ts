@@ -12,7 +12,7 @@ export type DragItem = {
 
 export type DropZoneKind = "tree-folder" | "tree-root" | "main" | "home";
 
-export type DropOperation = "move" | "copy" | "open-file" | "set-root" | "blocked";
+export type DropOperation = "move" | "copy" | "open-file" | "set-root";
 
 export type DropZone = {
   kind: DropZoneKind;
@@ -24,7 +24,7 @@ export type DragRenderHint = {
   operation: DropOperation;
   label: string;
   warning: string | null;
-  previewVariant: "file" | "folder" | "multi" | "blocked";
+  previewVariant: "file" | "folder" | "multi";
 };
 
 export type DragPointer = {

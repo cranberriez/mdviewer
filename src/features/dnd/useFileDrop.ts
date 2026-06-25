@@ -57,13 +57,15 @@ export function useFileDrop({ activeRootPath, onDrop }: FileDropCallbacks): File
       pointer: { x, y },
       target,
       mode,
-      renderHint: deriveDropRenderHint({
-        origin: "external",
-        items,
-        target,
-        mode,
-        activeRootPath: callbacksRef.current.activeRootPath,
-      }),
+      renderHint: target
+        ? deriveDropRenderHint({
+            origin: "external",
+            items,
+            target,
+            mode,
+            activeRootPath: callbacksRef.current.activeRootPath,
+          })
+        : null,
       activeRootPath: callbacksRef.current.activeRootPath,
       escalatedToNative: false,
     });
@@ -102,13 +104,15 @@ export function useFileDrop({ activeRootPath, onDrop }: FileDropCallbacks): File
         return {
           ...current,
           mode,
-          renderHint: deriveDropRenderHint({
-            origin: "external",
-            items: current.items,
-            target: current.target,
-            mode,
-            activeRootPath: callbacksRef.current.activeRootPath,
-          }),
+          renderHint: current.target
+            ? deriveDropRenderHint({
+                origin: "external",
+                items: current.items,
+                target: current.target,
+                mode,
+                activeRootPath: callbacksRef.current.activeRootPath,
+              })
+            : null,
         };
       });
     }

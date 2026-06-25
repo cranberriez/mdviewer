@@ -31,14 +31,9 @@ export function deriveDropRenderHint({
   target,
   mode,
   activeRootPath,
-}: DeriveDropRenderHintOptions): DragRenderHint {
+}: DeriveDropRenderHintOptions): DragRenderHint | null {
   if (!target || items.length === 0) {
-    return {
-      operation: "blocked",
-      label: "Not a drop target",
-      warning: null,
-      previewVariant: "blocked",
-    };
+    return null;
   }
 
   if (target.kind === "tree-folder" || target.kind === "tree-root") {
