@@ -1215,7 +1215,10 @@ function App() {
 			return;
 		}
 		event.preventDefault();
+		event.stopPropagation();
 		setDraft(null);
+		setContextMenuVariant('explorer');
+		setContextMenuRecent(null);
 		setContextMenu({
 			kind: 'folder',
 			path: activeRoot.path,

@@ -298,13 +298,7 @@ export function Sidebar({
             role="tree"
             data-drop-zone="tree-blank"
             data-drop-path={activeRoot?.path ?? ""}
-            onContextMenu={(event) => {
-              // Only handle right-clicks on empty tree space; rows stop propagation
-              // by handling their own contextmenu.
-              if (event.target === event.currentTarget) {
-                onRootContextMenu(event);
-              }
-            }}
+            onContextMenu={onRootContextMenu}
           >
             {rootDraft ? (
               <TreeInlineInput
