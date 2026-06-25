@@ -16,6 +16,7 @@ import type { Entry, FileSearchMatch } from "../../../shared/types/files";
 import type {
   AppTheme,
   ExplorerHeaderActionsVisibility,
+  SourcesHeaderActionsVisibility,
 } from "../../../shared/state/persistence";
 import type { InternalDragStart } from "../../dnd/dropTypes";
 import { EmptySidebar } from "./EmptySidebar";
@@ -50,6 +51,7 @@ interface SidebarProps {
   searchTruncated: boolean;
   rootRefreshing: boolean;
   explorerHeaderActionsVisible: ExplorerHeaderActionsVisibility;
+  sourcesHeaderActionsVisible: SourcesHeaderActionsVisibility;
   /** Rendered markdown HTML for the open file, or null for non-markdown / none. */
   outlineHtml: string | null;
   /** Whether any file is open (drives the outline empty state). */
@@ -66,6 +68,7 @@ interface SidebarProps {
   onCreateRootFile: () => void;
   onCreateRootFolder: () => void;
   onExplorerHeaderContextMenu: (event: ReactMouseEvent) => void;
+  onSourcesHeaderContextMenu: (event: ReactMouseEvent) => void;
   onSelectLocation: (location: Entry) => Promise<void>;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
@@ -117,6 +120,7 @@ export function Sidebar({
   searchTruncated,
   rootRefreshing,
   explorerHeaderActionsVisible,
+  sourcesHeaderActionsVisible,
   outlineHtml,
   hasOpenFile,
   showOutlineTab,
@@ -130,6 +134,7 @@ export function Sidebar({
   onCreateRootFile,
   onCreateRootFolder,
   onExplorerHeaderContextMenu,
+  onSourcesHeaderContextMenu,
   onSelectLocation,
   onToggleFolder,
   onSelectFile,
@@ -164,7 +169,7 @@ export function Sidebar({
   return (
     <aside className="sidebar" style={{ width, flexBasis: width }} aria-label="File explorer">
       <section className="sidebar-section">
-        <div className="saved-heading">
+        <div className="saved-heading" onContextMenu={onSourcesHeaderContextMenu}>
           <div className="sidebar-view-switch" role="tablist" aria-label="Sidebar view">
             <button
               type="button"
@@ -177,18 +182,20 @@ export function Sidebar({
             >
               <Folder size={14} />
             </button>
-            <button
-              type="button"
-              className={`sidebar-view-button ${effectiveMode === "search" ? "active" : ""}`}
-              role="tab"
-              aria-selected={effectiveMode === "search"}
-              title="Search files"
-              aria-label="Search files"
-              onClick={() => onSidebarModeChange("search")}
-            >
-              <Search size={14} />
-            </button>
-            {showOutlineTab ? (
+            {sourcesHeaderActionsVisible.search ? (
+              <button
+                type="button"
+                className={`sidebar-view-button ${effectiveMode === "search" ? "active" : ""}`}
+                role="tab"
+                aria-selected={effectiveMode === "search"}
+                title="Search files"
+                aria-label="Search files"
+                onClick={() => onSidebarModeChange("search")}
+              >
+                <Search size={14} />
+              </button>
+            ) : null}
+            {showOutlineTab && sourcesHeaderActionsVisible.outline ? (
               <button
                 type="button"
                 className={`sidebar-view-button ${effectiveMode === "outline" ? "active" : ""}`}
@@ -203,25 +210,27 @@ export function Sidebar({
             ) : null}
           </div>
           <div className="saved-actions">
-            <button
-              type="button"
-              className={`saved-add ${rootPinned ? "is-pinned" : ""}`}
-              disabled={rootPinDisabled}
-              title={
-                rootPinDisabled
-                  ? "Home is always pinned"
-                  : rootPinned
-                    ? "Unpin the current root folder"
-                    : "Pin the current root folder"
-              }
-              aria-label={
-                rootPinned ? "Unpin current root folder" : "Pin current root folder"
-              }
-              aria-pressed={rootPinned}
-              onClick={onToggleRootPin}
-            >
-              {rootPinned ? <PinOff size={15} /> : <Pin size={15} />}
-            </button>
+            {sourcesHeaderActionsVisible.pin ? (
+              <button
+                type="button"
+                className={`saved-add ${rootPinned ? "is-pinned" : ""}`}
+                disabled={rootPinDisabled}
+                title={
+                  rootPinDisabled
+                    ? "Home is always pinned"
+                    : rootPinned
+                      ? "Unpin the current root folder"
+                      : "Pin the current root folder"
+                }
+                aria-label={
+                  rootPinned ? "Unpin current root folder" : "Pin current root folder"
+                }
+                aria-pressed={rootPinned}
+                onClick={onToggleRootPin}
+              >
+                {rootPinned ? <PinOff size={15} /> : <Pin size={15} />}
+              </button>
+            ) : null}
             <button
               type="button"
               className="saved-add"

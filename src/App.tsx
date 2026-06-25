@@ -31,6 +31,10 @@ import {
 	type ExplorerHeaderMenuAction,
 } from './features/explorer/components/context-menu/ExplorerHeaderContextMenu';
 import {
+	SourcesHeaderContextMenu,
+	type SourcesHeaderMenuAction,
+} from './features/explorer/components/context-menu/SourcesHeaderContextMenu';
+import {
 	SavedContextMenu,
 	type SavedMenuAction,
 } from './features/explorer/components/SavedContextMenu';
@@ -81,10 +85,12 @@ import {
 	saveAppSession,
 	touchRecentRoot,
 	DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE,
+	DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE,
 	type AppConfigurationState,
 	type AppTheme,
 	type ExplorerHeaderActionsVisibility,
 	type RecentItem,
+	type SourcesHeaderActionsVisibility,
 	type StoredWindowFrame,
 } from './shared/state/persistence';
 import './App.css';
@@ -218,6 +224,12 @@ function App() {
 				initialConfiguration.explorerHeaderActionsVisible ??
 				DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE
 		);
+	const [sourcesHeaderActionsVisible, setSourcesHeaderActionsVisible] =
+		useState<SourcesHeaderActionsVisibility>(
+			() =>
+				initialConfiguration.sourcesHeaderActionsVisible ??
+				DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE
+		);
 	const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(
 		() =>
 			initialSession.selectedFolderPath ??
@@ -238,6 +250,10 @@ function App() {
 		y: number;
 	} | null>(null);
 	const [explorerHeaderMenu, setExplorerHeaderMenu] = useState<{
+		x: number;
+		y: number;
+	} | null>(null);
+	const [sourcesHeaderMenu, setSourcesHeaderMenu] = useState<{
 		x: number;
 		y: number;
 	} | null>(null);
@@ -310,6 +326,7 @@ function App() {
 		viewMode: mode,
 		theme,
 		explorerHeaderActionsVisible,
+		sourcesHeaderActionsVisible,
 		windowFrame,
 		pinnedLocations,
 		removedDefaultPaths,
@@ -443,6 +460,7 @@ function App() {
 			viewMode: mode,
 			theme,
 			explorerHeaderActionsVisible,
+			sourcesHeaderActionsVisible,
 			windowFrame,
 			pinnedLocations,
 			removedDefaultPaths,
@@ -461,6 +479,7 @@ function App() {
 		mode,
 		theme,
 		explorerHeaderActionsVisible,
+		sourcesHeaderActionsVisible,
 		sidebarWidth,
 		windowFrame,
 		pinnedLocations,
@@ -1213,6 +1232,7 @@ function App() {
 		event.stopPropagation();
 		setDraft(null);
 		setExplorerHeaderMenu(null);
+		setSourcesHeaderMenu(null);
 		setFocusedEntry(entry);
 		setContextMenuVariant('explorer');
 		setContextMenuRecent(null);
@@ -1227,6 +1247,7 @@ function App() {
 		event.preventDefault();
 		event.stopPropagation();
 		setExplorerHeaderMenu(null);
+		setSourcesHeaderMenu(null);
 		setSavedMenu(null);
 		setContextMenuRecent(item);
 		const isFile = recentItemKind(item) === 'file';
@@ -1248,6 +1269,7 @@ function App() {
 		event.stopPropagation();
 		setDraft(null);
 		setExplorerHeaderMenu(null);
+		setSourcesHeaderMenu(null);
 		setContextMenuVariant('explorer');
 		setContextMenuRecent(null);
 		setContextMenu({
@@ -1264,6 +1286,7 @@ function App() {
 		event.stopPropagation();
 		setContextMenu(null);
 		setExplorerHeaderMenu(null);
+		setSourcesHeaderMenu(null);
 		setSavedMenu({ location, x: event.clientX, y: event.clientY });
 	}
 
@@ -1278,11 +1301,31 @@ function App() {
 		setContextMenuRecent(null);
 		setContextMenuVariant('explorer');
 		setSavedMenu(null);
+		setSourcesHeaderMenu(null);
 		setExplorerHeaderMenu({ x: event.clientX, y: event.clientY });
+	}
+
+	function openSourcesHeaderContextMenu(event: ReactMouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+		setDraft(null);
+		setContextMenu(null);
+		setContextMenuRecent(null);
+		setContextMenuVariant('explorer');
+		setSavedMenu(null);
+		setExplorerHeaderMenu(null);
+		setSourcesHeaderMenu({ x: event.clientX, y: event.clientY });
 	}
 
 	function toggleExplorerHeaderAction(action: keyof ExplorerHeaderActionsVisibility) {
 		setExplorerHeaderActionsVisible((current) => ({
+			...current,
+			[action]: !current[action],
+		}));
+	}
+
+	function toggleSourcesHeaderAction(action: keyof SourcesHeaderActionsVisibility) {
+		setSourcesHeaderActionsVisible((current) => ({
 			...current,
 			[action]: !current[action],
 		}));
@@ -1323,6 +1366,39 @@ function App() {
 			}
 		} catch (cause) {
 			setError(`${String(cause)}`);
+		}
+	}
+
+	function handleSourcesHeaderMenuAction(action: SourcesHeaderMenuAction) {
+		setSourcesHeaderMenu(null);
+
+		switch (action) {
+			case 'switch-explorer':
+				setSidebarMode('explorer');
+				break;
+			case 'switch-search':
+				setSidebarMode('search');
+				break;
+			case 'switch-outline':
+				setSidebarMode('outline');
+				break;
+			case 'toggle-root-pin':
+				toggleRootPin();
+				break;
+			case 'open-folder':
+				void openFolderAsRoot();
+				break;
+			case 'toggle-search':
+				toggleSourcesHeaderAction('search');
+				break;
+			case 'toggle-outline':
+				toggleSourcesHeaderAction('outline');
+				break;
+			case 'toggle-pin':
+				toggleSourcesHeaderAction('pin');
+				break;
+			default:
+				break;
 		}
 	}
 
@@ -2130,6 +2206,7 @@ function App() {
 						searchTruncated={searchTruncated}
 						rootRefreshing={activeRoot ? loadingPaths.has(activeRoot.path) : false}
 						explorerHeaderActionsVisible={explorerHeaderActionsVisible}
+						sourcesHeaderActionsVisible={sourcesHeaderActionsVisible}
 						outlineHtml={openFile?.kind === 'md' ? renderedMarkdown : null}
 						hasOpenFile={Boolean(openFile)}
 						showOutlineTab={!outlinePanelVisible}
@@ -2157,6 +2234,7 @@ function App() {
 							}
 						}}
 						onExplorerHeaderContextMenu={openExplorerHeaderContextMenu}
+						onSourcesHeaderContextMenu={openSourcesHeaderContextMenu}
 						onSelectLocation={selectLocation}
 						onToggleFolder={toggleFolder}
 						onSelectFile={selectFile}
@@ -2306,6 +2384,19 @@ function App() {
 					visibleActions={explorerHeaderActionsVisible}
 					onAction={(action) => void handleExplorerHeaderMenuAction(action)}
 					onClose={() => setExplorerHeaderMenu(null)}
+				/>
+			) : null}
+
+			{sourcesHeaderMenu ? (
+				<SourcesHeaderContextMenu
+					x={sourcesHeaderMenu.x}
+					y={sourcesHeaderMenu.y}
+					visibleActions={sourcesHeaderActionsVisible}
+					showOutlineAction={!outlinePanelVisible}
+					rootPinned={activeRoot ? !isPinnable(activeRoot.path) : false}
+					rootPinDisabled={!activeRoot || !isUnpinnable(activeRoot)}
+					onAction={handleSourcesHeaderMenuAction}
+					onClose={() => setSourcesHeaderMenu(null)}
 				/>
 			) : null}
 

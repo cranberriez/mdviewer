@@ -18,10 +18,22 @@ export interface ExplorerHeaderActionsVisibility {
   refresh: boolean;
 }
 
+export interface SourcesHeaderActionsVisibility {
+  search: boolean;
+  outline: boolean;
+  pin: boolean;
+}
+
 export const DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE: ExplorerHeaderActionsVisibility = {
   newFile: true,
   newFolder: true,
   refresh: true,
+};
+
+export const DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE: SourcesHeaderActionsVisibility = {
+  search: true,
+  outline: true,
+  pin: true,
 };
 
 /** The last file opened within a recent root, if any. */
@@ -92,6 +104,8 @@ export interface AppConfigurationState {
   recents?: RecentItem[];
   /** Visibility of compact action buttons in the Explorer section header. */
   explorerHeaderActionsVisible?: ExplorerHeaderActionsVisibility;
+  /** Visibility of optional buttons in the Sources header. */
+  sourcesHeaderActionsVisible?: SourcesHeaderActionsVisibility;
 }
 
 export interface AppSessionState {
@@ -216,6 +230,20 @@ function readExplorerHeaderActionsVisibility(
     newFile: readBoolean(value.newFile) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFile,
     newFolder: readBoolean(value.newFolder) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFolder,
     refresh: readBoolean(value.refresh) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.refresh,
+  };
+}
+
+function readSourcesHeaderActionsVisibility(
+  value: unknown,
+): SourcesHeaderActionsVisibility | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    search: readBoolean(value.search) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.search,
+    outline: readBoolean(value.outline) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.outline,
+    pin: readBoolean(value.pin) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.pin,
   };
 }
 
@@ -425,6 +453,9 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
     recents: readRecents(record.recents),
     explorerHeaderActionsVisible: readExplorerHeaderActionsVisibility(
       record.explorerHeaderActionsVisible,
+    ),
+    sourcesHeaderActionsVisible: readSourcesHeaderActionsVisibility(
+      record.sourcesHeaderActionsVisible,
     ),
   };
 }
