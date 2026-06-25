@@ -24,8 +24,17 @@ export interface DropTarget {
    *   dragged — it opens directly (no copy/move).
    * - "main-folder": the main content area, when a folder is dragged — it
    *   becomes the new active root.
+   * - "home-file" / "home-folder": the Home screen, mirroring the main-area
+   *   behaviour (open the file / set the folder as root). A lone file dropped
+   *   here is additionally remembered as a rootless Recent.
    */
-  kind: "tree-folder" | "tree-root" | "main-file" | "main-folder";
+  kind:
+    | "tree-folder"
+    | "tree-root"
+    | "main-file"
+    | "main-folder"
+    | "home-file"
+    | "home-folder";
   destDir: string;
   label: string;
 }
@@ -81,6 +90,12 @@ export interface FileDropCallbacks {
   onOpenFile: (path: string) => void;
   /** Set a dropped folder as the new active root. */
   onSetRoot: (path: string) => void;
+  /**
+   * Handle a drop on the Home screen. `path` is the first dragged item; the
+   * handler decides file-vs-folder (open file as a rootless recent, or set
+   * folder as root) the same way the main area does.
+   */
+  onHomeDrop?: (path: string) => void;
 }
 
 /**
@@ -101,6 +116,7 @@ export function useFileDrop({
   onTreeDrop,
   onOpenFile,
   onSetRoot,
+  onHomeDrop,
 }: FileDropCallbacks): DropState {
   const [state, setState] = useState<DropState>(EMPTY_STATE);
 
@@ -123,6 +139,7 @@ export function useFileDrop({
     onTreeDrop,
     onOpenFile,
     onSetRoot,
+    onHomeDrop,
   });
   callbacksRef.current = {
     activeRootPath,
@@ -130,6 +147,7 @@ export function useFileDrop({
     onTreeDrop,
     onOpenFile,
     onSetRoot,
+    onHomeDrop,
   };
 
   // Resolve the target under a physical cursor position and update state.
@@ -228,6 +246,8 @@ export function useFileDrop({
               callbacksRef.current.onOpenFile(paths[0]);
             } else if (target.kind === "main-folder") {
               callbacksRef.current.onSetRoot(paths[0]);
+            } else if (target.kind === "home-file" || target.kind === "home-folder") {
+              callbacksRef.current.onHomeDrop?.(paths[0]);
             }
           }
 

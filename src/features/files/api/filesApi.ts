@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Entry, FileSearchResponse } from "../../../shared/types/files";
 
@@ -65,6 +65,42 @@ export function shiftPressed() {
 
 export function revealInExplorer(path: string) {
   return invoke<void>("reveal_in_explorer", { path });
+}
+
+/**
+ * A small page-glyph PNG (base64 data URL) used as the cursor preview while
+ * dragging files out of the window. Inlined so the drag has no runtime file
+ * dependency. The native plugin accepts a `data:image/png;base64,` string.
+ */
+const DRAG_OUT_ICON =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAM0lEQVR42mNgoCUICIj6TyomaODXbz9eE4tHDcRvYEVtO0486uVRL4/mlMFvIFULWGoAAB3h8rbMqat/AAAAAElFTkSuQmCC";
+
+/**
+ * Start a native OS drag-and-drop operation carrying real files OUT of the
+ * window, so the dragged paths can be dropped onto Windows Explorer, the
+ * desktop, or any other application exactly like dragging within the file
+ * manager. The OS decides copy vs. move from the destination and modifier keys.
+ *
+ * Backed by `tauri-plugin-drag`'s `start_drag` command (invoked directly to
+ * avoid an extra JS dependency). The command streams drag results over a
+ * Channel, which we accept but ignore. Best-effort: rejects silently outside the
+ * Tauri runtime so it's safe to call from UI handlers.
+ */
+export async function startFileDrag(paths: string[]): Promise<void> {
+  if (paths.length === 0) {
+    return;
+  }
+  // The plugin requires a Channel for drag-event callbacks even when unused.
+  const onEvent = new Channel<unknown>();
+  try {
+    await invoke("plugin:drag|start_drag", {
+      item: paths,
+      image: DRAG_OUT_ICON,
+      onEvent,
+    });
+  } catch {
+    // Drag-out is best effort and unavailable outside the Tauri runtime.
+  }
 }
 
 export function folderEntry(path: string) {

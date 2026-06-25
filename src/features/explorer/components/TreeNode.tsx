@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from "react";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
+import { startFileDrag } from "../../files/api/filesApi";
 import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
 
 const TREE_BASE_INDENT = 10;
@@ -66,6 +67,15 @@ export function TreeNode({
   // don't show the ring themselves.
   const isDropTarget = entry.is_dir && dropTargetPath != null && dropTargetPath === entry.path;
 
+  // Begin a native OS drag carrying this entry's real file/folder so it can be
+  // dropped into Explorer, the desktop, or other apps. We hand off to the native
+  // drag immediately and cancel the web drag (WebView2 can't attach real files
+  // to an HTML5 drag), so no drag image or dataTransfer is set here.
+  function handleDragStart(event: ReactDragEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    void startFileDrag([entry.path]);
+  }
+
   const isRenaming = draft?.mode === "rename" && draft.targetPath === entry.path;
   const childDraft =
     draft?.mode === "create" && draft.parentPath === entry.path ? draft : null;
@@ -119,6 +129,8 @@ export function TreeNode({
         data-drop-zone="tree"
         data-drop-path={entry.path}
         data-drop-isdir={entry.is_dir ? "1" : "0"}
+        draggable
+        onDragStart={handleDragStart}
         onClick={() =>
           entry.is_dir ? void onToggleFolder(entry) : void onSelectFile(entry)
         }

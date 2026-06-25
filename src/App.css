@@ -1358,6 +1358,14 @@ button {
 	background: color-mix(in srgb, var(--color-warning) 18%, transparent);
 }
 
+/* Home screen accepting an OS file/folder drop: a dashed accent inset that
+   matches the tree-root and main-area drop affordances, so the whole Home area
+   reads as a target (drop a folder = open as root, a file = open for viewing). */
+.home.drop-active {
+	box-shadow: inset 0 0 0 1.5px var(--color-accent-primary);
+	background: color-mix(in srgb, var(--color-accent-primary) 6%, transparent);
+}
+
 /* ---------- Icon picker ---------- */
 .icon-picker-menu {
 	position: fixed;

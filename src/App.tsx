@@ -47,6 +47,8 @@ import {
   loadAppConfiguration,
   loadAppSession,
   recordRecentFile,
+  recordRecentSingleFile,
+  recentItemKind,
   removeRecent,
   saveAppConfiguration,
   saveAppSession,
@@ -631,7 +633,10 @@ function App() {
     await loadFolder(path, { force: true, quiet: true });
   }
 
-  async function openFileAtPath(path: string, options?: { mode?: FileViewMode }) {
+  async function openFileAtPath(
+    path: string,
+    options?: { mode?: FileViewMode; skipRecent?: boolean },
+  ) {
     setError(null);
     setOpenFilePath(path);
     setSelectedFolderPath(parentPath(path));
@@ -650,9 +655,10 @@ function App() {
         setMode(options.mode);
       }
       // Update the active root's Recent entry with this file as its last-opened
-      // file. Only one Recent entry exists per root. If there's no active root
-      // (shouldn't normally happen when opening a file), skip recording.
-      if (activeRoot) {
+      // file. Only one Recent entry exists per root. Skipped when there's no
+      // active root, or when the caller records its own Recent (e.g. a rootless
+      // file dropped on Home).
+      if (activeRoot && !options?.skipRecent) {
         recordFileRecent({ path: activeRoot.path, name: activeRoot.name }, { path, name: fileName(path), kind });
       }
       find.close();
@@ -794,6 +800,12 @@ function App() {
         return { kind: "main-file", destDir: "", label: "" };
       }
 
+      if (kind === "home") {
+        // Home mirrors the main area: file opens for viewing, folder becomes the
+        // root. Default to file for the hover overlay; refined in handleHomeDrop.
+        return { kind: "home-file", destDir: "", label: "" };
+      }
+
       return null;
     },
     [activeRoot?.path],
@@ -880,12 +892,53 @@ function App() {
     [handleMainOpenFile, handleMainSetRoot],
   );
 
+  // A drop on the Home screen. Mirrors the main area: a folder becomes the new
+  // active root (recorded as a root recent via selectLocation); a viewer-
+  // supported file opens for viewing (Preview, switchable to Edit) and — uniquely
+  // — is remembered as a *rootless* Recent. Non-viewer files hand off to the OS.
+  const handleHomeDrop = useCallback(
+    async (firstPath: string) => {
+      try {
+        await readFolder(firstPath);
+        await handleMainSetRoot(firstPath);
+        return;
+      } catch {
+        // Not a folder — fall through to file handling.
+      }
+
+      if (!isVisibleFileName(firstPath)) {
+        try {
+          await openPath(firstPath);
+        } catch (cause) {
+          setError(`Unable to open: ${String(cause)}`);
+        }
+        return;
+      }
+
+      // Open the lone file with no root attached, defaulting to Preview, and
+      // record it as the one kind of single-file Recent the app keeps.
+      // openFileAtPath sets selectedFolderPath to the file's parent for us.
+      setActiveRoot(null);
+      setExpanded(new Set());
+      setOverlay(null);
+      await openFileAtPath(firstPath, { mode: "preview", skipRecent: true });
+      const kind = fileKindFromPath(firstPath);
+      if (kind !== "folder") {
+        setRecents((current) =>
+          recordRecentSingleFile(current, { path: firstPath, name: fileName(firstPath), kind }),
+        );
+      }
+    },
+    [handleMainSetRoot],
+  );
+
   const dropState = useFileDrop({
     activeRootPath: activeRoot?.path ?? null,
     resolveTarget: resolveDropTarget,
     onTreeDrop: (paths, target, dropMode) => void handleTreeDrop(paths, target, dropMode),
     onOpenFile: (path) => void handleMainDrop(path),
     onSetRoot: (path) => void handleMainSetRoot(path),
+    onHomeDrop: (path) => void handleHomeDrop(path),
   });
 
   // The folder path the tree should highlight while dragging (resolved dest).
@@ -1031,17 +1084,19 @@ function App() {
     setContextMenu(entryToTarget(entry, event.clientX, event.clientY));
   }
 
-  // Right-click on a Recent item from the Home screen. Recents are always roots,
-  // so they use the trimmed "recent-root" menu (remove-from-recent, rename,
-  // delete, reveal, copy path).
+  // Right-click on a Recent item from the Home screen. Root recents use the
+  // trimmed "recent-root" menu (remove, rename, delete, reveal, copy path); the
+  // rootless "file" recent uses the "recent-file" menu and a file-kind target so
+  // Open/reveal/delete act on the file itself.
   function openRecentContextMenu(item: RecentItem, event: ReactMouseEvent) {
     event.preventDefault();
     event.stopPropagation();
     setSavedMenu(null);
     setContextMenuRecent(item);
-    setContextMenuVariant("recent-root");
+    const isFile = recentItemKind(item) === "file";
+    setContextMenuVariant(isFile ? "recent-file" : "recent-root");
     setContextMenu({
-      kind: "folder",
+      kind: isFile ? "file" : "folder",
       path: item.path,
       name: item.name,
       x: event.clientX,
@@ -1085,10 +1140,25 @@ function App() {
     setPinnedLocations((current) => (current.some((location) => comparablePath(location.path) === key) ? current : [...current, { ...entry, is_dir: true, kind: "folder" }]));
   }
 
-  // Open a recent item (always a root) from the Home screen. Selects the root,
-  // then reopens its last-opened file if one was recorded. If no file was ever
-  // opened in that root, it just lands on the root.
+  // Open a recent item from the Home screen. A "file" recent (only created by
+  // dropping a lone file on Home) just reopens that file with no root, mirroring
+  // the home file-drop. A "root" recent selects the root, then reopens its
+  // last-opened file if one was recorded.
   async function openRecent(item: RecentItem) {
+    if (recentItemKind(item) === "file") {
+      setActiveRoot(null);
+      setExpanded(new Set());
+      setOverlay(null);
+      await openFileAtPath(item.path, { mode: "preview", skipRecent: true });
+      const kind = fileKindFromPath(item.path);
+      if (kind !== "folder") {
+        setRecents((current) =>
+          recordRecentSingleFile(current, { path: item.path, name: item.name, kind }),
+        );
+      }
+      return;
+    }
+
     const location: Entry = { name: item.name, path: item.path, is_dir: true, kind: "folder" };
     await selectLocation(location);
 
@@ -1098,7 +1168,7 @@ function App() {
   }
 
   function removeRecentItem(item: RecentItem) {
-    setRecents((current) => removeRecent(current, item.path));
+    setRecents((current) => removeRecent(current, { path: item.path, kind: recentItemKind(item) }));
   }
 
   // Apply the onboarding result: pin starter folders, set the greeting name and
@@ -1855,6 +1925,7 @@ function App() {
             onLocationContextMenu={openSavedContextMenu}
             onRecentContextMenu={openRecentContextMenu}
             onEditSetup={() => setOverlay("onboarding")}
+            dropActive={dropState.target?.kind === "home-file" || dropState.target?.kind === "home-folder"}
           />
         ) : (
           <PreviewPanel
