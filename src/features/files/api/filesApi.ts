@@ -68,25 +68,36 @@ export function revealInExplorer(path: string) {
 }
 
 /**
- * A small page-glyph PNG (base64 data URL) used as the cursor preview while
- * dragging files out of the window. Inlined so the drag has no runtime file
- * dependency. The native plugin accepts a `data:image/png;base64,` string.
+ * Drag-cursor preview icons (base64 PNG data URLs), inlined so the drag has no
+ * runtime file dependency. A 48px document glyph for files and a folder glyph
+ * for folders — sized like a real file icon rather than a small cursor marker.
+ * The native plugin accepts a `data:image/png;base64,` string.
  */
-const DRAG_OUT_ICON =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAM0lEQVR42mNgoCUICIj6TyomaODXbz9eE4tHDcRvYEVtO0486uVRL4/mlMFvIFULWGoAAB3h8rbMqat/AAAAAElFTkSuQmCC";
+const DRAG_FILE_ICON =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAiUlEQVR42u3ZsQ2AQAxD0ZuTigGYh4oBWIaGkiEQEgPAClfYDkLfkgd4SpQrrjVCSFeGcXpULQOc1y1pCUIJ2PYjj1AD4ggHIIpwAWIIJyCCcAPsiATAikgBbAgloOSx+yVgXlZJmQAAAAC4QqwQAABcISYAAAAArhArBAAAAAAAvgxIl995EsgLjxnAQC/KdDoAAAAASUVORK5CYII=";
+const DRAG_FOLDER_ICON =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAV0lEQVR42u3YMRGAMBBE0QhD2ImgjiIUoCE1Fi4WyNBchvdnVsBrtzVJklS45z7zywAAdgX0OLLalgHjijIDAAAAAAAAAAAAAAAAAAAAAAD4xzMnSXrTBAcsmcYLGjuXAAAAAElFTkSuQmCC";
 
 /**
  * Start a native OS drag-and-drop operation carrying real files OUT of the
  * window, so the dragged paths can be dropped onto Windows Explorer, the
  * desktop, or any other application exactly like dragging within the file
- * manager. The OS decides copy vs. move from the destination and modifier keys.
+ * manager.
+ *
+ * `mode` sets the action hint the OS shows (the +badge on the cursor): "move"
+ * removes the source on drop, "copy" leaves it. Mirrors the in-app convention
+ * (move by default, Shift = copy). `isFolder` picks the folder vs. file preview
+ * glyph for the drag cursor.
  *
  * Backed by `tauri-plugin-drag`'s `start_drag` command (invoked directly to
  * avoid an extra JS dependency). The command streams drag results over a
  * Channel, which we accept but ignore. Best-effort: rejects silently outside the
  * Tauri runtime so it's safe to call from UI handlers.
  */
-export async function startFileDrag(paths: string[]): Promise<void> {
+export async function startFileDrag(
+  paths: string[],
+  options?: { mode?: "move" | "copy"; isFolder?: boolean },
+): Promise<void> {
   if (paths.length === 0) {
     return;
   }
@@ -95,7 +106,8 @@ export async function startFileDrag(paths: string[]): Promise<void> {
   try {
     await invoke("plugin:drag|start_drag", {
       item: paths,
-      image: DRAG_OUT_ICON,
+      image: options?.isFolder ? DRAG_FOLDER_ICON : DRAG_FILE_ICON,
+      options: { mode: options?.mode ?? "move" },
       onEvent,
     });
   } catch {

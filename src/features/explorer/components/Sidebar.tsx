@@ -1,4 +1,4 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { Folder, FolderOpen, List, Moon, Pin, PinOff, RefreshCw, Search, Sun } from "lucide-react";
 import type { Entry, FileSearchMatch } from "../../../shared/types/files";
 import type { AppTheme } from "../../../shared/state/persistence";
@@ -64,6 +64,8 @@ interface SidebarProps {
   dropTargetPath?: string | null;
   /** True while files are being dragged over blank tree space (root drop). */
   rootDropActive?: boolean;
+  /** Start an in-app drag of a tree entry (drives overlays, escalates to OS). */
+  onEntryDragStart: (items: { path: string; isDir: boolean }[], event: ReactPointerEvent) => void;
   /** Custom icon name per saved-location path. */
   locationIcons?: Record<string, string>;
   /** Path of Home (first default location) — its icon is always Home and can't be changed. */
@@ -118,6 +120,7 @@ export function Sidebar({
   onDraftCancel,
   dropTargetPath,
   rootDropActive,
+  onEntryDragStart,
   locationIcons,
   homePath,
   theme,
@@ -328,6 +331,7 @@ export function Sidebar({
                     contextPath={contextPath}
                     focusedPath={focusedPath}
                     dropTargetPath={dropTargetPath}
+                    onEntryDragStart={onEntryDragStart}
                     draft={draft}
                     onToggleFolder={onToggleFolder}
                     onSelectFile={onSelectFile}

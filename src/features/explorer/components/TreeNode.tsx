@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
-import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
-import { startFileDrag } from "../../files/api/filesApi";
 import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
 
 const TREE_BASE_INDENT = 10;
@@ -26,6 +25,8 @@ interface TreeNodeProps {
   focusedPath?: string;
   /** Folder path currently highlighted as the active drop target, if any. */
   dropTargetPath?: string | null;
+  /** Start an in-app drag of this entry (drives overlays, escalates to OS). */
+  onEntryDragStart: (items: { path: string; isDir: boolean }[], event: ReactPointerEvent) => void;
   draft: InlineDraft | null;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
@@ -46,6 +47,7 @@ export function TreeNode({
   contextPath,
   focusedPath,
   dropTargetPath,
+  onEntryDragStart,
   draft,
   onToggleFolder,
   onSelectFile,
@@ -67,13 +69,13 @@ export function TreeNode({
   // don't show the ring themselves.
   const isDropTarget = entry.is_dir && dropTargetPath != null && dropTargetPath === entry.path;
 
-  // Begin a native OS drag carrying this entry's real file/folder so it can be
-  // dropped into Explorer, the desktop, or other apps. We hand off to the native
-  // drag immediately and cancel the web drag (WebView2 can't attach real files
-  // to an HTML5 drag), so no drag image or dataTransfer is set here.
-  function handleDragStart(event: ReactDragEvent<HTMLButtonElement>) {
-    event.preventDefault();
-    void startFileDrag([entry.path]);
+  // Begin an in-app drag of this entry on pointer-down. The controller waits for
+  // the pointer to move past a threshold before treating it as a drag (so a
+  // plain click still opens the file), drives the app's drop overlays while the
+  // pointer stays in the window, and escalates to a native OS drag (real files
+  // for Explorer/other apps) once it leaves.
+  function handlePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    onEntryDragStart([{ path: entry.path, isDir: entry.is_dir }], event);
   }
 
   const isRenaming = draft?.mode === "rename" && draft.targetPath === entry.path;
@@ -129,8 +131,7 @@ export function TreeNode({
         data-drop-zone="tree"
         data-drop-path={entry.path}
         data-drop-isdir={entry.is_dir ? "1" : "0"}
-        draggable
-        onDragStart={handleDragStart}
+        onPointerDown={handlePointerDown}
         onClick={() =>
           entry.is_dir ? void onToggleFolder(entry) : void onSelectFile(entry)
         }
@@ -197,6 +198,7 @@ export function TreeNode({
                 contextPath={contextPath}
                 focusedPath={focusedPath}
                 dropTargetPath={dropTargetPath}
+                onEntryDragStart={onEntryDragStart}
                 draft={draft}
                 onToggleFolder={onToggleFolder}
                 onSelectFile={onSelectFile}

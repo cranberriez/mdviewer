@@ -818,7 +818,14 @@ function App() {
       setError(null);
       const errors: string[] = [];
 
+      const destKey = comparablePath(target.destDir);
       for (const source of paths) {
+        // A move into the folder the item already lives in is a no-op — skip it
+        // so we never churn or append a " (copy)" suffix. (Copy into the same
+        // folder is still a real duplicate, so it's allowed to proceed.)
+        if (dropMode === "move" && comparablePath(parentPath(source)) === destKey) {
+          continue;
+        }
         try {
           if (dropMode === "copy") {
             await copyPath(source, target.destDir);
@@ -932,7 +939,7 @@ function App() {
     [handleMainSetRoot],
   );
 
-  const dropState = useFileDrop({
+  const { state: dropState, beginInternalDrag } = useFileDrop({
     activeRootPath: activeRoot?.path ?? null,
     resolveTarget: resolveDropTarget,
     onTreeDrop: (paths, target, dropMode) => void handleTreeDrop(paths, target, dropMode),
@@ -1903,6 +1910,7 @@ function App() {
             onDraftCancel={cancelDraft}
             dropTargetPath={treeDropTargetPath}
             rootDropActive={rootDropActive}
+            onEntryDragStart={beginInternalDrag}
             locationIcons={locationIcons}
             homePath={homePath}
             theme={theme}

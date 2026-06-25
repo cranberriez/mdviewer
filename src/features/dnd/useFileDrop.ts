@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { shiftPressed } from "../files/api/filesApi";
+import { shiftPressed, startFileDrag } from "../files/api/filesApi";
 
 /**
  * What kind of action a drop will perform. The default is "move"; holding Shift
@@ -117,7 +118,7 @@ export function useFileDrop({
   onOpenFile,
   onSetRoot,
   onHomeDrop,
-}: FileDropCallbacks): DropState {
+}: FileDropCallbacks): FileDropController {
   const [state, setState] = useState<DropState>(EMPTY_STATE);
 
   // Live Shift state. Kept in a ref so the drag handlers always read the latest
@@ -168,6 +169,167 @@ export function useFileDrop({
       activeRootPath: callbacksRef.current.activeRootPath,
     });
   }, []);
+
+  // ---- Internal (in-window) drag ----------------------------------------
+  //
+  // The window runs with Tauri's native drag-drop enabled (so external file
+  // drags arrive via `onDragDropEvent` with absolute paths). On Windows that
+  // setting *disables* the webview's HTML5 drag events, so we can't use
+  // `dragstart`/`dragover` for in-app drags. Instead we drive a custom drag from
+  // raw pointer events: while the pointer stays in the window we update the same
+  // overlays as an external drag; on release we perform the move/copy; if the
+  // pointer leaves the window we escalate to a real native OS drag
+  // (`startFileDrag`) so the item can land in Explorer or another app.
+  //
+  // Kept in refs so the window-level listeners always read the latest values.
+  const internalRef = useRef<{
+    paths: string[];
+    isFolder: boolean;
+    startX: number;
+    startY: number;
+    dragging: boolean;
+  } | null>(null);
+  const internalCleanupRef = useRef<(() => void) | null>(null);
+  const escalatedRef = useRef(false);
+
+  // Pixels the pointer must travel before a press becomes a drag (so a plain
+  // click to open a file isn't treated as a drag).
+  const DRAG_THRESHOLD = 5;
+
+  const beginInternalDrag = useCallback(
+    (items: { path: string; isDir: boolean }[], event: ReactPointerEvent) => {
+      // Only the primary (left) button starts a drag; let right-click etc. pass
+      // through to selection / context menus.
+      if (items.length === 0 || event.button !== 0) {
+        return;
+      }
+      // Tear down any listeners from a prior, un-cleared gesture first.
+      internalCleanupRef.current?.();
+      const paths = items.map((item) => item.path);
+      const isFolder = items.some((item) => item.isDir);
+      internalRef.current = {
+        paths,
+        isFolder,
+        startX: event.clientX,
+        startY: event.clientY,
+        dragging: false,
+      };
+      escalatedRef.current = false;
+      shiftRef.current = event.shiftKey;
+
+      function clear() {
+        internalRef.current = null;
+        internalCleanupRef.current?.();
+        internalCleanupRef.current = null;
+        document.body.style.removeProperty("cursor");
+        setState(EMPTY_STATE);
+      }
+
+      function pointerLeftWindow(x: number, y: number) {
+        return x <= 0 || y <= 0 || x >= window.innerWidth || y >= window.innerHeight;
+      }
+
+      function onPointerMove(move: PointerEvent) {
+        const current = internalRef.current;
+        if (!current || escalatedRef.current) {
+          return;
+        }
+        shiftRef.current = move.shiftKey;
+
+        // Promote to an actual drag only once past the movement threshold.
+        if (!current.dragging) {
+          const dx = move.clientX - current.startX;
+          const dy = move.clientY - current.startY;
+          if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) {
+            return;
+          }
+          current.dragging = true;
+          document.body.style.cursor = "grabbing";
+        }
+
+        // Left the window → hand off to a native OS drag for Explorer / others.
+        if (pointerLeftWindow(move.clientX, move.clientY)) {
+          escalatedRef.current = true;
+          const mode = resolveDropMode(shiftRef.current);
+          void startFileDrag(current.paths, { mode, isFolder: current.isFolder });
+          clear();
+          return;
+        }
+
+        const element = document.elementFromPoint(move.clientX, move.clientY);
+        const target = callbacksRef.current.resolveTarget(element);
+        setState({
+          active: true,
+          target,
+          mode: resolveDropMode(shiftRef.current),
+          paths: current.paths,
+          activeRootPath: callbacksRef.current.activeRootPath,
+        });
+      }
+
+      function onPointerUp(up: PointerEvent) {
+        const current = internalRef.current;
+        if (!current) {
+          return;
+        }
+        const didDrag = current.dragging;
+        // A press that never crossed the threshold is a click, not a drag —
+        // leave it to the row's own onClick.
+        if (current.dragging && !escalatedRef.current) {
+          const element = document.elementFromPoint(up.clientX, up.clientY);
+          const target = callbacksRef.current.resolveTarget(element);
+          dispatchDropRef.current(target, current.paths, resolveDropMode(up.shiftKey));
+        }
+        clear();
+
+        // After a real drag the browser still fires a click on the origin row;
+        // swallow that one click so it doesn't also open/toggle the entry.
+        if (didDrag) {
+          const swallow = (click: MouseEvent) => {
+            click.stopPropagation();
+            click.preventDefault();
+            window.removeEventListener("click", swallow, true);
+          };
+          window.addEventListener("click", swallow, true);
+          // Safety: if no click arrives, drop the listener on the next frame.
+          setTimeout(() => window.removeEventListener("click", swallow, true), 0);
+        }
+      }
+
+      function onPointerCancel() {
+        clear();
+      }
+
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+      window.addEventListener("pointercancel", onPointerCancel);
+      internalCleanupRef.current = () => {
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+        window.removeEventListener("pointercancel", onPointerCancel);
+      };
+    },
+    [],
+  );
+
+  // Apply a resolved drop target (shared by native and internal drop paths).
+  function dispatchDrop(target: DropTarget | null, paths: string[], mode: DropMode) {
+    if (!target || paths.length === 0) {
+      return;
+    }
+    if (target.kind === "tree-folder" || target.kind === "tree-root") {
+      callbacksRef.current.onTreeDrop(paths, target, mode);
+    } else if (target.kind === "main-file") {
+      callbacksRef.current.onOpenFile(paths[0]);
+    } else if (target.kind === "main-folder") {
+      callbacksRef.current.onSetRoot(paths[0]);
+    } else if (target.kind === "home-file" || target.kind === "home-folder") {
+      callbacksRef.current.onHomeDrop?.(paths[0]);
+    }
+  }
+  // Keep a stable ref so the native listener can reuse the same dispatch.
+  const dispatchDropRef = useRef(dispatchDrop);
+  dispatchDropRef.current = dispatchDrop;
 
   useEffect(() => {
     let disposed = false;
@@ -239,17 +401,7 @@ export function useFileDrop({
           const target = callbacksRef.current.resolveTarget(element);
           const mode = resolveDropMode(shiftRef.current);
 
-          if (target && paths.length > 0) {
-            if (target.kind === "tree-folder" || target.kind === "tree-root") {
-              callbacksRef.current.onTreeDrop(paths, target, mode);
-            } else if (target.kind === "main-file") {
-              callbacksRef.current.onOpenFile(paths[0]);
-            } else if (target.kind === "main-folder") {
-              callbacksRef.current.onSetRoot(paths[0]);
-            } else if (target.kind === "home-file" || target.kind === "home-folder") {
-              callbacksRef.current.onHomeDrop?.(paths[0]);
-            }
-          }
+          dispatchDropRef.current(target, paths, mode);
 
           pathsRef.current = [];
           setState(EMPTY_STATE);
@@ -274,5 +426,21 @@ export function useFileDrop({
     };
   }, [updateFromPosition]);
 
-  return state;
+  // Ensure internal-drag listeners are torn down if the component unmounts mid-drag.
+  useEffect(() => () => internalCleanupRef.current?.(), []);
+
+  return { state, beginInternalDrag };
+}
+
+/** Return shape of {@link useFileDrop}. */
+export interface FileDropController {
+  /** Live drag state for overlays/highlights (native and internal drags). */
+  state: DropState;
+  /**
+   * Start an in-window drag from an explorer row. Drives the app's overlays from
+   * pointer events while the cursor stays in the window, and escalates to a
+   * native OS drag when the pointer leaves it. Call from the element's
+   * `onPointerDown`.
+   */
+  beginInternalDrag: (items: { path: string; isDir: boolean }[], event: ReactPointerEvent) => void;
 }

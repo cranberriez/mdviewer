@@ -378,9 +378,14 @@ fn move_path(source: String, dest_dir: String) -> Result<String, String> {
         return Err(format!("\"{}\" is not a folder", dest_dir.display()));
     }
 
-    // Already living directly in the destination: nothing to do.
-    if source.parent() == Some(dest_dir.as_path()) {
-        return Ok(source.display().to_string());
+    // Already living directly in the destination: nothing to do. Compare via
+    // canonicalized paths so separator/case/normalization differences (e.g. a
+    // trailing slash, or `C:/foo` vs `C:\foo`) don't slip past the no-op and
+    // cause a needless copy/" (copy)" rename.
+    if let Some(parent) = source.parent() {
+        if same_dir(parent, &dest_dir) {
+            return Ok(source.display().to_string());
+        }
     }
 
     if source.is_dir() && (dest_dir == source || dest_dir.starts_with(&source)) {
@@ -502,6 +507,24 @@ fn resolve_link_path(base_file: String, target: String) -> Result<String, String
         .unwrap_or(resolved);
 
     Ok(resolved)
+}
+
+/// Whether two paths refer to the same directory, comparing canonicalized forms
+/// when possible (resolves separators, case on case-insensitive filesystems, and
+/// `.`/`..`), falling back to a normalized string compare if canonicalize fails.
+fn same_dir(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(ca), Ok(cb)) => ca == cb,
+        _ => {
+            let norm = |p: &Path| {
+                p.to_string_lossy()
+                    .replace('\\', "/")
+                    .trim_end_matches('/')
+                    .to_string()
+            };
+            norm(a) == norm(b)
+        }
+    }
 }
 
 fn display_name(path: &Path) -> String {
