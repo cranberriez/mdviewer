@@ -27,6 +27,14 @@ import {
 	type ContextMenuVariant,
 } from './features/explorer/components/ContextMenu';
 import {
+	ExplorerHeaderContextMenu,
+	type ExplorerHeaderMenuAction,
+} from './features/explorer/components/context-menu/ExplorerHeaderContextMenu';
+import {
+	SourcesHeaderContextMenu,
+	type SourcesHeaderMenuAction,
+} from './features/explorer/components/context-menu/SourcesHeaderContextMenu';
+import {
 	SavedContextMenu,
 	type SavedMenuAction,
 } from './features/explorer/components/SavedContextMenu';
@@ -76,9 +84,13 @@ import {
 	saveAppConfiguration,
 	saveAppSession,
 	touchRecentRoot,
+	DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE,
+	DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE,
 	type AppConfigurationState,
 	type AppTheme,
+	type ExplorerHeaderActionsVisibility,
 	type RecentItem,
+	type SourcesHeaderActionsVisibility,
 	type StoredWindowFrame,
 } from './shared/state/persistence';
 import './App.css';
@@ -206,6 +218,18 @@ function App() {
 	const [saving, setSaving] = useState(false);
 	const [barMerged, setBarMerged] = useState(() => initialConfiguration.barMerged ?? false);
 	const [theme, setTheme] = useState<AppTheme>(() => initialConfiguration.theme ?? 'dark');
+	const [explorerHeaderActionsVisible, setExplorerHeaderActionsVisible] =
+		useState<ExplorerHeaderActionsVisibility>(
+			() =>
+				initialConfiguration.explorerHeaderActionsVisible ??
+				DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE
+		);
+	const [sourcesHeaderActionsVisible, setSourcesHeaderActionsVisible] =
+		useState<SourcesHeaderActionsVisibility>(
+			() =>
+				initialConfiguration.sourcesHeaderActionsVisible ??
+				DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE
+		);
 	const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(
 		() =>
 			initialSession.selectedFolderPath ??
@@ -222,6 +246,14 @@ function App() {
 	const [contextMenuRecent, setContextMenuRecent] = useState<RecentItem | null>(null);
 	const [savedMenu, setSavedMenu] = useState<{
 		location: Entry;
+		x: number;
+		y: number;
+	} | null>(null);
+	const [explorerHeaderMenu, setExplorerHeaderMenu] = useState<{
+		x: number;
+		y: number;
+	} | null>(null);
+	const [sourcesHeaderMenu, setSourcesHeaderMenu] = useState<{
 		x: number;
 		y: number;
 	} | null>(null);
@@ -293,6 +325,8 @@ function App() {
 		barMerged,
 		viewMode: mode,
 		theme,
+		explorerHeaderActionsVisible,
+		sourcesHeaderActionsVisible,
 		windowFrame,
 		pinnedLocations,
 		removedDefaultPaths,
@@ -347,6 +381,15 @@ function App() {
 			return false;
 		}
 		return true;
+	}
+
+	function getCreateTargetFolder() {
+		return (
+			selectedFolderPath ??
+			(openFilePath ? parentPath(openFilePath) : null) ??
+			activeRoot?.path ??
+			null
+		);
 	}
 
 	const dirty = openFile ? Boolean(unsavedFileDrafts[comparablePath(openFile.path)]) : false;
@@ -416,6 +459,8 @@ function App() {
 			barMerged,
 			viewMode: mode,
 			theme,
+			explorerHeaderActionsVisible,
+			sourcesHeaderActionsVisible,
 			windowFrame,
 			pinnedLocations,
 			removedDefaultPaths,
@@ -433,6 +478,8 @@ function App() {
 		outlinePanelVisible,
 		mode,
 		theme,
+		explorerHeaderActionsVisible,
+		sourcesHeaderActionsVisible,
 		sidebarWidth,
 		windowFrame,
 		pinnedLocations,
@@ -1184,6 +1231,8 @@ function App() {
 		event.preventDefault();
 		event.stopPropagation();
 		setDraft(null);
+		setExplorerHeaderMenu(null);
+		setSourcesHeaderMenu(null);
 		setFocusedEntry(entry);
 		setContextMenuVariant('explorer');
 		setContextMenuRecent(null);
@@ -1197,6 +1246,8 @@ function App() {
 	function openRecentContextMenu(item: RecentItem, event: ReactMouseEvent) {
 		event.preventDefault();
 		event.stopPropagation();
+		setExplorerHeaderMenu(null);
+		setSourcesHeaderMenu(null);
 		setSavedMenu(null);
 		setContextMenuRecent(item);
 		const isFile = recentItemKind(item) === 'file';
@@ -1215,7 +1266,12 @@ function App() {
 			return;
 		}
 		event.preventDefault();
+		event.stopPropagation();
 		setDraft(null);
+		setExplorerHeaderMenu(null);
+		setSourcesHeaderMenu(null);
+		setContextMenuVariant('explorer');
+		setContextMenuRecent(null);
 		setContextMenu({
 			kind: 'folder',
 			path: activeRoot.path,
@@ -1229,7 +1285,121 @@ function App() {
 		event.preventDefault();
 		event.stopPropagation();
 		setContextMenu(null);
+		setExplorerHeaderMenu(null);
+		setSourcesHeaderMenu(null);
 		setSavedMenu({ location, x: event.clientX, y: event.clientY });
+	}
+
+	function openExplorerHeaderContextMenu(event: ReactMouseEvent) {
+		if (!activeRoot) {
+			return;
+		}
+		event.preventDefault();
+		event.stopPropagation();
+		setDraft(null);
+		setContextMenu(null);
+		setContextMenuRecent(null);
+		setContextMenuVariant('explorer');
+		setSavedMenu(null);
+		setSourcesHeaderMenu(null);
+		setExplorerHeaderMenu({ x: event.clientX, y: event.clientY });
+	}
+
+	function openSourcesHeaderContextMenu(event: ReactMouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+		setDraft(null);
+		setContextMenu(null);
+		setContextMenuRecent(null);
+		setContextMenuVariant('explorer');
+		setSavedMenu(null);
+		setExplorerHeaderMenu(null);
+		setSourcesHeaderMenu({ x: event.clientX, y: event.clientY });
+	}
+
+	function toggleExplorerHeaderAction(action: keyof ExplorerHeaderActionsVisibility) {
+		setExplorerHeaderActionsVisible((current) => ({
+			...current,
+			[action]: !current[action],
+		}));
+	}
+
+	function toggleSourcesHeaderAction(action: keyof SourcesHeaderActionsVisibility) {
+		setSourcesHeaderActionsVisible((current) => ({
+			...current,
+			[action]: !current[action],
+		}));
+	}
+
+	async function handleExplorerHeaderMenuAction(action: ExplorerHeaderMenuAction) {
+		setExplorerHeaderMenu(null);
+		const targetFolder = getCreateTargetFolder();
+
+		try {
+			switch (action) {
+				case 'new-file':
+					if (targetFolder) {
+						await startCreateDraft(targetFolder, 'file');
+					}
+					break;
+				case 'new-folder':
+					if (targetFolder) {
+						await startCreateDraft(targetFolder, 'folder');
+					}
+					break;
+				case 'refresh':
+					if (activeRoot) {
+						await refreshFolder(activeRoot.path);
+					}
+					break;
+				case 'toggle-new-file':
+					toggleExplorerHeaderAction('newFile');
+					break;
+				case 'toggle-new-folder':
+					toggleExplorerHeaderAction('newFolder');
+					break;
+				case 'toggle-refresh':
+					toggleExplorerHeaderAction('refresh');
+					break;
+				default:
+					break;
+			}
+		} catch (cause) {
+			setError(`${String(cause)}`);
+		}
+	}
+
+	function handleSourcesHeaderMenuAction(action: SourcesHeaderMenuAction) {
+		setSourcesHeaderMenu(null);
+
+		switch (action) {
+			case 'switch-explorer':
+				setSidebarMode('explorer');
+				break;
+			case 'switch-search':
+				setSidebarMode('search');
+				break;
+			case 'switch-outline':
+				setSidebarMode('outline');
+				break;
+			case 'toggle-root-pin':
+				toggleRootPin();
+				break;
+			case 'open-folder':
+				void openFolderAsRoot();
+				break;
+			case 'toggle-search':
+				toggleSourcesHeaderAction('search');
+				break;
+			case 'toggle-outline':
+				toggleSourcesHeaderAction('outline');
+				break;
+			case 'toggle-pin':
+				toggleSourcesHeaderAction('pin');
+				break;
+			default:
+				break;
+		}
 	}
 
 	// Add a folder to the Saved list. Re-pinning a previously removed default
@@ -1466,16 +1636,24 @@ function App() {
 		);
 	}
 
+	function defaultCreateName(rawName: string, kind: 'file' | 'folder') {
+		if (kind === 'folder') {
+			return rawName || 'New Folder';
+		}
+		return !rawName || rawName.toLowerCase() === '.md' ? 'New File.md' : rawName;
+	}
+
 	async function submitDraft(rawValue: string) {
 		const current = draft;
 		if (!current) {
 			return;
 		}
 
-		const name = rawValue.trim();
+		const rawName = rawValue.trim();
+		const name = current.mode === 'create' ? defaultCreateName(rawName, current.kind) : rawName;
 		setDraft(null);
 
-		// Empty or unchanged-on-rename: treat as cancel.
+		// Empty rename remains a cancel; empty creates use the default name above.
 		if (!name) {
 			return;
 		}
@@ -2027,6 +2205,8 @@ function App() {
 						searchError={searchError}
 						searchTruncated={searchTruncated}
 						rootRefreshing={activeRoot ? loadingPaths.has(activeRoot.path) : false}
+						explorerHeaderActionsVisible={explorerHeaderActionsVisible}
+						sourcesHeaderActionsVisible={sourcesHeaderActionsVisible}
 						outlineHtml={openFile?.kind === 'md' ? renderedMarkdown : null}
 						hasOpenFile={Boolean(openFile)}
 						showOutlineTab={!outlinePanelVisible}
@@ -2041,6 +2221,20 @@ function App() {
 								void refreshFolder(activeRoot.path);
 							}
 						}}
+						onCreateRootFile={() => {
+							const targetFolder = getCreateTargetFolder();
+							if (targetFolder) {
+								void startCreateDraft(targetFolder, 'file');
+							}
+						}}
+						onCreateRootFolder={() => {
+							const targetFolder = getCreateTargetFolder();
+							if (targetFolder) {
+								void startCreateDraft(targetFolder, 'folder');
+							}
+						}}
+						onExplorerHeaderContextMenu={openExplorerHeaderContextMenu}
+						onSourcesHeaderContextMenu={openSourcesHeaderContextMenu}
 						onSelectLocation={selectLocation}
 						onToggleFolder={toggleFolder}
 						onSelectFile={selectFile}
@@ -2180,6 +2374,29 @@ function App() {
 						setContextMenuRecent(null);
 						setContextMenuVariant('explorer');
 					}}
+				/>
+			) : null}
+
+			{explorerHeaderMenu ? (
+				<ExplorerHeaderContextMenu
+					x={explorerHeaderMenu.x}
+					y={explorerHeaderMenu.y}
+					visibleActions={explorerHeaderActionsVisible}
+					onAction={(action) => void handleExplorerHeaderMenuAction(action)}
+					onClose={() => setExplorerHeaderMenu(null)}
+				/>
+			) : null}
+
+			{sourcesHeaderMenu ? (
+				<SourcesHeaderContextMenu
+					x={sourcesHeaderMenu.x}
+					y={sourcesHeaderMenu.y}
+					visibleActions={sourcesHeaderActionsVisible}
+					showOutlineAction={!outlinePanelVisible}
+					rootPinned={activeRoot ? !isPinnable(activeRoot.path) : false}
+					rootPinDisabled={!activeRoot || !isUnpinnable(activeRoot)}
+					onAction={handleSourcesHeaderMenuAction}
+					onClose={() => setSourcesHeaderMenu(null)}
 				/>
 			) : null}
 

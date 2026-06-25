@@ -12,6 +12,30 @@ export interface StoredWindowFrame {
 
 export type AppTheme = "dark" | "light";
 
+export interface ExplorerHeaderActionsVisibility {
+  newFile: boolean;
+  newFolder: boolean;
+  refresh: boolean;
+}
+
+export interface SourcesHeaderActionsVisibility {
+  search: boolean;
+  outline: boolean;
+  pin: boolean;
+}
+
+export const DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE: ExplorerHeaderActionsVisibility = {
+  newFile: true,
+  newFolder: true,
+  refresh: true,
+};
+
+export const DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE: SourcesHeaderActionsVisibility = {
+  search: true,
+  outline: true,
+  pin: true,
+};
+
 /** The last file opened within a recent root, if any. */
 export interface RecentFile {
   path: string;
@@ -78,6 +102,10 @@ export interface AppConfigurationState {
   userName?: string;
   /** Recently opened files and roots, newest first, capped at MAX_RECENTS. */
   recents?: RecentItem[];
+  /** Visibility of compact action buttons in the Explorer section header. */
+  explorerHeaderActionsVisible?: ExplorerHeaderActionsVisibility;
+  /** Visibility of optional buttons in the Sources header. */
+  sourcesHeaderActionsVisible?: SourcesHeaderActionsVisibility;
 }
 
 export interface AppSessionState {
@@ -189,6 +217,34 @@ function readEntryArray(value: unknown): Entry[] {
 
 function readBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function readExplorerHeaderActionsVisibility(
+  value: unknown,
+): ExplorerHeaderActionsVisibility | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    newFile: readBoolean(value.newFile) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFile,
+    newFolder: readBoolean(value.newFolder) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFolder,
+    refresh: readBoolean(value.refresh) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.refresh,
+  };
+}
+
+function readSourcesHeaderActionsVisibility(
+  value: unknown,
+): SourcesHeaderActionsVisibility | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    search: readBoolean(value.search) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.search,
+    outline: readBoolean(value.outline) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.outline,
+    pin: readBoolean(value.pin) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.pin,
+  };
 }
 
 function readRecentKind(value: unknown): Exclude<EntryKind, "folder"> | undefined {
@@ -395,6 +451,12 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
     onboardingCompleted: readBoolean(record.onboardingCompleted),
     userName: readString(record.userName),
     recents: readRecents(record.recents),
+    explorerHeaderActionsVisible: readExplorerHeaderActionsVisibility(
+      record.explorerHeaderActionsVisible,
+    ),
+    sourcesHeaderActionsVisible: readSourcesHeaderActionsVisibility(
+      record.sourcesHeaderActionsVisible,
+    ),
   };
 }
 

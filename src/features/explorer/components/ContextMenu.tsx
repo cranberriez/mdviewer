@@ -1,269 +1,67 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
-  Copy,
-  CornerUpLeft,
-  FilePlus,
-  FolderPlus,
-  Link2,
-  Pencil,
-  Pin,
-  Scissors,
-  SquareArrowOutUpRight,
-  TerminalSquare,
-  Trash2,
-  X,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+	ContextMenuSurface,
+	type MenuEntry,
+	type MenuItem,
+	type MenuSeparator,
+	isSeparator,
+} from './context-menu/ContextMenuSurface';
+import {
+	entriesForTreeContext,
+	type ContextMenuAction,
+	type ContextMenuTargetKind,
+	type ContextMenuVariant,
+} from './context-menu/treeContextMenuEntries';
 
-export type ContextMenuTargetKind = "folder" | "file";
+export type {
+	ContextMenuAction,
+	ContextMenuTargetKind,
+	ContextMenuVariant,
+	MenuEntry,
+	MenuItem,
+	MenuSeparator,
+};
+
+export { isSeparator };
 
 export interface ContextMenuTarget {
-  kind: ContextMenuTargetKind;
-  path: string;
-  name: string;
-  /** Anchor coordinates (viewport pixels) where the menu should open. */
-  x: number;
-  y: number;
-}
-
-export type ContextMenuAction =
-  | "new-file"
-  | "new-folder"
-  | "pin"
-  | "open"
-  | "reveal"
-  | "copy-path"
-  | "copy-relative-path"
-  | "rename"
-  | "delete"
-  | "remove-recent";
-
-interface MenuItem {
-  id: ContextMenuAction;
-  label: string;
-  icon: LucideIcon;
-  shortcut?: string;
-  danger?: boolean;
-  disabled?: boolean;
-}
-
-interface MenuSeparator {
-  separator: true;
-}
-
-type MenuEntry = MenuItem | MenuSeparator;
-
-function isSeparator(entry: MenuEntry): entry is MenuSeparator {
-  return "separator" in entry;
-}
-
-// Items that are part of the mockup but not yet wired up. Shown disabled so the
-// remaining work is visible in the UI.
-const PENDING_CUT: MenuItem = {
-  id: "copy-path",
-  label: "Cut",
-  icon: Scissors,
-  shortcut: "Ctrl+X",
-  disabled: true,
-};
-const PENDING_COPY: MenuItem = {
-  id: "copy-path",
-  label: "Copy",
-  icon: Copy,
-  shortcut: "Ctrl+C",
-  disabled: true,
-};
-
-const COMMON_TAIL: MenuEntry[] = [
-  PENDING_CUT,
-  PENDING_COPY,
-  { separator: true },
-  { id: "copy-path", label: "Copy Path", icon: Link2, shortcut: "Shift+Alt+C" },
-  {
-    id: "copy-relative-path",
-    label: "Copy Relative Path",
-    icon: Link2,
-    shortcut: "Ctrl+K Ctrl+Shift+C",
-  },
-  { separator: true },
-  { id: "rename", label: "Rename…", icon: Pencil, shortcut: "F2" },
-  { id: "delete", label: "Delete", icon: Trash2, shortcut: "Del", danger: true },
-];
-
-/** Where the menu was opened from, which trims the available actions. */
-export type ContextMenuVariant = "explorer" | "recent-file" | "recent-root";
-
-const REMOVE_RECENT: MenuItem = {
-  id: "remove-recent",
-  label: "Remove from Recent",
-  icon: X,
-};
-
-function entriesFor(kind: ContextMenuTargetKind, canPin: boolean, variant: ContextMenuVariant): MenuEntry[] {
-  // Recent files: open, reveal, copy path, rename, delete, remove-from-recent.
-  if (variant === "recent-file") {
-    return [
-      { id: "open", label: "Open", icon: SquareArrowOutUpRight, shortcut: "Enter" },
-      { separator: true },
-      { id: "reveal", label: "Reveal in File Explorer", icon: CornerUpLeft },
-      { id: "copy-path", label: "Copy Path", icon: Link2 },
-      { separator: true },
-      { id: "rename", label: "Rename…", icon: Pencil },
-      { id: "delete", label: "Delete", icon: Trash2, danger: true },
-      { separator: true },
-      REMOVE_RECENT,
-    ];
-  }
-
-  // Recent roots: deliberately limited — remove-from-recent, rename, delete.
-  if (variant === "recent-root") {
-    return [
-      { id: "reveal", label: "Reveal in File Explorer", icon: CornerUpLeft },
-      { id: "copy-path", label: "Copy Path", icon: Link2 },
-      { separator: true },
-      { id: "rename", label: "Rename…", icon: Pencil },
-      { id: "delete", label: "Delete", icon: Trash2, danger: true },
-      { separator: true },
-      REMOVE_RECENT,
-    ];
-  }
-
-  if (kind === "folder") {
-    return [
-      { id: "new-file", label: "New File…", icon: FilePlus },
-      { id: "new-folder", label: "New Folder…", icon: FolderPlus },
-      { separator: true },
-      ...(canPin
-        ? ([{ id: "pin", label: "Pin Folder", icon: Pin }, { separator: true }] as MenuEntry[])
-        : []),
-      { id: "reveal", label: "Reveal in File Explorer", icon: CornerUpLeft, shortcut: "Shift+Alt+R" },
-      {
-        id: "open",
-        label: "Open in Terminal",
-        icon: TerminalSquare,
-        disabled: true,
-      },
-      { separator: true },
-      ...COMMON_TAIL,
-    ];
-  }
-
-  return [
-    { id: "open", label: "Open", icon: SquareArrowOutUpRight, shortcut: "Enter" },
-    { separator: true },
-    { id: "reveal", label: "Reveal in File Explorer", icon: CornerUpLeft, shortcut: "Shift+Alt+R" },
-    { separator: true },
-    ...COMMON_TAIL,
-  ];
+	kind: ContextMenuTargetKind;
+	path: string;
+	name: string;
+	/** Anchor coordinates (viewport pixels) where the menu should open. */
+	x: number;
+	y: number;
 }
 
 interface ContextMenuProps {
-  target: ContextMenuTarget;
-  /** Whether the "Pin Folder" item should appear (folders not already pinned). */
-  canPin?: boolean;
-  /** Origin of the menu, which trims the action set. Defaults to "explorer". */
-  variant?: ContextMenuVariant;
-  onAction: (action: ContextMenuAction, target: ContextMenuTarget) => void;
-  onClose: () => void;
+	target: ContextMenuTarget;
+	/** Whether the "Pin Folder" item should appear (folders not already pinned). */
+	canPin?: boolean;
+	/** Origin of the menu, which trims the action set. Defaults to "explorer". */
+	variant?: ContextMenuVariant;
+	onAction: (action: ContextMenuAction, target: ContextMenuTarget) => void;
+	onClose: () => void;
 }
 
-const VIEWPORT_PADDING = 8;
+export function ContextMenu({
+	target,
+	canPin = false,
+	variant = 'explorer',
+	onAction,
+	onClose,
+}: ContextMenuProps) {
+	const entries = entriesForTreeContext({
+		kind: target.kind,
+		canPin,
+		variant,
+	});
 
-export function ContextMenu({ target, canPin = false, variant = "explorer", onAction, onClose }: ContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState({ x: target.x, y: target.y });
-  const [ready, setReady] = useState(false);
-
-  // Measure and clamp to the viewport before showing.
-  useLayoutEffect(() => {
-    const menu = menuRef.current;
-    if (!menu) {
-      return;
-    }
-
-    const { offsetWidth: width, offsetHeight: height } = menu;
-    let x = target.x;
-    let y = target.y;
-
-    if (x + width + VIEWPORT_PADDING > window.innerWidth) {
-      x = Math.max(VIEWPORT_PADDING, window.innerWidth - width - VIEWPORT_PADDING);
-    }
-    if (y + height + VIEWPORT_PADDING > window.innerHeight) {
-      y = Math.max(VIEWPORT_PADDING, window.innerHeight - height - VIEWPORT_PADDING);
-    }
-
-    setPosition({ x, y });
-    setReady(true);
-  }, [target.x, target.y, target.path]);
-
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        onClose();
-      }
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    }
-
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("contextmenu", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("blur", onClose);
-    window.addEventListener("resize", onClose);
-
-    return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("contextmenu", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("blur", onClose);
-      window.removeEventListener("resize", onClose);
-    };
-  }, [onClose]);
-
-  const entries = entriesFor(target.kind, canPin, variant);
-
-  return createPortal(
-    <div
-      ref={menuRef}
-      className={`ctx-menu ${ready ? "show" : ""}`}
-      role="menu"
-      style={{ left: position.x, top: position.y }}
-    >
-      {entries.map((entry, index) => {
-        if (isSeparator(entry)) {
-          // eslint-disable-next-line react/no-array-index-key
-          return <div key={`sep-${index}`} className="ctx-sep" />;
-        }
-
-        const Icon = entry.icon;
-        return (
-          <button
-            key={`${entry.label}-${index}`}
-            type="button"
-            role="menuitem"
-            className={`ctx-item ${entry.danger ? "danger" : ""}`}
-            disabled={entry.disabled}
-            onClick={() => {
-              if (entry.disabled) {
-                return;
-              }
-              onAction(entry.id, target);
-              onClose();
-            }}
-          >
-            <span className="ci-ico">
-              <Icon size={15} />
-            </span>
-            <span className="ci-label">{entry.label}</span>
-            {entry.shortcut ? <span className="ci-key">{entry.shortcut}</span> : null}
-          </button>
-        );
-      })}
-    </div>,
-    document.body,
-  );
+	return (
+		<ContextMenuSurface
+			x={target.x}
+			y={target.y}
+			entries={entries}
+			onSelect={(action) => onAction(action, target)}
+			onClose={onClose}
+		/>
+	);
 }
