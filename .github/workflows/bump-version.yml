@@ -1,0 +1,131 @@
+name: Bump Version on PR Merge
+
+on:
+  pull_request:
+    types:
+      - closed
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    name: Bump patch version
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Need full history + ability to push back
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine new version
+        id: version
+        run: |
+          TARGET_BRANCH="${{ github.base_ref }}"
+          CURRENT=$(grep -m1 '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          if [[ "$TARGET_BRANCH" =~ ^v([0-9]+)\.([0-9]+)(\.([0-9]+))?$ ]]; then
+            BRANCH_MAJOR="${BASH_REMATCH[1]}"
+            BRANCH_MINOR="${BASH_REMATCH[2]}"
+            BRANCH_PATCH="${BASH_REMATCH[4]}"
+            if [[ -n "$BRANCH_PATCH" ]]; then
+              MAJOR="$BRANCH_MAJOR"
+              MINOR="$BRANCH_MINOR"
+              PATCH=$((BRANCH_PATCH + 1))
+            elif [[ "$BRANCH_MAJOR" != "$MAJOR" || "$BRANCH_MINOR" != "$MINOR" ]]; then
+              # Moved to a new major.minor branch; reset patch to 1
+              MAJOR="$BRANCH_MAJOR"
+              MINOR="$BRANCH_MINOR"
+              PATCH=1
+            else
+              PATCH=$((PATCH + 1))
+            fi
+          else
+            # Non-versioned branch (e.g. main); just bump patch
+            PATCH=$((PATCH + 1))
+          fi
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "new=$NEW_VERSION"  >> "$GITHUB_OUTPUT"
+
+      - name: Update version files
+        run: |
+          CURRENT="${{ steps.version.outputs.current }}"
+          NEW="${{ steps.version.outputs.new }}"
+
+          # package.json — first "version" field only
+          sed -i "0,/\"version\": *\"$CURRENT\"/s/\"version\": *\"$CURRENT\"/\"version\": \"$NEW\"/" package.json
+
+          # Cargo.toml — first bare version = "..." line
+          sed -i "0,/^version = \"$CURRENT\"/s/^version = \"$CURRENT\"/version = \"$NEW\"/" src-tauri/Cargo.toml
+
+          # tauri.conf.json — first "version" field only
+          sed -i "0,/\"version\": *\"$CURRENT\"/s/\"version\": *\"$CURRENT\"/\"version\": \"$NEW\"/" src-tauri/tauri.conf.json
+
+      - name: Verify all three files agree
+        run: |
+          NEW="${{ steps.version.outputs.new }}"
+          PKG=$(grep -m1 '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          CARGO=$(grep -m1 '^version' src-tauri/Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          TAURI=$(grep -m1 '"version"' src-tauri/tauri.conf.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+
+          if [[ "$PKG" != "$NEW" || "$CARGO" != "$NEW" || "$TAURI" != "$NEW" ]]; then
+            echo "Version mismatch!"
+            echo "  package.json:    $PKG"
+            echo "  Cargo.toml:      $CARGO"
+            echo "  tauri.conf.json: $TAURI"
+            exit 1
+          fi
+          echo "All files verified at $NEW ✓"
+
+      - name: Commit and push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
+          git commit -m "chore: bump version to ${{ steps.version.outputs.new }}"
+          git push origin HEAD:${{ github.base_ref }}
+
+  tag-release:
+    name: Tag release from versioned PR
+    # Fires when a PR named v#.#.# is merged into main
+    if: |
+      github.event.pull_request.merged == true &&
+      github.base_ref == 'main' &&
+      startsWith(github.event.pull_request.head.ref, 'v') &&
+      contains(github.event.pull_request.head.ref, '.')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR branch name is v#.#.#
+        id: tag
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          if [[ "$BRANCH" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+            echo "Tag to create: $BRANCH"
+          else
+            echo "Branch '$BRANCH' does not match v#.#.# — skipping tag."
+            echo "name=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.tag.outputs.name != ''
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push tag
+        if: steps.tag.outputs.name != ''
+        run: |
+          TAG="${{ steps.tag.outputs.name }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG" "${{ github.event.pull_request.merge_commit_sha }}"
+          git push origin "$TAG"
+          echo "Tagged ${{ github.event.pull_request.merge_commit_sha }} as $TAG"

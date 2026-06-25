@@ -3,7 +3,7 @@ import { FileText, FolderOpen, FolderPlus, Home as HomeIcon, Settings } from "lu
 import type { LucideIcon } from "lucide-react";
 import * as Icons from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
-import type { RecentItem } from "../../../shared/state/persistence";
+import { recentItemKind, type RecentItem } from "../../../shared/state/persistence";
 
 interface HomeViewProps {
   /** Greeting name (from onboarding); empty falls back to "Welcome back". */
@@ -22,6 +22,8 @@ interface HomeViewProps {
   onLocationContextMenu: (location: Entry, event: ReactMouseEvent) => void;
   onRecentContextMenu: (item: RecentItem, event: ReactMouseEvent) => void;
   onEditSetup: () => void;
+  /** True while an OS file/folder drag is hovering the Home screen. */
+  dropActive?: boolean;
 }
 
 function comparable(path: string) {
@@ -48,11 +50,12 @@ export function HomeView({
   onLocationContextMenu,
   onRecentContextMenu,
   onEditSetup,
+  dropActive,
 }: HomeViewProps) {
   const greeting = userName?.trim() ? `Welcome back, ${userName.trim()}` : "Welcome back";
 
   return (
-    <div className="home">
+    <div className={`home ${dropActive ? "drop-active" : ""}`} data-drop-zone="home">
       <div className="home-inner">
         <div className="home-head">
           <div className="home-logo">
@@ -102,27 +105,30 @@ export function HomeView({
               <p className="home-empty">Files and folders you open will show up here.</p>
             ) : (
               <div className="home-recents">
-                {recents.map((item, index) => (
-                  <button
-                    key={item.path}
-                    type="button"
-                    className={`home-recent ${index === 0 ? "first" : ""}`}
-                    title={item.lastFile ? `${item.path}\n${item.lastFile.path}` : item.path}
-                    onClick={() => onOpenRecent(item)}
-                    onContextMenu={(event) => onRecentContextMenu(item, event)}
-                  >
-                    <span className="home-recent-ico">
-                      <FolderOpen size={15} />
-                    </span>
-                    <span className="home-recent-name">{item.name}</span>
-                    {item.lastFile ? (
-                      <span className="home-recent-file">
-                        <FileText size={12} />
-                        {item.lastFile.name}
+                {recents.map((item, index) => {
+                  const isFile = recentItemKind(item) === "file";
+                  return (
+                    <button
+                      key={`${isFile ? "file" : "root"}:${item.path}`}
+                      type="button"
+                      className={`home-recent ${index === 0 ? "first" : ""}`}
+                      title={item.lastFile ? `${item.path}\n${item.lastFile.path}` : item.path}
+                      onClick={() => onOpenRecent(item)}
+                      onContextMenu={(event) => onRecentContextMenu(item, event)}
+                    >
+                      <span className="home-recent-ico">
+                        {isFile ? <FileText size={15} /> : <FolderOpen size={15} />}
                       </span>
-                    ) : null}
-                  </button>
-                ))}
+                      <span className="home-recent-name">{item.name}</span>
+                      {item.lastFile ? (
+                        <span className="home-recent-file">
+                          <FileText size={12} />
+                          {item.lastFile.name}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </section>

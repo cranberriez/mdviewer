@@ -21,6 +21,11 @@
   --color-accent-primary: #8bc5ff;
   --color-accent-primary-strong: #4aa8ff;
 
+  /* Warning (e.g. file dragged in from outside the active root). Dark theme uses
+     a soft amber; light theme overrides with a much deeper amber for contrast. */
+  --color-warning: #e6c07b;
+  --color-warning-text: #e6c07b;
+
   --radius-win: 12px;
   --radius-card: 12px;
   --radius-ctl: 6px;
@@ -92,6 +97,9 @@ body.theme-light {
   --color-text-on-active: #000000;
   --color-accent-primary: #1677d2;
   --color-accent-primary-strong: #0069c9;
+  /* Deep amber so the warning pill stays legible on the light surface. */
+  --color-warning: #a86412;
+  --color-warning-text: #8a4f08;
 }
 
 /* Custom scrollbars to match the dark, flat aesthetic */
