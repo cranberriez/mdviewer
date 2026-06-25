@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
 import {
+  copyPath,
   createFile,
   createFolder,
   defaultLocations,
   deletePath,
+  movePath,
   pickFolder,
   readFile,
   readFolder,
@@ -34,6 +36,9 @@ import { slugify } from "./features/preview/slug";
 import { PreviewPanel } from "./features/preview/components/PreviewPanel";
 import { FloatingOutlinePanel } from "./features/outline/components/FloatingOutlinePanel";
 import { TitleBar } from "./features/window-chrome/components/TitleBar";
+import { useFileDrop, type DropMode, type DropTarget } from "./features/dnd/useFileDrop";
+import { MainDropOverlay } from "./features/dnd/MainDropOverlay";
+import { TreeDropBadge } from "./features/dnd/TreeDropBadge";
 import { HomeView } from "./features/home/components/HomeView";
 import { OnboardingView, type OnboardingResult } from "./features/home/components/OnboardingView";
 import type { Entry, FileSearchMatch, OpenFile } from "./shared/types/files";
@@ -745,6 +750,169 @@ function App() {
       setError(`Unable to open link: ${String(cause)}`);
     }
   }
+
+  // --- Drag and drop ---------------------------------------------------------
+  // Resolve the DOM element under the OS drag cursor into a logical drop target.
+  // Tree rows carry data-drop-* markers; the main content area is data-drop-zone
+  // "main". A drop onto a file row targets that file's parent folder.
+  const resolveDropTarget = useCallback(
+    (element: Element | null): DropTarget | null => {
+      if (!element) {
+        return null;
+      }
+
+      const zone = element.closest<HTMLElement>("[data-drop-zone]");
+      if (!zone) {
+        return null;
+      }
+
+      const kind = zone.getAttribute("data-drop-zone");
+
+      if (kind === "tree") {
+        const path = zone.getAttribute("data-drop-path") ?? "";
+        const isDir = zone.getAttribute("data-drop-isdir") === "1";
+        // Folder row → into that folder; file row → into its parent folder.
+        const destDir = isDir ? path : parentPath(path);
+        if (!destDir) {
+          return null;
+        }
+        return { kind: "tree-folder", destDir, label: fileName(destDir) || destDir };
+      }
+
+      if (kind === "tree-blank") {
+        const rootPath = zone.getAttribute("data-drop-path") ?? activeRoot?.path ?? "";
+        if (!rootPath) {
+          return null;
+        }
+        return { kind: "tree-root", destDir: rootPath, label: fileName(rootPath) || "root" };
+      }
+
+      if (kind === "main") {
+        // The action depends on what is being dragged (file vs folder); that is
+        // decided at drop time from the dragged paths. Default to a file open
+        // target for the hover overlay; refined in onMainDrop.
+        return { kind: "main-file", destDir: "", label: "" };
+      }
+
+      return null;
+    },
+    [activeRoot?.path],
+  );
+
+  // Apply a copy/move of dropped paths into a tree folder, then refresh it and
+  // surface any per-item errors together.
+  const handleTreeDrop = useCallback(
+    async (paths: string[], target: DropTarget, dropMode: DropMode) => {
+      setError(null);
+      const errors: string[] = [];
+
+      for (const source of paths) {
+        try {
+          if (dropMode === "copy") {
+            await copyPath(source, target.destDir);
+          } else {
+            await movePath(source, target.destDir);
+          }
+        } catch (cause) {
+          errors.push(`${fileName(source)}: ${String(cause)}`);
+        }
+      }
+
+      // Refresh the destination folder so new items show up. Moves also change
+      // the source folders, so refresh each distinct source parent too.
+      await refreshFolder(target.destDir);
+      if (dropMode === "move") {
+        const sourceParents = new Set(paths.map((path) => parentPath(path)));
+        for (const parent of sourceParents) {
+          if (parent && comparablePath(parent) !== comparablePath(target.destDir) && childrenCache[parent]) {
+            await refreshFolder(parent);
+          }
+        }
+      }
+
+      if (errors.length > 0) {
+        setError(errors.length === 1 ? `Couldn't ${dropMode} ${errors[0]}` : `Couldn't ${dropMode} ${errors.length} items:\n${errors.join("\n")}`);
+      }
+    },
+    [childrenCache],
+  );
+
+  // A file dropped on the main content area opens directly (from any path).
+  const handleMainOpenFile = useCallback(
+    async (path: string) => {
+      if (isVisibleFileName(path)) {
+        setOverlay(null);
+        await openFileAtPath(path);
+      } else {
+        // Not a viewer-supported file — hand it to the OS so e.g. images/PDFs open.
+        try {
+          await openPath(path);
+        } catch (cause) {
+          setError(`Unable to open: ${String(cause)}`);
+        }
+      }
+    },
+    [],
+  );
+
+  // A folder dropped on the main content area becomes the new active root.
+  const handleMainSetRoot = useCallback(async (path: string) => {
+    const location: Entry = { name: fileName(path) || path, path, is_dir: true, kind: "folder" };
+    await selectLocation(location);
+  }, []);
+
+  // Route a main-area drop by whether the first dragged path is a folder. We
+  // can't stat in the resolver, so the actual file-vs-folder decision is made
+  // here. The hook calls onOpenFile for main-file targets; we override when the
+  // path turns out to be a directory.
+  const handleMainDrop = useCallback(
+    async (firstPath: string) => {
+      // Heuristic: a path without a visible-file extension and no "." in its
+      // basename is treated as a folder. To be robust we ask Rust to read it as
+      // a folder; readFolder succeeds for directories and throws for files.
+      try {
+        await readFolder(firstPath);
+        await handleMainSetRoot(firstPath);
+      } catch {
+        await handleMainOpenFile(firstPath);
+      }
+    },
+    [handleMainOpenFile, handleMainSetRoot],
+  );
+
+  const dropState = useFileDrop({
+    activeRootPath: activeRoot?.path ?? null,
+    resolveTarget: resolveDropTarget,
+    onTreeDrop: (paths, target, dropMode) => void handleTreeDrop(paths, target, dropMode),
+    onOpenFile: (path) => void handleMainDrop(path),
+    onSetRoot: (path) => void handleMainSetRoot(path),
+  });
+
+  // The folder path the tree should highlight while dragging (resolved dest).
+  const treeDropTargetPath = dropState.target?.kind === "tree-folder" ? dropState.target.destDir : null;
+  const rootDropActive = dropState.target?.kind === "tree-root";
+
+  // Refine the main-area overlay so it previews the right action without an
+  // async stat: a first path that looks like a folder (no visible file
+  // extension) is shown as "set as root", otherwise as "open file". The real
+  // decision still happens in handleMainDrop via readFolder.
+  const mainDropTarget = useMemo<DropTarget | null>(() => {
+    if (dropState.target?.kind !== "main-file" && dropState.target?.kind !== "main-folder") {
+      return dropState.target;
+    }
+    const firstPath = dropState.paths[0];
+    if (!firstPath) {
+      return dropState.target;
+    }
+    const looksLikeFolder = !isVisibleFileName(firstPath) && fileExtension(firstPath) === "";
+    return looksLikeFolder
+      ? { kind: "main-folder", destDir: firstPath, label: fileName(firstPath) || firstPath }
+      : { kind: "main-file", destDir: "", label: fileName(firstPath) };
+  }, [dropState.target, dropState.paths]);
+
+  // For the main overlay, flag when the single dragged file lives outside root.
+  const mainDropOutsideRoot =
+    mainDropTarget?.kind === "main-file" && dropState.paths[0] && activeRoot ? !containsPath(activeRoot.path, dropState.paths[0]) : false;
 
   async function selectLocation(location: Entry) {
     setActiveRoot(location);
@@ -1663,6 +1831,8 @@ function App() {
             onToggleRootPin={toggleRootPin}
             onDraftSubmit={submitDraft}
             onDraftCancel={cancelDraft}
+            dropTargetPath={treeDropTargetPath}
+            rootDropActive={rootDropActive}
             locationIcons={locationIcons}
             homePath={homePath}
             theme={theme}
@@ -1697,6 +1867,7 @@ function App() {
                 />
               ) : null
             }
+            dropOverlay={<MainDropOverlay target={mainDropTarget} outsideRoot={mainDropOutsideRoot} count={dropState.paths.length} />}
             actionBar={
               openFile && (formatControls || !barMerged) ? (
                 <FileActionBar>
@@ -1744,6 +1915,8 @@ function App() {
           onSkip={skipOnboarding}
         />
       ) : null}
+
+      <TreeDropBadge target={dropState.target} mode={dropState.mode} count={dropState.paths.length} />
 
       {contextMenu ? (
         <ContextMenu

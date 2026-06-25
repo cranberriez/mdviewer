@@ -23,6 +23,8 @@ interface TreeNodeProps {
   unsavedFilePathKeys: Set<string>;
   contextPath?: string;
   focusedPath?: string;
+  /** Folder path currently highlighted as the active drop target, if any. */
+  dropTargetPath?: string | null;
   draft: InlineDraft | null;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
@@ -42,6 +44,7 @@ export function TreeNode({
   unsavedFilePathKeys,
   contextPath,
   focusedPath,
+  dropTargetPath,
   draft,
   onToggleFolder,
   onSelectFile,
@@ -58,6 +61,10 @@ export function TreeNode({
   const isActive = isActiveFile;
   const isContextTarget = contextPath === entry.path;
   const isFocused = focusedPath === entry.path;
+  // Highlight a folder row while files are being dragged onto it (the row that
+  // will receive the drop). File rows resolve to their parent folder, so they
+  // don't show the ring themselves.
+  const isDropTarget = entry.is_dir && dropTargetPath != null && dropTargetPath === entry.path;
 
   const isRenaming = draft?.mode === "rename" && draft.targetPath === entry.path;
   const childDraft =
@@ -106,9 +113,12 @@ export function TreeNode({
       <button
         ref={rowRef}
         type="button"
-        className={`tree-row ${isActive ? "active" : ""} ${isContextTarget ? "context-target" : ""} ${isUnsavedFile ? "unsaved-file" : ""}`}
+        className={`tree-row ${isActive ? "active" : ""} ${isContextTarget ? "context-target" : ""} ${isUnsavedFile ? "unsaved-file" : ""} ${isDropTarget ? "drop-target" : ""}`}
         style={{ paddingLeft: TREE_BASE_INDENT + depth * TREE_DEPTH_INDENT }}
         tabIndex={isFocused ? 0 : -1}
+        data-drop-zone="tree"
+        data-drop-path={entry.path}
+        data-drop-isdir={entry.is_dir ? "1" : "0"}
         onClick={() =>
           entry.is_dir ? void onToggleFolder(entry) : void onSelectFile(entry)
         }
@@ -174,6 +184,7 @@ export function TreeNode({
                 unsavedFilePathKeys={unsavedFilePathKeys}
                 contextPath={contextPath}
                 focusedPath={focusedPath}
+                dropTargetPath={dropTargetPath}
                 draft={draft}
                 onToggleFolder={onToggleFolder}
                 onSelectFile={onSelectFile}

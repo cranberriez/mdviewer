@@ -38,6 +38,31 @@ export function deletePath(path: string) {
   return invoke<void>("delete_path", { path });
 }
 
+/**
+ * Copy a file/folder into a destination directory. Returns the final
+ * destination path (de-duplicated with a " (copy)" suffix on name collision).
+ */
+export function copyPath(source: string, destDir: string) {
+  return invoke<string>("copy_path", { source, destDir });
+}
+
+/**
+ * Move a file/folder into a destination directory. Returns the final
+ * destination path. No-ops if the item already lives in that directory.
+ */
+export function movePath(source: string, destDir: string) {
+  return invoke<string>("move_path", { source, destDir });
+}
+
+/**
+ * Whether Shift is currently held, read at the OS level so it stays accurate
+ * during a drag started from another window (where the webview gets no key
+ * events). Returns false on non-Windows platforms.
+ */
+export function shiftPressed() {
+  return invoke<boolean>("shift_pressed");
+}
+
 export function revealInExplorer(path: string) {
   return invoke<void>("reveal_in_explorer", { path });
 }

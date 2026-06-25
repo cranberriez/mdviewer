@@ -22,6 +22,8 @@ import { LexicalMarkdownEditor, type LexicalMarkdownEditorHandle } from './Lexic
 interface PreviewPanelProps {
 	/** Floating outline overlay, rendered into the content area's left gutter. */
 	outlinePanel: ReactNode;
+	/** Drag-and-drop overlay shown over the whole content area while dragging. */
+	dropOverlay: ReactNode;
 	actionBar: ReactNode;
 	error: string | null;
 	findBar: ReactNode;
@@ -63,6 +65,7 @@ function scrollCenterRatio(element: HTMLElement) {
 
 export function PreviewPanel({
 	outlinePanel,
+	dropOverlay,
 	actionBar,
 	error,
 	findBar,
@@ -472,7 +475,9 @@ export function PreviewPanel({
 			ref={contentRef}
 			className={`content ${showOutline ? 'has-outline-panel' : ''}`}
 			aria-label="Markdown preview"
+			data-drop-zone="main"
 		>
+			{dropOverlay}
 			{error ? <Notice tone="error">{error}</Notice> : null}
 
 			{openFile ? (

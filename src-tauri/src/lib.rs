@@ -274,6 +274,161 @@ fn delete_path(path: String) -> Result<(), String> {
     trash::delete(&path).map_err(|error| error.to_string())
 }
 
+/// Pick a non-clobbering destination path inside `dest_dir` for an item named
+/// `name`. If `name` already exists there, append " (copy)", then " (copy 2)",
+/// etc., preserving any file extension. Mirrors common file-manager behaviour so
+/// a drop never silently overwrites an existing entry.
+fn unique_destination(dest_dir: &Path, name: &str) -> PathBuf {
+    let first = dest_dir.join(name);
+    if !first.exists() {
+        return first;
+    }
+
+    // Split "stem.ext" so the suffix lands before the extension (only for files;
+    // a leading dot like ".gitignore" is treated as a full name, no extension).
+    let dot = name.rfind('.').filter(|index| *index > 0);
+    let (stem, ext) = match dot {
+        Some(index) => (&name[..index], &name[index..]),
+        None => (name, ""),
+    };
+
+    for counter in 1..10_000 {
+        let suffix = if counter == 1 {
+            " (copy)".to_string()
+        } else {
+            format!(" (copy {counter})")
+        };
+        let candidate = dest_dir.join(format!("{stem}{suffix}{ext}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+
+    // Extremely unlikely fallback.
+    dest_dir.join(name)
+}
+
+fn copy_dir_recursive(source: &Path, destination: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(destination).map_err(|error| error.to_string())?;
+
+    for item in std::fs::read_dir(source).map_err(|error| error.to_string())? {
+        let item = item.map_err(|error| error.to_string())?;
+        let from = item.path();
+        let to = destination.join(item.file_name());
+
+        if from.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else {
+            std::fs::copy(&from, &to).map_err(|error| error.to_string())?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Recursively copy a file or directory into a destination directory. Returns
+/// the final destination path (which may be de-duplicated with a " (copy)"
+/// suffix). Rejects copying a folder into itself or its own subtree.
+#[tauri::command]
+fn copy_path(source: String, dest_dir: String) -> Result<String, String> {
+    let source = PathBuf::from(&source);
+    let dest_dir = PathBuf::from(&dest_dir);
+
+    if !source.exists() {
+        return Err(format!("\"{}\" no longer exists", display_name(&source)));
+    }
+    if !dest_dir.is_dir() {
+        return Err(format!("\"{}\" is not a folder", dest_dir.display()));
+    }
+
+    let name = source
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "Invalid source name".to_string())?
+        .to_string();
+
+    let destination = unique_destination(&dest_dir, &name);
+
+    if source.is_dir() {
+        // Guard against copying a directory into itself or a descendant, which
+        // would otherwise recurse forever.
+        if dest_dir == source || dest_dir.starts_with(&source) {
+            return Err("Cannot copy a folder into itself".to_string());
+        }
+        copy_dir_recursive(&source, &destination)?;
+    } else {
+        std::fs::copy(&source, &destination).map_err(|error| error.to_string())?;
+    }
+
+    Ok(destination.display().to_string())
+}
+
+/// Move a file or folder into a destination directory. Returns the final
+/// destination path (de-duplicated with a " (copy)" suffix on name collision).
+/// No-ops successfully if the item is already directly inside `dest_dir`.
+#[tauri::command]
+fn move_path(source: String, dest_dir: String) -> Result<String, String> {
+    let source = PathBuf::from(&source);
+    let dest_dir = PathBuf::from(&dest_dir);
+
+    if !source.exists() {
+        return Err(format!("\"{}\" no longer exists", display_name(&source)));
+    }
+    if !dest_dir.is_dir() {
+        return Err(format!("\"{}\" is not a folder", dest_dir.display()));
+    }
+
+    // Already living directly in the destination: nothing to do.
+    if source.parent() == Some(dest_dir.as_path()) {
+        return Ok(source.display().to_string());
+    }
+
+    if source.is_dir() && (dest_dir == source || dest_dir.starts_with(&source)) {
+        return Err("Cannot move a folder into itself".to_string());
+    }
+
+    let name = source
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "Invalid source name".to_string())?
+        .to_string();
+
+    let destination = unique_destination(&dest_dir, &name);
+
+    // Try a fast rename first; fall back to copy-then-delete across filesystems
+    // / drives where std::fs::rename refuses to move.
+    if std::fs::rename(&source, &destination).is_err() {
+        if source.is_dir() {
+            copy_dir_recursive(&source, &destination)?;
+            std::fs::remove_dir_all(&source).map_err(|error| error.to_string())?;
+        } else {
+            std::fs::copy(&source, &destination).map_err(|error| error.to_string())?;
+            std::fs::remove_file(&source).map_err(|error| error.to_string())?;
+        }
+    }
+
+    Ok(destination.display().to_string())
+}
+
+/// Whether either Shift key is currently held down, read at the OS level so it
+/// works during a drag that originates from another (focused) window — where
+/// the webview receives no key events. Windows uses GetAsyncKeyState; other
+/// platforms return false and rely on the webview's keyboard listener instead.
+#[tauri::command]
+fn shift_pressed() -> bool {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_SHIFT};
+        // The high-order bit is set while the key is down.
+        unsafe { (GetAsyncKeyState(VK_SHIFT as i32) as u16 & 0x8000) != 0 }
+    }
+
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 /// Open the system file manager with the given path selected.
 #[tauri::command]
 fn reveal_in_explorer(path: String) -> Result<(), String> {
@@ -388,6 +543,9 @@ pub fn run() {
             create_folder,
             rename_path,
             delete_path,
+            copy_path,
+            move_path,
+            shift_pressed,
             reveal_in_explorer,
             folder_entry,
             resolve_link_path

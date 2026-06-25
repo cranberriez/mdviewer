@@ -60,6 +60,10 @@ interface SidebarProps {
   onToggleRootPin: () => void;
   onDraftSubmit: (value: string) => void;
   onDraftCancel: () => void;
+  /** Folder path currently highlighted as the active drop target, if any. */
+  dropTargetPath?: string | null;
+  /** True while files are being dragged over blank tree space (root drop). */
+  rootDropActive?: boolean;
   /** Custom icon name per saved-location path. */
   locationIcons?: Record<string, string>;
   /** Path of Home (first default location) — its icon is always Home and can't be changed. */
@@ -112,6 +116,8 @@ export function Sidebar({
   onToggleRootPin,
   onDraftSubmit,
   onDraftCancel,
+  dropTargetPath,
+  rootDropActive,
   locationIcons,
   homePath,
   theme,
@@ -284,8 +290,10 @@ export function Sidebar({
           />
         ) : (
           <div
-            className="tree"
+            className={`tree ${rootDropActive ? "drop-target-root" : ""}`}
             role="tree"
+            data-drop-zone="tree-blank"
+            data-drop-path={activeRoot?.path ?? ""}
             onContextMenu={(event) => {
               // Only handle right-clicks on empty tree space; rows stop propagation
               // by handling their own contextmenu.
@@ -319,6 +327,7 @@ export function Sidebar({
                     unsavedFilePathKeys={unsavedFilePathKeys}
                     contextPath={contextPath}
                     focusedPath={focusedPath}
+                    dropTargetPath={dropTargetPath}
                     draft={draft}
                     onToggleFolder={onToggleFolder}
                     onSelectFile={onSelectFile}
