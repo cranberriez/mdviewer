@@ -40,6 +40,7 @@ type ScrollPanel = 'editor' | 'preview';
 
 interface ScrollSnapshot {
 	scrollTop: number;
+	topRatio: number;
 	centerRatio: number;
 	clientHeight: number;
 	scrollHeight: number;
@@ -48,7 +49,6 @@ interface ScrollSnapshot {
 interface TextSelectionSnapshot {
 	start: number;
 	end: number;
-	version: number;
 }
 
 /**
@@ -76,77 +76,12 @@ function scrollCenterRatio(element: HTMLElement) {
 	);
 }
 
-function markdownSyntaxSpan(markdown: string, index: number): number {
-	const lineStart = index === 0 || markdown[index - 1] === '\n';
-	const rest = markdown.slice(index);
-
-	if (lineStart) {
-		const blockMarker = rest.match(/^ {0,3}(?:#{1,6}\s+|>\s?|(?:[-+*]|\d+[.)])\s+(?:\[[ xX]\]\s+)?)/);
-		if (blockMarker) {
-			return blockMarker[0].length;
-		}
+function scrollTopRatio(element: HTMLElement) {
+	if (element.scrollHeight <= element.clientHeight) {
+		return 0;
 	}
 
-	const char = markdown[index];
-	if (char === '\\' && index + 1 < markdown.length) {
-		return 1;
-	}
-	if (char === '!' && markdown[index + 1] === '[') {
-		return 1;
-	}
-	if (char === '[' || char === ']') {
-		return 1;
-	}
-	if (char === '(' && index > 0 && markdown[index - 1] === ']') {
-		const end = markdown.indexOf(')', index + 1);
-		return end === -1 ? 1 : end - index + 1;
-	}
-	if (char === '*' || char === '_' || char === '`' || char === '~') {
-		return 1;
-	}
-
-	return 0;
-}
-
-function markdownTextOffsetFromSourceOffset(markdown: string, sourceOffset: number) {
-	const target = Math.max(0, Math.min(sourceOffset, markdown.length));
-	let textOffset = 0;
-
-	for (let index = 0; index < target; index += 1) {
-		const syntaxSpan = markdownSyntaxSpan(markdown, index);
-		if (syntaxSpan > 0) {
-			index += syntaxSpan - 1;
-			continue;
-		}
-
-		textOffset += 1;
-	}
-
-	return textOffset;
-}
-
-function markdownSourceOffsetFromTextOffset(markdown: string, textOffset: number) {
-	const target = Math.max(0, textOffset);
-	let visibleOffset = 0;
-
-	for (let index = 0; index < markdown.length; index += 1) {
-		const syntaxSpan = markdownSyntaxSpan(markdown, index);
-		if (syntaxSpan > 0) {
-			index += syntaxSpan - 1;
-			continue;
-		}
-
-		if (visibleOffset >= target) {
-			return index;
-		}
-
-		visibleOffset += 1;
-		if (visibleOffset >= target) {
-			return index + 1;
-		}
-	}
-
-	return markdown.length;
+	return Math.max(0, Math.min(1, element.scrollTop / element.scrollHeight));
 }
 
 export function PreviewPanel({
@@ -168,13 +103,14 @@ export function PreviewPanel({
 	const previewScrollRef = useRef<HTMLElement | null>(null);
 	const visualEditorRootRef = useRef<HTMLDivElement | null>(null);
 	const visualEditorRef = useRef<LexicalMarkdownEditorHandle | null>(null);
+	const topRatioRef = useRef(0);
 	const centerRatioRef = useRef(0);
 	const ignoredScrollPanelsRef = useRef<Set<ScrollPanel>>(new Set());
 	const lastScrolledPanelRef = useRef<ScrollPanel>('preview');
 	const scrollSnapshotsRef = useRef<Record<string, ScrollSnapshot>>({});
+	const sharedFileTopRatioRef = useRef<Record<string, number>>({});
 	const sharedFileRatioRef = useRef<Record<string, number>>({});
 	const selectionSnapshotsRef = useRef<Record<string, TextSelectionSnapshot>>({});
-	const selectionVersionRef = useRef(0);
 	const lastFocusRestoreKeyRef = useRef('');
 	const appliedFormatActionIdRef = useRef(0);
 	const undoStackRef = useRef<ToolbarHistoryEntry[]>([]);
@@ -232,34 +168,10 @@ export function PreviewPanel({
 	);
 
 	const rememberSelectionSnapshot = useCallback(
-		(targetMode: FileViewMode, selection: Omit<TextSelectionSnapshot, 'version'>) => {
-			selectionVersionRef.current += 1;
-			const version = selectionVersionRef.current;
-			selectionSnapshotsRef.current[selectionSnapshotKey(targetMode)] = {
-				...selection,
-				version,
-			};
-
-			if (!openFile || openFile.kind !== 'md' || targetMode === 'preview') {
-				return;
-			}
-
-			if (targetMode === 'edit') {
-				selectionSnapshotsRef.current[selectionSnapshotKey('code')] = {
-					start: markdownSourceOffsetFromTextOffset(openFile.content, selection.start),
-					end: markdownSourceOffsetFromTextOffset(openFile.content, selection.end),
-					version,
-				};
-				return;
-			}
-
-			selectionSnapshotsRef.current[selectionSnapshotKey('edit')] = {
-				start: markdownTextOffsetFromSourceOffset(openFile.content, selection.start),
-				end: markdownTextOffsetFromSourceOffset(openFile.content, selection.end),
-				version,
-			};
+		(targetMode: FileViewMode, selection: TextSelectionSnapshot) => {
+			selectionSnapshotsRef.current[selectionSnapshotKey(targetMode)] = selection;
 		},
-		[openFile, selectionSnapshotKey]
+		[selectionSnapshotKey]
 	);
 
 	const getPanelElement = useCallback(
@@ -283,11 +195,15 @@ export function PreviewPanel({
 				return;
 			}
 
+			const topRatio = scrollTopRatio(element);
 			const centerRatio = scrollCenterRatio(element);
+			topRatioRef.current = topRatio;
 			centerRatioRef.current = centerRatio;
+			sharedFileTopRatioRef.current[filePositionKey] = topRatio;
 			sharedFileRatioRef.current[filePositionKey] = centerRatio;
 			scrollSnapshotsRef.current[scrollSnapshotKey(panel)] = {
 				scrollTop: element.scrollTop,
+				topRatio,
 				centerRatio,
 				clientHeight: element.clientHeight,
 				scrollHeight: element.scrollHeight,
@@ -324,51 +240,17 @@ export function PreviewPanel({
 		});
 	}, [mode, openFile, rememberSelectionSnapshot]);
 
-	const rememberVisualSelection = useCallback(() => {
-		if (!openFile || mode !== 'edit' || openFile.kind !== 'md') {
-			return;
-		}
-
-		const selection = visualEditorRef.current?.getSelection();
-		if (selection) {
-			rememberSelectionSnapshot('edit', selection);
-		}
-	}, [mode, openFile, rememberSelectionSnapshot]);
-
 	const selectionForMode = useCallback(
 		(targetMode: FileViewMode): TextSelectionSnapshot | null => {
 			if (!openFile) {
 				return null;
 			}
 
-			const exact = selectionSnapshotsRef.current[selectionSnapshotKey(targetMode)];
 			if (targetMode === 'preview') {
 				return null;
 			}
 
-			const siblingMode = targetMode === 'edit' ? 'code' : 'edit';
-			const sibling = selectionSnapshotsRef.current[selectionSnapshotKey(siblingMode)];
-			if (exact && (!sibling || exact.version >= sibling.version)) {
-				return exact;
-			}
-
-			if (!sibling || openFile.kind !== 'md') {
-				return exact ?? sibling ?? null;
-			}
-
-			if (targetMode === 'edit') {
-				return {
-					start: markdownTextOffsetFromSourceOffset(openFile.content, sibling.start),
-					end: markdownTextOffsetFromSourceOffset(openFile.content, sibling.end),
-					version: sibling.version,
-				};
-			}
-
-			return {
-				start: markdownSourceOffsetFromTextOffset(openFile.content, sibling.start),
-				end: markdownSourceOffsetFromTextOffset(openFile.content, sibling.end),
-				version: sibling.version,
-			};
+			return selectionSnapshotsRef.current[selectionSnapshotKey(targetMode)] ?? null;
 		},
 		[openFile, selectionSnapshotKey]
 	);
@@ -378,8 +260,6 @@ export function PreviewPanel({
 			return;
 		}
 
-		const fallbackRatio = sharedFileRatioRef.current[filePositionKey] ?? 0;
-
 		for (const panel of activeScrollPanels()) {
 			const element = getPanelElement(panel);
 			if (!element || element.clientHeight === 0 || element.scrollHeight === 0) {
@@ -387,13 +267,8 @@ export function PreviewPanel({
 			}
 
 			const snapshot = scrollSnapshotsRef.current[scrollSnapshotKey(panel)];
-			const restoreRatio = snapshot?.centerRatio ?? fallbackRatio;
-			const nextScrollTop =
-				snapshot &&
-				snapshot.clientHeight === element.clientHeight &&
-				snapshot.scrollHeight === element.scrollHeight
-					? clampScrollTop(snapshot.scrollTop, element)
-					: clampScrollTop(restoreRatio * element.scrollHeight - element.clientHeight / 2, element);
+			const restoreRatio = sharedFileTopRatioRef.current[filePositionKey] ?? snapshot?.topRatio ?? 0;
+			const nextScrollTop = clampScrollTop(restoreRatio * element.scrollHeight, element);
 
 			if (Math.abs(element.scrollTop - nextScrollTop) < 1) {
 				continue;
@@ -451,6 +326,27 @@ export function PreviewPanel({
 		});
 	}, [getPanelElement]);
 
+	const applyTopRatio = useCallback((panel: ScrollPanel, ratio: number) => {
+		const element = getPanelElement(panel);
+
+		if (!element || element.clientHeight === 0 || element.scrollHeight === 0) {
+			return;
+		}
+
+		const nextScrollTop = clampScrollTop(ratio * element.scrollHeight, element);
+
+		if (Math.abs(element.scrollTop - nextScrollTop) < 1) {
+			return;
+		}
+
+		ignoredScrollPanelsRef.current.add(panel);
+		element.scrollTop = nextScrollTop;
+
+		window.requestAnimationFrame(() => {
+			ignoredScrollPanelsRef.current.delete(panel);
+		});
+	}, [getPanelElement]);
+
 	const syncFromPanel = useCallback(
 		(panel: ScrollPanel, element: HTMLElement) => {
 			if (ignoredScrollPanelsRef.current.has(panel)) {
@@ -460,6 +356,7 @@ export function PreviewPanel({
 
 			const ratio = scrollCenterRatio(element);
 			rememberScrollSnapshot(panel, element);
+			topRatioRef.current = scrollTopRatio(element);
 			centerRatioRef.current = ratio;
 			lastScrolledPanelRef.current = panel;
 			if (mode === 'code') {
@@ -488,15 +385,14 @@ export function PreviewPanel({
 			if (editorScrollRef.current) {
 				rememberScrollSnapshot('editor', editorScrollRef.current);
 				rememberTextareaSelection();
+				topRatioRef.current = scrollTopRatio(editorScrollRef.current);
 				centerRatioRef.current = scrollCenterRatio(editorScrollRef.current);
 				lastScrolledPanelRef.current = 'editor';
-			} else {
-				rememberVisualSelection();
 			}
 
 			onContentChange(content);
 		},
-		[onContentChange, rememberScrollSnapshot, rememberTextareaSelection, rememberVisualSelection]
+		[onContentChange, rememberScrollSnapshot, rememberTextareaSelection]
 	);
 
 	const handleEditorKeyDown = useCallback(
@@ -639,6 +535,7 @@ export function PreviewPanel({
 	}, [focusActiveEditor, onContentChange]);
 
 	useEffect(() => {
+		topRatioRef.current = openFile ? (sharedFileTopRatioRef.current[filePositionKey] ?? 0) : 0;
 		centerRatioRef.current = openFile ? (sharedFileRatioRef.current[filePositionKey] ?? 0) : 0;
 		ignoredScrollPanelsRef.current.clear();
 		lastScrolledPanelRef.current = 'preview';
@@ -649,9 +546,8 @@ export function PreviewPanel({
 	useLayoutEffect(() => {
 		return () => {
 			rememberTextareaSelection();
-			rememberVisualSelection();
 		};
-	}, [mode, openFile?.path, rememberTextareaSelection, rememberVisualSelection]);
+	}, [mode, openFile?.path, rememberTextareaSelection]);
 
 	useEffect(() => {
 		if (!openFile || openFile.kind !== 'md') {
@@ -704,12 +600,12 @@ export function PreviewPanel({
 		const target = lastScrolledPanelRef.current === 'editor' ? 'preview' : 'editor';
 		const frame = window.requestAnimationFrame(() => {
 			if (mode === 'code') {
-				applyCenterRatio(target, centerRatioRef.current);
+				applyTopRatio(target, topRatioRef.current);
 			}
 		});
 
 		return () => window.cancelAnimationFrame(frame);
-	}, [applyCenterRatio, mode, openFile?.content, openFile?.path, renderedMarkdown]);
+	}, [applyTopRatio, mode, openFile?.content, openFile?.path, renderedMarkdown]);
 
 	useEffect(() => {
 		if (!openFile || mode === 'preview') {
@@ -726,11 +622,7 @@ export function PreviewPanel({
 			const selection = selectionForMode(mode);
 
 			if (mode === 'edit' && openFile.kind === 'md') {
-				if (selection) {
-					visualEditorRef.current?.restoreSelection(selection);
-				} else {
-					visualEditorRef.current?.focus();
-				}
+				visualEditorRef.current?.focus();
 				return;
 			}
 
@@ -740,11 +632,13 @@ export function PreviewPanel({
 			}
 
 			editor.focus({ preventScroll: true });
-			if (selection) {
-				const start = Math.max(0, Math.min(selection.start, editor.value.length));
-				const end = Math.max(0, Math.min(selection.end, editor.value.length));
-				editor.setSelectionRange(start, end);
+			if (!selection) {
+				return;
 			}
+
+			const start = Math.max(0, Math.min(selection.start, editor.value.length));
+			const end = Math.max(0, Math.min(selection.end, editor.value.length));
+			editor.setSelectionRange(start, end);
 		});
 
 		return () => window.cancelAnimationFrame(frame);
@@ -839,7 +733,6 @@ export function PreviewPanel({
 										ref={visualEditorRef}
 										content={openFile.content}
 										onChange={handleEditorContentChange}
-										onSelectionChange={rememberVisualSelection}
 										onScroll={handlePreviewScroll}
 										rootRef={visualEditorRootRef}
 									/>
