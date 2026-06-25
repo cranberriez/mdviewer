@@ -19,6 +19,7 @@ interface MenuItem {
   label: string;
   icon: LucideIcon;
   checked?: boolean;
+  checkable?: boolean;
   disabled?: boolean;
 }
 
@@ -121,16 +122,22 @@ export function SourcesHeaderContextMenu({
       id: "toggle-recent",
       label: visibleActions.recent ? "Hide Recent Button" : "Show Recent Button",
       icon: History,
+      checked: visibleActions.recent,
+      checkable: true,
     },
     {
       id: "toggle-search",
       label: visibleActions.search ? "Hide Search Button" : "Show Search Button",
       icon: Search,
+      checked: visibleActions.search,
+      checkable: true,
     },
     {
       id: "toggle-outline",
       label: visibleActions.outline ? "Hide Outline Button" : "Show Outline Button",
       icon: List,
+      checked: visibleActions.outline,
+      checkable: true,
     },
   ];
 
@@ -164,7 +171,7 @@ export function SourcesHeaderContextMenu({
             }}
           >
             <span className="ci-ico">
-              {entry.checked ? <Check size={15} /> : <Icon size={15} />}
+              {entry.checked ? <Check size={15} /> : entry.checkable ? null : <Icon size={15} />}
             </span>
             <span className="ci-label">{entry.label}</span>
           </button>
