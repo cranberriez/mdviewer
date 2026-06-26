@@ -678,7 +678,13 @@
 	white-space: nowrap;
 }
 
-.explorer-refresh {
+.explorer-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.explorer-header-action {
 	display: grid;
 	place-items: center;
 	width: 22px;
@@ -691,12 +697,12 @@
 	cursor: pointer;
 }
 
-.explorer-refresh:hover:not(:disabled) {
+.explorer-header-action:hover:not(:disabled) {
 	background: var(--color-bg-hover);
 	color: var(--color-text-primary);
 }
 
-.explorer-refresh:disabled {
+.explorer-header-action:disabled {
 	opacity: 0.55;
 	cursor: default;
 }
@@ -706,7 +712,7 @@
 	flex: 1;
 	overflow-y: auto;
 	overflow-x: hidden;
-	padding: 0 0 10px;
+	padding: 0 0 38px;
 }
 
 .search-panel {

@@ -1,7 +1,9 @@
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
+  FilePlus,
   Folder,
   FolderOpen,
+  FolderPlus,
   History,
   List,
   Moon,
@@ -15,8 +17,9 @@ import {
 import type { Entry, FileSearchMatch } from "../../../shared/types/files";
 import type {
   AppTheme,
+  ExplorerHeaderActionsVisibility,
   NavigationHistoryItem,
-  SourceHeaderActionsVisible,
+  SourcesHeaderActionsVisibility,
 } from "../../../shared/state/persistence";
 import type { InternalDragStart } from "../../dnd/dropTypes";
 import { EmptySidebar } from "./EmptySidebar";
@@ -52,8 +55,9 @@ interface SidebarProps {
   searchTruncated: boolean;
   navigationHistory: NavigationHistoryItem[];
   navigationHistoryIndex: number;
-  sourceHeaderActionsVisible: SourceHeaderActionsVisible;
   rootRefreshing: boolean;
+  explorerHeaderActionsVisible: ExplorerHeaderActionsVisibility;
+  sourcesHeaderActionsVisible: SourcesHeaderActionsVisibility;
   /** Rendered markdown HTML for the open file, or null for non-markdown / none. */
   outlineHtml: string | null;
   /** Whether any file is open (drives the outline empty state). */
@@ -69,13 +73,16 @@ interface SidebarProps {
   onOpenHistoryItem: (index: number) => void;
   onClearHistory: () => void;
   onRefreshRoot: () => void;
+  onCreateRootFile: () => void;
+  onCreateRootFolder: () => void;
+  onExplorerHeaderContextMenu: (event: ReactMouseEvent) => void;
+  onSourcesHeaderContextMenu: (event: ReactMouseEvent) => void;
   onSelectLocation: (location: Entry) => Promise<void>;
   onToggleFolder: (entry: Entry) => Promise<void>;
   onSelectFile: (entry: Entry) => Promise<void>;
   onEntryContextMenu: (entry: Entry, event: ReactMouseEvent) => void;
   onRootContextMenu: (event: ReactMouseEvent) => void;
   onSavedContextMenu: (location: Entry, event: ReactMouseEvent) => void;
-  onSourcesHeaderContextMenu: (event: ReactMouseEvent) => void;
   onOpenFolder: () => void;
   /** Whether the current explorer root is already pinned. */
   rootPinned: boolean;
@@ -121,8 +128,9 @@ export function Sidebar({
   searchTruncated,
   navigationHistory,
   navigationHistoryIndex,
-  sourceHeaderActionsVisible,
   rootRefreshing,
+  explorerHeaderActionsVisible,
+  sourcesHeaderActionsVisible,
   outlineHtml,
   hasOpenFile,
   showOutlineTab,
@@ -135,13 +143,16 @@ export function Sidebar({
   onOpenHistoryItem,
   onClearHistory,
   onRefreshRoot,
+  onCreateRootFile,
+  onCreateRootFolder,
+  onExplorerHeaderContextMenu,
+  onSourcesHeaderContextMenu,
   onSelectLocation,
   onToggleFolder,
   onSelectFile,
   onEntryContextMenu,
   onRootContextMenu,
   onSavedContextMenu,
-  onSourcesHeaderContextMenu,
   onOpenFolder,
   rootPinned,
   rootPinDisabled,
@@ -190,7 +201,7 @@ export function Sidebar({
             >
               <Folder size={14} />
             </button>
-            {sourceHeaderActionsVisible.recent ? (
+            {sourcesHeaderActionsVisible.recent ? (
               <button
                 type="button"
                 className={`sidebar-view-button ${effectiveMode === "recent" ? "active" : ""}`}
@@ -203,7 +214,7 @@ export function Sidebar({
                 <History size={14} />
               </button>
             ) : null}
-            {sourceHeaderActionsVisible.search ? (
+            {sourcesHeaderActionsVisible.search ? (
               <button
                 type="button"
                 className={`sidebar-view-button ${effectiveMode === "search" ? "active" : ""}`}
@@ -216,7 +227,7 @@ export function Sidebar({
                 <Search size={14} />
               </button>
             ) : null}
-            {sourceHeaderActionsVisible.outline && showOutlineTab ? (
+            {showOutlineTab && sourcesHeaderActionsVisible.outline ? (
               <button
                 type="button"
                 className={`sidebar-view-button ${effectiveMode === "outline" ? "active" : ""}`}
@@ -231,7 +242,7 @@ export function Sidebar({
             ) : null}
           </div>
           <div className="saved-actions">
-            {effectiveMode === "explorer" ? (
+            {sourcesHeaderActionsVisible.pin ? (
               <button
                 type="button"
                 className={`saved-add ${rootPinned ? "is-pinned" : ""}`}
@@ -252,7 +263,6 @@ export function Sidebar({
                 {rootPinned ? <PinOff size={15} /> : <Pin size={15} />}
               </button>
             ) : null}
-            {effectiveMode === "explorer" ? (
             <button
               type="button"
               className="saved-add"
@@ -262,7 +272,6 @@ export function Sidebar({
             >
               <FolderOpen size={15} />
             </button>
-            ) : null}
             {effectiveMode === "recent" ? (
               <button
                 type="button"
@@ -325,8 +334,15 @@ export function Sidebar({
       </section>
 
       {recentFillsSidebar ? null : (
-      <section className="sidebar-section explorer-section">
-        <div className="explorer-heading">
+        <section className="sidebar-section explorer-section">
+        <div
+          className="explorer-heading"
+          onContextMenu={
+            !showingSearchResults && !showingOutline && activeRoot
+              ? onExplorerHeaderContextMenu
+              : undefined
+          }
+        >
           <div>
             <div className="section-label">
               {showingOutline
@@ -339,16 +355,42 @@ export function Sidebar({
             </div>
           </div>
           {!showingSearchResults && !showingOutline && activeRoot ? (
-            <button
-              type="button"
-              className="explorer-refresh"
-              title="Refresh explorer"
-              aria-label="Refresh explorer"
-              disabled={rootRefreshing}
-              onClick={onRefreshRoot}
-            >
-              <RefreshCw className={rootRefreshing ? "search-spinner" : undefined} size={14} />
-            </button>
+            <div className="explorer-actions">
+              {explorerHeaderActionsVisible.newFile ? (
+                <button
+                  type="button"
+                  className="explorer-header-action"
+                  title="Add file"
+                  aria-label="Add file"
+                  onClick={onCreateRootFile}
+                >
+                  <FilePlus size={14} />
+                </button>
+              ) : null}
+              {explorerHeaderActionsVisible.newFolder ? (
+                <button
+                  type="button"
+                  className="explorer-header-action"
+                  title="Add folder"
+                  aria-label="Add folder"
+                  onClick={onCreateRootFolder}
+                >
+                  <FolderPlus size={14} />
+                </button>
+              ) : null}
+              {explorerHeaderActionsVisible.refresh ? (
+                <button
+                  type="button"
+                  className="explorer-header-action"
+                  title="Refresh explorer"
+                  aria-label="Refresh explorer"
+                  disabled={rootRefreshing}
+                  onClick={onRefreshRoot}
+                >
+                  <RefreshCw className={rootRefreshing ? "search-spinner" : undefined} size={14} />
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
@@ -380,13 +422,7 @@ export function Sidebar({
             role="tree"
             data-drop-zone="tree-blank"
             data-drop-path={activeRoot?.path ?? ""}
-            onContextMenu={(event) => {
-              // Only handle right-clicks on empty tree space; rows stop propagation
-              // by handling their own contextmenu.
-              if (event.target === event.currentTarget) {
-                onRootContextMenu(event);
-              }
-            }}
+            onContextMenu={onRootContextMenu}
           >
             {rootDraft ? (
               <TreeInlineInput
@@ -431,7 +467,7 @@ export function Sidebar({
             )}
           </div>
         )}
-      </section>
+        </section>
       )}
 
       <div className="sidebar-footer">

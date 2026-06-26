@@ -12,11 +12,33 @@ export interface StoredWindowFrame {
 
 export type AppTheme = "dark" | "light";
 
-export interface SourceHeaderActionsVisible {
+export interface ExplorerHeaderActionsVisibility {
+  newFile: boolean;
+  newFolder: boolean;
+  refresh: boolean;
+}
+
+export interface SourcesHeaderActionsVisibility {
   search: boolean;
   outline: boolean;
   recent: boolean;
+  pin: boolean;
 }
+
+export const DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE: ExplorerHeaderActionsVisibility = {
+  newFile: true,
+  newFolder: true,
+  refresh: true,
+};
+
+export const DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE: SourcesHeaderActionsVisibility = {
+  search: true,
+  outline: true,
+  recent: true,
+  pin: true,
+};
+
+export type SourceHeaderActionsVisible = SourcesHeaderActionsVisibility;
 
 export interface NavigationHistoryRoot {
   path: string;
@@ -103,14 +125,16 @@ export interface AppConfigurationState {
   removedDefaultPaths?: string[];
   /** Custom icon name per saved-location path. Home icon is never stored here. */
   locationIcons?: Record<string, string>;
-  /** Optional Sources header action button visibility. */
-  sourcesHeaderActionsVisible?: SourceHeaderActionsVisible;
   /** True once the user has completed (or skipped) first-run onboarding. */
   onboardingCompleted?: boolean;
   /** Optional display name from onboarding, used to greet on the Home screen. */
   userName?: string;
   /** Recently opened files and roots, newest first, capped at MAX_RECENTS. */
   recents?: RecentItem[];
+  /** Visibility of compact action buttons in the Explorer section header. */
+  explorerHeaderActionsVisible?: ExplorerHeaderActionsVisibility;
+  /** Visibility of optional buttons in the Sources header. */
+  sourcesHeaderActionsVisible?: SourcesHeaderActionsVisibility;
 }
 
 export interface AppSessionState {
@@ -226,15 +250,32 @@ function readBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
 }
 
-function readSourceHeaderActionsVisible(value: unknown): SourceHeaderActionsVisible | undefined {
+function readExplorerHeaderActionsVisibility(
+  value: unknown,
+): ExplorerHeaderActionsVisibility | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
 
   return {
-    search: readBoolean(value.search) ?? true,
-    outline: readBoolean(value.outline) ?? true,
-    recent: readBoolean(value.recent) ?? true,
+    newFile: readBoolean(value.newFile) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFile,
+    newFolder: readBoolean(value.newFolder) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFolder,
+    refresh: readBoolean(value.refresh) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.refresh,
+  };
+}
+
+function readSourcesHeaderActionsVisibility(
+  value: unknown,
+): SourcesHeaderActionsVisibility | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    search: readBoolean(value.search) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.search,
+    outline: readBoolean(value.outline) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.outline,
+    recent: readBoolean(value.recent) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.recent,
+    pin: readBoolean(value.pin) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.pin,
   };
 }
 
@@ -500,10 +541,15 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
     pinnedLocations: readEntryArray(record.pinnedLocations),
     removedDefaultPaths: readStringArray(record.removedDefaultPaths),
     locationIcons: readStringRecord(record.locationIcons),
-    sourcesHeaderActionsVisible: readSourceHeaderActionsVisible(record.sourcesHeaderActionsVisible),
     onboardingCompleted: readBoolean(record.onboardingCompleted),
     userName: readString(record.userName),
     recents: readRecents(record.recents),
+    explorerHeaderActionsVisible: readExplorerHeaderActionsVisibility(
+      record.explorerHeaderActionsVisible,
+    ),
+    sourcesHeaderActionsVisible: readSourcesHeaderActionsVisibility(
+      record.sourcesHeaderActionsVisible,
+    ),
   };
 }
 
