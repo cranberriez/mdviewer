@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import {
 	copyPath,
 	createFile,
@@ -14,10 +13,8 @@ import {
 	renamePath,
 	resolveLinkPath,
 	revealInExplorer,
-	searchFiles,
 	writeFile,
 } from './features/files/api/filesApi';
-import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
 import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 import { Sidebar, type SidebarMode } from './features/explorer/components/Sidebar';
 import {
@@ -41,13 +38,13 @@ import {
 import { IconPickerMenu } from './features/explorer/components/IconPickerMenu';
 import type { InlineDraft } from './features/explorer/components/TreeInlineInput';
 import { SidebarResizeHandle } from './features/explorer/components/SidebarResizeHandle';
-import { FileActionBar } from './features/file-actions/components/FileActionBar';
 import {
-	FileActionControls,
-	type FileViewMode,
-} from './features/file-actions/components/FileActionControls';
+	DEFAULT_SIDEBAR_WIDTH,
+	useSidebarResize,
+} from './features/explorer/hooks/useSidebarResize';
+import type { FileViewMode } from './features/file-actions/components/FileActionControls';
+import { useAppFileActionSlots } from './features/file-actions/components/AppFileActionSlots';
 import { FindBar } from './features/file-actions/components/FindBar';
-import { MarkdownFormatToolbar } from './features/file-actions/components/MarkdownFormatToolbar';
 import { useFindInPreview } from './features/file-actions/hooks/useFindInPreview';
 import type { MarkdownAction } from './features/preview/markdownActions';
 import { markdown } from './features/preview/markdown';
@@ -63,8 +60,10 @@ import { MainDropOverlay } from './features/dnd/MainDropOverlay';
 import { TreeDropBadge } from './features/dnd/TreeDropBadge';
 import { HomeView } from './features/home/components/HomeView';
 import { OnboardingView, type OnboardingResult } from './features/home/components/OnboardingView';
-import type { Entry, FileSearchMatch, OpenFile } from './shared/types/files';
+import type { Entry, OpenFile } from './shared/types/files';
 import {
+	comparablePath,
+	containsPath,
 	fileExtension,
 	fileKindFromPath,
 	fileName,
@@ -73,6 +72,7 @@ import {
 	parentName,
 	parentPath,
 	relativePath,
+	rebasePath,
 } from './shared/utils/path';
 import {
 	loadAppConfiguration,
@@ -93,77 +93,25 @@ import {
 	type SourcesHeaderActionsVisibility,
 	type StoredWindowFrame,
 } from './shared/state/persistence';
+import { useThemeClass } from './shared/hooks/useThemeClass';
+import { useWindowFramePersistence } from './features/window-chrome/hooks/useWindowFramePersistence';
+import { useCrossFileSearch } from './features/search/hooks/useCrossFileSearch';
+import {
+	deriveSavedLocations,
+	findContainingLocation,
+	isHomeLocation,
+	isPathSavedLocation,
+} from './features/saved-locations/savedLocations';
+import {
+	confirmDeleteTarget,
+	entryToContextTarget,
+	pathIsDeletedTarget,
+} from './features/explorer/utils/contextTargets';
 import './App.css';
 
-const DEFAULT_SIDEBAR_WIDTH = 280;
-const MIN_SIDEBAR_WIDTH = 240;
-const MAX_SIDEBAR_WIDTH = 420;
-const MIN_CONTENT_WIDTH = 420;
 const TREE_HOVER_EXPAND_DELAY_MS = 800;
 
 type UnsavedFileDrafts = Record<string, OpenFile>;
-
-function clampSidebarWidth(width: number) {
-	const availableMax = Math.max(
-		MIN_SIDEBAR_WIDTH,
-		Math.min(MAX_SIDEBAR_WIDTH, window.innerWidth - MIN_CONTENT_WIDTH)
-	);
-
-	return Math.min(availableMax, Math.max(MIN_SIDEBAR_WIDTH, width));
-}
-
-function comparablePath(path: string) {
-	return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-}
-
-function containsPath(rootPath: string, path: string) {
-	const root = comparablePath(rootPath);
-	const child = comparablePath(path);
-
-	return child === root || child.startsWith(`${root}/`);
-}
-
-function findContainingLocation(locations: Entry[], path?: string) {
-	if (!path) {
-		return null;
-	}
-
-	return (
-		locations
-			.filter((location) => containsPath(location.path, path))
-			.sort(
-				(left, right) => comparablePath(right.path).length - comparablePath(left.path).length
-			)[0] ?? null
-	);
-}
-
-function pathIsDeletedTarget(target: ContextMenuTarget, path?: string | null) {
-	if (!path) {
-		return false;
-	}
-
-	return target.kind === 'folder'
-		? containsPath(target.path, path)
-		: comparablePath(path) === comparablePath(target.path);
-}
-
-function rebasePath(path: string, fromRoot: string, toRoot: string) {
-	if (comparablePath(path) === comparablePath(fromRoot)) {
-		return toRoot;
-	}
-
-	return `${toRoot}${path.slice(fromRoot.length)}`;
-}
-
-function confirmDeleteTarget(target: ContextMenuTarget) {
-	const description =
-		target.kind === 'folder' ? `folder "${target.name}" and its contents` : `file "${target.name}"`;
-
-	return confirmDialog(`Move ${description} to the Recycle Bin?`, {
-		title: 'Move to Recycle Bin',
-		kind: 'warning',
-	});
-}
 
 // Run a built-in editing command (undo/redo/cut/copy/paste) on the focused
 // editor. document.execCommand is formally deprecated, but inside a
@@ -206,8 +154,8 @@ function App() {
 	const [outlinePanelVisible, setOutlinePanelVisible] = useState(
 		() => initialConfiguration.outlinePanelVisible ?? false
 	);
-	const [sidebarWidth, setSidebarWidth] = useState(() =>
-		clampSidebarWidth(initialConfiguration.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH)
+	const { sidebarWidth, startSidebarResize } = useSidebarResize(
+		initialConfiguration.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH
 	);
 	const [mode, setMode] = useState<FileViewMode>(() => initialConfiguration.viewMode ?? 'preview');
 	const [pendingFormatAction, setPendingFormatAction] = useState<{
@@ -221,14 +169,12 @@ function App() {
 	const [explorerHeaderActionsVisible, setExplorerHeaderActionsVisible] =
 		useState<ExplorerHeaderActionsVisibility>(
 			() =>
-				initialConfiguration.explorerHeaderActionsVisible ??
-				DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE
+				initialConfiguration.explorerHeaderActionsVisible ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE
 		);
 	const [sourcesHeaderActionsVisible, setSourcesHeaderActionsVisible] =
 		useState<SourcesHeaderActionsVisibility>(
 			() =>
-				initialConfiguration.sourcesHeaderActionsVisible ??
-				DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE
+				initialConfiguration.sourcesHeaderActionsVisible ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE
 		);
 	const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(
 		() =>
@@ -279,17 +225,9 @@ function App() {
 	const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
 	const [draft, setDraft] = useState<InlineDraft | null>(null);
 	const [sidebarMode, setSidebarMode] = useState<SidebarMode>('explorer');
-	const [searchQuery, setSearchQuery] = useState('');
-	const [searchedQuery, setSearchedQuery] = useState('');
-	const [searchResults, setSearchResults] = useState<FileSearchMatch[]>([]);
-	const [searchLoading, setSearchLoading] = useState(false);
-	const [searchError, setSearchError] = useState<string | null>(null);
-	const [searchTruncated, setSearchTruncated] = useState(false);
 	const [sessionHydrated, setSessionHydrated] = useState(false);
-	const [isMaximized, setIsMaximized] = useState(false);
 	const findTargetRef = useRef<HTMLElement | null>(null);
 	const unsavedFileDraftsRef = useRef<UnsavedFileDrafts>({});
-	const searchRequestRef = useRef(0);
 	const pendingFindQueryRef = useRef<string | null>(null);
 	// A heading fragment to scroll to once the just-opened file has rendered
 	// (set when following a cross-file link like `doc.md#section`).
@@ -335,52 +273,37 @@ function App() {
 		userName,
 		recents,
 	});
+	const { isMaximized } = useWindowFramePersistence({
+		initialFrame: initialConfiguration.windowFrame,
+		configurationRef,
+		unsavedFileDraftsRef,
+		onFrameChange: setWindowFrame,
+	});
+
+	useThemeClass(theme);
 
 	// Home is the first default location and can never be unpinned.
 	const homePath = defaultLocs[0]?.path;
 
 	// The Saved list = defaults (minus user-removed) followed by custom pins,
 	// de-duplicated by path. Home always stays first.
-	const locations = useMemo<Entry[]>(() => {
-		const removed = new Set(removedDefaultPaths.map((path) => comparablePath(path)));
-		const seen = new Set<string>();
-		const result: Entry[] = [];
-
-		for (const location of defaultLocs) {
-			const key = comparablePath(location.path);
-			const isHome = homePath ? comparablePath(homePath) === key : false;
-			if (!isHome && removed.has(key)) {
-				continue;
-			}
-			if (seen.has(key)) {
-				continue;
-			}
-			seen.add(key);
-			result.push(location);
-		}
-
-		for (const location of pinnedLocations) {
-			const key = comparablePath(location.path);
-			if (seen.has(key)) {
-				continue;
-			}
-			seen.add(key);
-			result.push(location);
-		}
-
-		return result;
-	}, [defaultLocs, pinnedLocations, removedDefaultPaths, homePath]);
+	const locations = useMemo<Entry[]>(
+		() =>
+			deriveSavedLocations({
+				defaultLocations: defaultLocs,
+				pinnedLocations,
+				removedDefaultPaths,
+				homePath,
+			}),
+		[defaultLocs, pinnedLocations, removedDefaultPaths, homePath]
+	);
 
 	function isPinnable(path: string) {
-		const key = comparablePath(path);
-		return !locations.some((location) => comparablePath(location.path) === key);
+		return !isPathSavedLocation(locations, path);
 	}
 
 	function isUnpinnable(location: Entry) {
-		if (homePath && comparablePath(homePath) === comparablePath(location.path)) {
-			return false;
-		}
-		return true;
+		return !isHomeLocation(location, homePath);
 	}
 
 	function getCreateTargetFolder() {
@@ -440,14 +363,6 @@ function App() {
 	}, [openFile?.path, renderedMarkdown, mode]);
 
 	useEffect(() => {
-		document.body.classList.toggle('theme-light', theme === 'light');
-
-		return () => {
-			document.body.classList.remove('theme-light');
-		};
-	}, [theme]);
-
-	useEffect(() => {
 		unsavedFileDraftsRef.current = unsavedFileDrafts;
 	}, [unsavedFileDrafts]);
 
@@ -502,162 +417,6 @@ function App() {
 			expandedPaths: Array.from(expanded),
 		});
 	}, [activeRoot?.path, expanded, openFilePath, selectedFolderPath, sessionHydrated]);
-
-	useEffect(() => {
-		const appWindow = getCurrentWindow();
-		let cancelled = false;
-		let unlistenResize: (() => void) | undefined;
-
-		async function setup() {
-			try {
-				const maximized = await appWindow.isMaximized();
-				if (!cancelled) setIsMaximized(maximized);
-
-				const unlisten = await appWindow.onResized(async () => {
-					const v = await appWindow.isMaximized();
-					if (!cancelled) setIsMaximized(v);
-				});
-
-				if (cancelled) {
-					unlisten();
-				} else {
-					unlistenResize = unlisten;
-				}
-			} catch {
-				// Best effort — window APIs may not be available outside Tauri.
-			}
-		}
-
-		void setup();
-
-		return () => {
-			cancelled = true;
-			unlistenResize?.();
-		};
-	}, []);
-
-	useEffect(() => {
-		const appWindow = getCurrentWindow();
-		const unlisteners: Array<() => void> = [];
-		let cancelled = false;
-
-		async function captureWindowFrame() {
-			try {
-				const [size, position, maximized] = await Promise.all([
-					appWindow.innerSize(),
-					appWindow.outerPosition(),
-					appWindow.isMaximized(),
-				]);
-
-				const nextFrame: StoredWindowFrame = {
-					width: size.width,
-					height: size.height,
-					x: position.x,
-					y: position.y,
-					maximized,
-				};
-
-				if (cancelled) {
-					return;
-				}
-
-				setWindowFrame(nextFrame);
-
-				const nextConfiguration = {
-					...configurationRef.current,
-					windowFrame: nextFrame,
-				};
-				configurationRef.current = nextConfiguration;
-				saveAppConfiguration(nextConfiguration);
-			} catch {
-				// Window persistence is best effort outside the Tauri runtime.
-			}
-		}
-
-		async function restoreWindowFrame() {
-			const frame = initialConfiguration.windowFrame;
-			if (!frame) {
-				return;
-			}
-
-			try {
-				if (frame.maximized) {
-					await appWindow.setPosition(new PhysicalPosition(frame.x, frame.y));
-					await appWindow.setSize(new PhysicalSize(frame.width, frame.height));
-					await appWindow.maximize();
-					return;
-				}
-
-				await appWindow.setPosition(new PhysicalPosition(frame.x, frame.y));
-				await appWindow.setSize(new PhysicalSize(frame.width, frame.height));
-			} catch {
-				// Ignore stale monitor positions or unavailable window APIs.
-			}
-		}
-
-		void restoreWindowFrame();
-
-		void appWindow
-			.onResized(() => void captureWindowFrame())
-			.then((unlisten) => {
-				if (cancelled) {
-					unlisten();
-				} else {
-					unlisteners.push(unlisten);
-				}
-			})
-			.catch(() => undefined);
-
-		void appWindow
-			.onMoved(() => void captureWindowFrame())
-			.then((unlisten) => {
-				if (cancelled) {
-					unlisten();
-				} else {
-					unlisteners.push(unlisten);
-				}
-			})
-			.catch(() => undefined);
-
-		void appWindow
-			.onCloseRequested(async (event) => {
-				await captureWindowFrame();
-
-				const draftCount = Object.keys(unsavedFileDraftsRef.current).length;
-				if (draftCount === 0) {
-					return;
-				}
-
-				const confirmed = await confirmDialog(
-					draftCount === 1
-						? 'There are unsaved changes in 1 file. Close without saving?'
-						: `There are unsaved changes in ${draftCount} files. Close without saving?`,
-					{
-						title: 'Unsaved Changes',
-						kind: 'warning',
-						okLabel: 'Close Without Saving',
-						cancelLabel: 'Cancel',
-					}
-				);
-
-				if (!confirmed) {
-					event.preventDefault();
-				}
-			})
-			.then((unlisten) => {
-				if (cancelled) {
-					unlisten();
-				} else {
-					unlisteners.push(unlisten);
-				}
-			})
-			.catch(() => undefined);
-
-		return () => {
-			cancelled = true;
-			unlisteners.forEach((unlisten) => unlisten());
-		};
-	}, [initialConfiguration.windowFrame]);
 
 	const saveOpenFile = useCallback(async () => {
 		if (!openFile || saving) {
@@ -827,6 +586,23 @@ function App() {
 			setError(`Unable to read file: ${String(cause)}`);
 		}
 	}
+
+	const {
+		searchQuery,
+		setSearchQuery,
+		searchedQuery,
+		searchResults,
+		searchLoading,
+		searchError,
+		searchTruncated,
+		runCrossFileSearch,
+		openSearchResult,
+		clearCrossFileSearch,
+	} = useCrossFileSearch({
+		activeRoot,
+		openFileAtPath,
+		pendingFindQueryRef,
+	});
 
 	// Scroll the preview to a heading matching a URL fragment. Tries the raw
 	// fragment first (explicit ids/names), then the slugified form so a link like
@@ -1130,10 +906,7 @@ function App() {
 		setMode('preview');
 		setOverlay(null);
 		find.close();
-		setSearchResults([]);
-		setSearchedQuery('');
-		setSearchError(null);
-		setSearchTruncated(false);
+		clearCrossFileSearch();
 		touchRootRecent({ path: location.path, name: location.name });
 		await loadFolder(location.path);
 	}
@@ -1164,69 +937,6 @@ function App() {
 		await openFileAtPath(entry.path);
 	}
 
-	async function runCrossFileSearch() {
-		const root = activeRoot;
-		const query = searchQuery.trim();
-		setSidebarMode('search');
-		setSearchError(null);
-
-		if (!root || !query) {
-			setSearchedQuery(query);
-			setSearchResults([]);
-			setSearchTruncated(false);
-			return;
-		}
-
-		const requestId = searchRequestRef.current + 1;
-		searchRequestRef.current = requestId;
-		setSearchLoading(true);
-		setSearchedQuery(query);
-		setSearchResults([]);
-		setSearchTruncated(false);
-
-		try {
-			const response = await searchFiles(root.path, query);
-			if (searchRequestRef.current !== requestId) {
-				return;
-			}
-			setSearchResults(response.matches);
-			setSearchTruncated(response.truncated);
-		} catch (cause) {
-			if (searchRequestRef.current === requestId) {
-				setSearchError(`Unable to search files: ${String(cause)}`);
-			}
-		} finally {
-			if (searchRequestRef.current === requestId) {
-				setSearchLoading(false);
-			}
-		}
-	}
-
-	async function openSearchResult(result: FileSearchMatch) {
-		pendingFindQueryRef.current = searchedQuery || searchQuery.trim();
-		await openFileAtPath(result.path, { mode: 'preview' });
-	}
-
-	function clearCrossFileSearch() {
-		searchRequestRef.current += 1;
-		setSearchQuery('');
-		setSearchedQuery('');
-		setSearchResults([]);
-		setSearchError(null);
-		setSearchTruncated(false);
-		setSearchLoading(false);
-	}
-
-	function entryToTarget(entry: Entry, x = 0, y = 0): ContextMenuTarget {
-		return {
-			kind: entry.is_dir ? 'folder' : 'file',
-			path: entry.path,
-			name: entry.name,
-			x,
-			y,
-		};
-	}
-
 	function openEntryContextMenu(entry: Entry, event: ReactMouseEvent) {
 		event.preventDefault();
 		event.stopPropagation();
@@ -1236,7 +946,7 @@ function App() {
 		setFocusedEntry(entry);
 		setContextMenuVariant('explorer');
 		setContextMenuRecent(null);
-		setContextMenu(entryToTarget(entry, event.clientX, event.clientY));
+		setContextMenu(entryToContextTarget(entry, event.clientX, event.clientY));
 	}
 
 	// Right-click on a Recent item from the Home screen. Root recents use the
@@ -1907,25 +1617,6 @@ function App() {
 		}));
 	}
 
-	function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
-		event.preventDefault();
-
-		const startX = event.clientX;
-		const startWidth = sidebarWidth;
-
-		function resize(moveEvent: PointerEvent) {
-			setSidebarWidth(clampSidebarWidth(startWidth + moveEvent.clientX - startX));
-		}
-
-		function stopResize() {
-			window.removeEventListener('pointermove', resize);
-			window.removeEventListener('pointerup', stopResize);
-		}
-
-		window.addEventListener('pointermove', resize);
-		window.addEventListener('pointerup', stopResize);
-	}
-
 	// Dispatch a menu-bar action to the matching existing handler. Edit clipboard
 	// / history actions defer to the browser's built-in commands so they behave
 	// exactly like the native Ctrl+Z / Ctrl+X / … keybinds on the focused editor.
@@ -2045,32 +1736,23 @@ function App() {
 	const unsavedFilePathKeys = new Set(
 		Object.values(unsavedFileDrafts).map((file) => comparablePath(file.path))
 	);
-	const fileActionControls = openFile ? (
-		<FileActionControls
-			dirty={dirty}
-			findOpen={find.open}
-			merged={barMerged}
-			mode={mode}
-			saving={saving}
-			onModeChange={(nextMode) => {
-				setMode(nextMode);
-			}}
-			onSave={() => void saveOpenFile()}
-			onToggleFind={find.toggle}
-			onToggleMerged={() => setBarMerged((merged) => !merged)}
-		/>
-	) : null;
-	const formatControls =
-		openFile?.kind === 'md' && (mode === 'edit' || mode === 'code') ? (
-			<MarkdownFormatToolbar
-				onAction={(action) =>
-					setPendingFormatAction((current) => ({
-						action,
-						id: (current?.id ?? 0) + 1,
-					}))
-				}
-			/>
-		) : null;
+	const { fileActionControls, previewActionBar } = useAppFileActionSlots({
+		openFile,
+		dirty,
+		findOpen: find.open,
+		merged: barMerged,
+		mode,
+		saving,
+		onModeChange: setMode,
+		onSave: () => void saveOpenFile(),
+		onToggleFind: find.toggle,
+		onToggleMerged: () => setBarMerged((merged) => !merged),
+		onFormatAction: (action) =>
+			setPendingFormatAction((current) => ({
+				action,
+				id: (current?.id ?? 0) + 1,
+			})),
+	});
 
 	useEffect(() => {
 		function handleKeyDown(event: KeyboardEvent) {
@@ -2117,7 +1799,7 @@ function App() {
 				return;
 			}
 
-			const target = entryToTarget(focusedEntry);
+			const target = entryToContextTarget(focusedEntry);
 
 			// Rename — F2
 			if (event.key === 'F2') {
@@ -2214,7 +1896,10 @@ function App() {
 						onSidebarModeChange={setSidebarMode}
 						onSearchQueryChange={setSearchQuery}
 						onSearchClear={clearCrossFileSearch}
-						onSearchSubmit={() => void runCrossFileSearch()}
+						onSearchSubmit={() => {
+							setSidebarMode('search');
+							void runCrossFileSearch();
+						}}
 						onOpenSearchResult={(result) => void openSearchResult(result)}
 						onRefreshRoot={() => {
 							if (activeRoot) {
@@ -2292,15 +1977,7 @@ function App() {
 								count={dropCount}
 							/>
 						}
-						actionBar={
-							openFile && (formatControls || !barMerged) ? (
-								<FileActionBar>
-									{formatControls}
-									<span className="file-action-spacer" aria-hidden="true" />
-									{!barMerged ? fileActionControls : null}
-								</FileActionBar>
-							) : null
-						}
+						actionBar={previewActionBar}
 						error={error}
 						findBar={
 							openFile ? (
