@@ -1,20 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import {
-	copyPath,
-	createFile,
-	createFolder,
 	defaultLocations,
 	deletePath,
-	movePath,
 	pickFolder,
-	readFile,
 	readFolder,
-	renamePath,
 	revealInExplorer,
-	writeFile,
 } from './features/files/api/filesApi';
-import { openPath } from '@tauri-apps/plugin-opener';
 import type { SidebarMode } from './features/explorer/components/Sidebar';
 import type {
 	ContextMenuAction,
@@ -24,54 +16,37 @@ import type {
 import type { ExplorerHeaderMenuAction } from './features/explorer/components/context-menu/ExplorerHeaderContextMenu';
 import type { SourcesHeaderMenuAction } from './features/explorer/components/context-menu/SourcesHeaderContextMenu';
 import type { SavedMenuAction } from './features/explorer/components/SavedContextMenu';
-import type { InlineDraft } from './features/explorer/components/TreeInlineInput';
-import { SidebarResizeHandle } from './features/explorer/components/SidebarResizeHandle';
 import {
 	DEFAULT_SIDEBAR_WIDTH,
 	useSidebarResize,
 } from './features/explorer/hooks/useSidebarResize';
 import type { FileViewMode } from './features/file-actions/components/FileActionControls';
 import { useAppFileActionSlots } from './features/file-actions/components/AppFileActionSlots';
-import { FindBar } from './features/file-actions/components/FindBar';
 import { useFindInPreview } from './features/file-actions/hooks/useFindInPreview';
 import type { MarkdownAction } from './features/preview/markdownActions';
-import { markdown } from './features/preview/markdown';
-import { PreviewPanel } from './features/preview/components/PreviewPanel';
 import { usePreviewNavigation } from './features/preview/hooks/usePreviewNavigation';
-import { FloatingOutlinePanel } from './features/outline/components/FloatingOutlinePanel';
-import { TitleBar } from './features/window-chrome/components/TitleBar';
-import { useFileDrop } from './features/dnd/useFileDrop';
-import { useInternalDrag } from './features/dnd/useInternalDrag';
+import {
+	useOpenFileController,
+	type UnsavedFileDrafts,
+} from './features/files/hooks/useOpenFileController';
+import { useAppDragDropController } from './features/dnd/useAppDragDropController';
 import { DragLayer } from './features/dnd/DragLayer';
-import type { DragItem, DropMode, DropZone } from './features/dnd/dropTypes';
-import { MainDropOverlay } from './features/dnd/MainDropOverlay';
 import { TreeDropBadge } from './features/dnd/TreeDropBadge';
-import { HomeView } from './features/home/components/HomeView';
-import type { OnboardingResult } from './features/home/components/OnboardingView';
-import type { Entry, OpenFile } from './shared/types/files';
+import type { Entry } from './shared/types/files';
 import {
 	comparablePath,
-	containsPath,
-	fileExtension,
 	fileKindFromPath,
 	fileName,
-	isVisibleFileName,
-	joinPath,
 	parentName,
 	parentPath,
 	relativePath,
-	rebasePath,
 } from './shared/utils/path';
 import {
 	loadAppConfiguration,
 	loadAppSession,
-	recordRecentFile,
-	recordRecentSingleFile,
 	recentItemKind,
-	removeRecent,
 	saveAppConfiguration,
 	saveAppSession,
-	touchRecentRoot,
 	DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE,
 	DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE,
 	type AppConfigurationState,
@@ -87,23 +62,16 @@ import { useCrossFileSearch } from './features/search/hooks/useCrossFileSearch';
 import { useAppKeyboardShortcuts } from './features/app-shell/hooks/useAppKeyboardShortcuts';
 import { AppMenus } from './features/app-shell/components/AppMenus';
 import { AppOnboardingOverlay } from './features/app-shell/components/AppOnboardingOverlay';
-import { AppSidebar } from './features/app-shell/components/AppSidebar';
-import {
-	deriveSavedLocations,
-	findContainingLocation,
-	isHomeLocation,
-	isPathSavedLocation,
-} from './features/saved-locations/savedLocations';
+import { AppWorkspace } from './features/app-shell/components/AppWorkspace';
+import { findContainingLocation } from './features/saved-locations/savedLocations';
+import { useSavedLocationsController } from './features/saved-locations/hooks/useSavedLocationsController';
 import {
 	confirmDeleteTarget,
 	entryToContextTarget,
 	pathIsDeletedTarget,
 } from './features/explorer/utils/contextTargets';
+import { useInlineDraftController } from './features/explorer/hooks/useInlineDraftController';
 import './App.css';
-
-const TREE_HOVER_EXPAND_DELAY_MS = 800;
-
-type UnsavedFileDrafts = Record<string, OpenFile>;
 
 // Run a built-in editing command (undo/redo/cut/copy/paste) on the focused
 // editor. document.execCommand is formally deprecated, but inside a
@@ -123,21 +91,11 @@ function App() {
 	const initialConfiguration = useMemo(() => loadAppConfiguration(), []);
 	const initialSession = useMemo(() => loadAppSession(), []);
 	const [defaultLocs, setDefaultLocs] = useState<Entry[]>([]);
-	const [pinnedLocations, setPinnedLocations] = useState<Entry[]>(
-		() => initialConfiguration.pinnedLocations ?? []
-	);
-	const [removedDefaultPaths, setRemovedDefaultPaths] = useState<string[]>(
-		() => initialConfiguration.removedDefaultPaths ?? []
-	);
 	const [activeRoot, setActiveRoot] = useState<Entry | null>(null);
 	const [expanded, setExpanded] = useState<Set<string>>(
 		() => new Set(initialSession.expandedPaths)
 	);
 	const [childrenCache, setChildrenCache] = useState<Record<string, Entry[]>>({});
-	const [openFile, setOpenFile] = useState<OpenFile | null>(null);
-	const [openFilePath, setOpenFilePath] = useState<string | null>(
-		() => initialSession.openFilePath ?? null
-	);
 	const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
 	const [error, setError] = useState<string | null>(null);
 	const [explorerHidden, setExplorerHidden] = useState(
@@ -154,8 +112,6 @@ function App() {
 		action: MarkdownAction;
 		id: number;
 	} | null>(null);
-	const [unsavedFileDrafts, setUnsavedFileDrafts] = useState<UnsavedFileDrafts>({});
-	const [saving, setSaving] = useState(false);
 	const [barMerged, setBarMerged] = useState(() => initialConfiguration.barMerged ?? false);
 	const [theme, setTheme] = useState<AppTheme>(() => initialConfiguration.theme ?? 'dark');
 	const [explorerHeaderActionsVisible, setExplorerHeaderActionsVisible] =
@@ -200,14 +156,6 @@ function App() {
 		x: number;
 		y: number;
 	} | null>(null);
-	const [locationIcons, setLocationIcons] = useState<Record<string, string>>(
-		() => initialConfiguration.locationIcons ?? {}
-	);
-	const [recents, setRecents] = useState<RecentItem[]>(() => initialConfiguration.recents ?? []);
-	const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(
-		() => initialConfiguration.onboardingCompleted ?? false
-	);
-	const [userName, setUserName] = useState<string>(() => initialConfiguration.userName ?? '');
 	// Which overlay screen (if any) is showing. "onboarding" forces the setup
 	// flow; "home" is the default landing until the user opens a file/root.
 	// null = the normal preview/editor workspace.
@@ -215,36 +163,76 @@ function App() {
 		initialConfiguration.onboardingCompleted ? 'home' : 'onboarding'
 	);
 	const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
-	const [draft, setDraft] = useState<InlineDraft | null>(null);
 	const [sidebarMode, setSidebarMode] = useState<SidebarMode>('explorer');
 	const [sessionHydrated, setSessionHydrated] = useState(false);
 	const findTargetRef = useRef<HTMLElement | null>(null);
-	const unsavedFileDraftsRef = useRef<UnsavedFileDrafts>({});
+	const closeFindAfterOpenRef = useRef<(() => void) | null>(null);
+	const openFileAtPathRef = useRef<
+		| ((path: string, options?: { mode?: FileViewMode; skipRecent?: boolean }) => Promise<void>)
+		| null
+	>(null);
 	const pendingFindQueryRef = useRef<string | null>(null);
-	const updateUnsavedFileDrafts = useCallback(
-		(updater: (current: UnsavedFileDrafts) => UnsavedFileDrafts) => {
-			setUnsavedFileDrafts((current) => {
-				const next = updater(current);
-				unsavedFileDraftsRef.current = next;
-				return next;
-			});
-		},
-		[]
-	);
-	// Record that a file was opened within a root (updates that root's lastFile).
-	const recordFileRecent = useCallback(
-		(
-			root: { path: string; name: string },
-			file: { path: string; name: string; kind: Exclude<OpenFile['kind'], 'folder'> }
-		) => {
-			setRecents((current) => recordRecentFile(current, root, file));
-		},
-		[]
-	);
-	// Record that a root was selected (no file), moving it to the top.
-	const touchRootRecent = useCallback((root: { path: string; name: string }) => {
-		setRecents((current) => touchRecentRoot(current, root));
-	}, []);
+	const savedLocations = useSavedLocationsController({
+		activeRoot,
+		defaultLocations: defaultLocs,
+		initialConfiguration,
+		onActiveRootChange: setActiveRoot,
+		onError: setError,
+		onExpandedChange: setExpanded,
+		onOpenFileAtPath: (path, options) =>
+			openFileAtPathRef.current?.(path, options) ?? Promise.resolve(),
+		onOverlayChange: setOverlay,
+		onSelectLocation: selectLocation,
+		onViewModeChange: setMode,
+	});
+	const {
+		homePath,
+		isPinnable,
+		isUnpinnable,
+		locationIcons,
+		locations,
+		onboardingCompleted,
+		pinnedLocations,
+		recents,
+		removedDefaultPaths,
+		userName,
+		setRecents,
+		applyLocationIcon,
+		completeOnboarding,
+		openFolderAsRoot,
+		openRecent,
+		pinFolder,
+		recordFileRecent,
+		removeRecentItem,
+		skipOnboarding,
+		touchRootRecent,
+		toggleRootPin,
+		unpinLocation,
+	} = savedLocations;
+	const {
+		dirty,
+		openFile,
+		openFilePath,
+		renderedMarkdown,
+		saving,
+		setOpenFile,
+		setOpenFilePath,
+		unsavedFileDrafts,
+		unsavedFileDraftsRef,
+		updateUnsavedFileDrafts,
+		openFileAtPath,
+		saveOpenFile,
+		updateOpenFileContent,
+	} = useOpenFileController({
+		activeRoot,
+		afterOpenRef: closeFindAfterOpenRef,
+		initialOpenFilePath: initialSession.openFilePath,
+		onError: setError,
+		onRecordFileRecent: recordFileRecent,
+		onSelectedFolderPathChange: setSelectedFolderPath,
+		onViewModeChange: setMode,
+	});
+	openFileAtPathRef.current = openFileAtPath;
 	const configurationRef = useRef<AppConfigurationState>({
 		explorerHidden,
 		outlinePanelVisible,
@@ -271,30 +259,6 @@ function App() {
 
 	useThemeClass(theme);
 
-	// Home is the first default location and can never be unpinned.
-	const homePath = defaultLocs[0]?.path;
-
-	// The Saved list = defaults (minus user-removed) followed by custom pins,
-	// de-duplicated by path. Home always stays first.
-	const locations = useMemo<Entry[]>(
-		() =>
-			deriveSavedLocations({
-				defaultLocations: defaultLocs,
-				pinnedLocations,
-				removedDefaultPaths,
-				homePath,
-			}),
-		[defaultLocs, pinnedLocations, removedDefaultPaths, homePath]
-	);
-
-	function isPinnable(path: string) {
-		return !isPathSavedLocation(locations, path);
-	}
-
-	function isUnpinnable(location: Entry) {
-		return !isHomeLocation(location, homePath);
-	}
-
 	function getCreateTargetFolder() {
 		return (
 			selectedFolderPath ??
@@ -304,19 +268,10 @@ function App() {
 		);
 	}
 
-	const dirty = openFile ? Boolean(unsavedFileDrafts[comparablePath(openFile.path)]) : false;
-
-	const renderedMarkdown = useMemo(() => {
-		if (!openFile || openFile.kind !== 'md') {
-			return '';
-		}
-
-		return markdown.render(openFile.content);
-	}, [openFile]);
-
 	const findContentKey =
 		mode === 'preview' && openFile?.kind === 'md' ? renderedMarkdown : (openFile?.content ?? '');
 	const find = useFindInPreview(findTargetRef, `${openFile?.path ?? ''}:${mode}:${findContentKey}`);
+	closeFindAfterOpenRef.current = find.close;
 
 	useEffect(() => {
 		const query = pendingFindQueryRef.current;
@@ -331,10 +286,6 @@ function App() {
 
 		return () => window.cancelAnimationFrame(frame);
 	}, [find, mode, openFile?.path, renderedMarkdown]);
-
-	useEffect(() => {
-		unsavedFileDraftsRef.current = unsavedFileDrafts;
-	}, [unsavedFileDrafts]);
 
 	useEffect(() => {
 		const nextConfiguration: AppConfigurationState = {
@@ -387,36 +338,6 @@ function App() {
 			expandedPaths: Array.from(expanded),
 		});
 	}, [activeRoot?.path, expanded, openFilePath, selectedFolderPath, sessionHydrated]);
-
-	const saveOpenFile = useCallback(async () => {
-		if (!openFile || saving) {
-			return;
-		}
-
-		const fileToSave = openFile;
-		const draftKey = comparablePath(fileToSave.path);
-
-		setSaving(true);
-		setError(null);
-
-		try {
-			await writeFile(fileToSave.path, fileToSave.content);
-			updateUnsavedFileDrafts((current) => {
-				const currentDraft = current[draftKey];
-				if (currentDraft && currentDraft.content !== fileToSave.content) {
-					return current;
-				}
-
-				const next = { ...current };
-				delete next[draftKey];
-				return next;
-			});
-		} catch (cause) {
-			setError(`Unable to save file: ${String(cause)}`);
-		} finally {
-			setSaving(false);
-		}
-	}, [openFile, saving, updateUnsavedFileDrafts]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -518,45 +439,6 @@ function App() {
 		await loadFolder(path, { force: true, quiet: true });
 	}
 
-	async function openFileAtPath(
-		path: string,
-		options?: { mode?: FileViewMode; skipRecent?: boolean }
-	) {
-		setError(null);
-		setOpenFilePath(path);
-		setSelectedFolderPath(parentPath(path));
-
-		try {
-			const content = await readFile(path);
-			const draft = unsavedFileDraftsRef.current[comparablePath(path)];
-			const kind = fileKindFromPath(path);
-			setOpenFile({
-				path,
-				name: fileName(path),
-				content: draft?.content ?? content,
-				kind,
-			});
-			if (options?.mode) {
-				setMode(options.mode);
-			}
-			// Update the active root's Recent entry with this file as its last-opened
-			// file. Only one Recent entry exists per root. Skipped when there's no
-			// active root, or when the caller records its own Recent (e.g. a rootless
-			// file dropped on Home).
-			if (activeRoot && !options?.skipRecent) {
-				recordFileRecent(
-					{ path: activeRoot.path, name: activeRoot.name },
-					{ path, name: fileName(path), kind }
-				);
-			}
-			find.close();
-		} catch (cause) {
-			setOpenFile(null);
-			setOpenFilePath(null);
-			setError(`Unable to read file: ${String(cause)}`);
-		}
-	}
-
 	const { scrollToAnchor, handleLinkClick } = usePreviewNavigation({
 		findTargetRef,
 		mode,
@@ -583,207 +465,42 @@ function App() {
 		pendingFindQueryRef,
 	});
 
-	// --- Drag and drop ---------------------------------------------------------
-	// Apply a copy/move of dropped paths into a tree folder, then refresh it and
-	// surface any per-item errors together.
-	const handleTreeDrop = useCallback(
-		async (paths: string[], target: DropZone, dropMode: DropMode) => {
-			setError(null);
-			const errors: string[] = [];
-
-			const destKey = comparablePath(target.destDir);
-			for (const source of paths) {
-				// A move into the folder the item already lives in is a no-op — skip it
-				// so we never churn or append a " (copy)" suffix. (Copy into the same
-				// folder is still a real duplicate, so it's allowed to proceed.)
-				if (dropMode === 'move' && comparablePath(parentPath(source)) === destKey) {
-					continue;
-				}
-				try {
-					if (dropMode === 'copy') {
-						await copyPath(source, target.destDir);
-					} else {
-						await movePath(source, target.destDir);
-					}
-				} catch (cause) {
-					errors.push(`${fileName(source)}: ${String(cause)}`);
-				}
-			}
-
-			// Refresh the destination folder so new items show up. Moves also change
-			// the source folders, so refresh each distinct source parent too.
-			await refreshFolder(target.destDir);
-			if (dropMode === 'move') {
-				const sourceParents = new Set(paths.map((path) => parentPath(path)));
-				for (const parent of sourceParents) {
-					if (
-						parent &&
-						comparablePath(parent) !== comparablePath(target.destDir) &&
-						childrenCache[parent]
-					) {
-						await refreshFolder(parent);
-					}
-				}
-			}
-
-			if (errors.length > 0) {
-				setError(
-					errors.length === 1
-						? `Couldn't ${dropMode} ${errors[0]}`
-						: `Couldn't ${dropMode} ${errors.length} items:\n${errors.join('\n')}`
-				);
-			}
-		},
-		[childrenCache]
-	);
-
-	// A file dropped on the main content area opens directly (from any path).
-	const handleMainOpenFile = useCallback(async (path: string) => {
-		if (isVisibleFileName(path)) {
-			setOverlay(null);
-			await openFileAtPath(path);
-		} else {
-			// Not a viewer-supported file — hand it to the OS so e.g. images/PDFs open.
-			try {
-				await openPath(path);
-			} catch (cause) {
-				setError(`Unable to open: ${String(cause)}`);
-			}
-		}
-	}, []);
-
-	// A folder dropped on the main content area becomes the new active root.
-	const handleMainSetRoot = useCallback(async (path: string) => {
-		const location: Entry = { name: fileName(path) || path, path, is_dir: true, kind: 'folder' };
-		await selectLocation(location);
-	}, []);
-
-	// Route a main-area drop by whether the first dragged path is a folder. The
-	// resolver stays synchronous, so the actual file-vs-folder decision is made
-	// here by asking Rust whether the path can be read as a folder.
-	const handleMainDrop = useCallback(
-		async (firstPath: string) => {
-			// Heuristic: a path without a visible-file extension and no "." in its
-			// basename is treated as a folder. To be robust we ask Rust to read it as
-			// a folder; readFolder succeeds for directories and throws for files.
-			try {
-				await readFolder(firstPath);
-				await handleMainSetRoot(firstPath);
-			} catch {
-				await handleMainOpenFile(firstPath);
-			}
-		},
-		[handleMainOpenFile, handleMainSetRoot]
-	);
-
-	// A drop on the Home screen. Mirrors the main area: a folder becomes the new
-	// active root (recorded as a root recent via selectLocation); a viewer-
-	// supported file opens for viewing (Preview, switchable to Edit) and — uniquely
-	// — is remembered as a *rootless* Recent. Non-viewer files hand off to the OS.
-	const handleHomeDrop = useCallback(
-		async (firstPath: string) => {
-			try {
-				await readFolder(firstPath);
-				await handleMainSetRoot(firstPath);
-				return;
-			} catch {
-				// Not a folder — fall through to file handling.
-			}
-
-			if (!isVisibleFileName(firstPath)) {
-				try {
-					await openPath(firstPath);
-				} catch (cause) {
-					setError(`Unable to open: ${String(cause)}`);
-				}
-				return;
-			}
-
-			// Open the lone file with no root attached, defaulting to Preview, and
-			// record it as the one kind of single-file Recent the app keeps.
-			// openFileAtPath sets selectedFolderPath to the file's parent for us.
-			setActiveRoot(null);
-			setExpanded(new Set());
-			setOverlay(null);
-			await openFileAtPath(firstPath, { mode: 'preview', skipRecent: true });
-			const kind = fileKindFromPath(firstPath);
-			setRecents((current) =>
-				recordRecentSingleFile(current, { path: firstPath, name: fileName(firstPath), kind })
-			);
-		},
-		[handleMainSetRoot]
-	);
-
-	const dispatchDrop = useCallback(
-		(target: DropZone | null, items: DragItem[], dropMode: DropMode) => {
-			if (!target || items.length === 0) {
-				return;
-			}
-
-			const paths = items.map((item) => item.path);
-			if (target.kind === 'tree-folder' || target.kind === 'tree-root') {
-				void handleTreeDrop(paths, target, dropMode);
-				return;
-			}
-
-			const first = items[0];
-			if (target.kind === 'main') {
-				void handleMainDrop(first.path);
-				return;
-			}
-
-			if (target.kind === 'home') {
-				void handleHomeDrop(first.path);
-			}
-		},
-		[handleHomeDrop, handleMainDrop, handleTreeDrop]
-	);
-
-	const { state: externalDropState } = useFileDrop({
-		activeRootPath: activeRoot?.path ?? null,
-		onDrop: dispatchDrop,
+	const {
+		beginInternalDrag,
+		dropCount,
+		dropState,
+		internalDragState,
+		rootDropActive,
+		treeDropTargetPath,
+	} = useAppDragDropController({
+		activeRoot,
+		childrenCache,
+		expanded,
+		loadingPaths,
+		openFileAtPath,
+		refreshFolder,
+		selectLocation,
+		loadFolder,
+		onExpandedChange: setExpanded,
+		onError: setError,
+		onOverlayChange: setOverlay,
+		onRecentsChange: setRecents,
 	});
-	const { state: internalDragState, beginInternalDrag } = useInternalDrag({
-		activeRootPath: activeRoot?.path ?? null,
-		onDrop: dispatchDrop,
-	});
-
-	const dropState = internalDragState.active ? internalDragState : externalDropState;
-	const dropCount = dropState.items.length;
-
-	// The folder path the tree should highlight while dragging (resolved dest).
-	const treeDropTargetPath =
-		dropState.target?.kind === 'tree-folder' ? dropState.target.destDir : null;
-	const rootDropActive =
-		dropState.target?.kind === 'tree-root' ||
-		(dropState.target?.kind === 'tree-folder' &&
-			activeRoot != null &&
-			comparablePath(dropState.target.destDir) === comparablePath(activeRoot.path));
-
-	const hoverExpandPath =
-		internalDragState.active && internalDragState.target?.kind === 'tree-folder'
-			? internalDragState.target.destDir
-			: null;
-
-	useEffect(() => {
-		if (!hoverExpandPath || expanded.has(hoverExpandPath) || loadingPaths.has(hoverExpandPath)) {
-			return;
-		}
-
-		const timer = window.setTimeout(() => {
-			setExpanded((current) => {
-				if (current.has(hoverExpandPath)) {
-					return current;
-				}
-				const next = new Set(current);
-				next.add(hoverExpandPath);
-				return next;
-			});
-			void loadFolder(hoverExpandPath, { quiet: true });
-		}, TREE_HOVER_EXPAND_DELAY_MS);
-
-		return () => window.clearTimeout(timer);
-	}, [expanded, hoverExpandPath, loadingPaths]);
+	const { draft, cancelDraft, startCreateDraft, startRenameDraft, submitDraft } =
+		useInlineDraftController({
+			activeRootPath: activeRoot?.path,
+			expanded,
+			openFilePath,
+			loadFolder,
+			refreshFolder,
+			openFileAtPath,
+			onError: setError,
+			onExpandedChange: setExpanded,
+			onFocusedEntryChange: setFocusedEntry,
+			onOpenFileChange: setOpenFile,
+			onOpenFilePathChange: setOpenFilePath,
+			onUnsavedFileDraftsChange: updateUnsavedFileDrafts,
+		});
 
 	async function selectLocation(location: Entry) {
 		setActiveRoot(location);
@@ -829,7 +546,7 @@ function App() {
 	function openEntryContextMenu(entry: Entry, event: ReactMouseEvent) {
 		event.preventDefault();
 		event.stopPropagation();
-		setDraft(null);
+		cancelDraft();
 		setExplorerHeaderMenu(null);
 		setSourcesHeaderMenu(null);
 		setFocusedEntry(entry);
@@ -866,7 +583,7 @@ function App() {
 		}
 		event.preventDefault();
 		event.stopPropagation();
-		setDraft(null);
+		cancelDraft();
 		setExplorerHeaderMenu(null);
 		setSourcesHeaderMenu(null);
 		setContextMenuVariant('explorer');
@@ -895,7 +612,7 @@ function App() {
 		}
 		event.preventDefault();
 		event.stopPropagation();
-		setDraft(null);
+		cancelDraft();
 		setContextMenu(null);
 		setContextMenuRecent(null);
 		setContextMenuVariant('explorer');
@@ -907,7 +624,7 @@ function App() {
 	function openSourcesHeaderContextMenu(event: ReactMouseEvent) {
 		event.preventDefault();
 		event.stopPropagation();
-		setDraft(null);
+		cancelDraft();
 		setContextMenu(null);
 		setContextMenuRecent(null);
 		setContextMenuVariant('explorer');
@@ -1001,144 +718,6 @@ function App() {
 		}
 	}
 
-	// Add a folder to the Saved list. Re-pinning a previously removed default
-	// simply clears it from the removed set rather than duplicating it.
-	function pinFolder(entry: Entry) {
-		const key = comparablePath(entry.path);
-		const isDefault = defaultLocs.some((location) => comparablePath(location.path) === key);
-
-		if (isDefault) {
-			setRemovedDefaultPaths((current) => current.filter((path) => comparablePath(path) !== key));
-			return;
-		}
-
-		setPinnedLocations((current) =>
-			current.some((location) => comparablePath(location.path) === key)
-				? current
-				: [...current, { ...entry, is_dir: true, kind: 'folder' }]
-		);
-	}
-
-	// Open a recent item from the Home screen. A "file" recent (only created by
-	// dropping a lone file on Home) just reopens that file with no root, mirroring
-	// the home file-drop. A "root" recent selects the root, then reopens its
-	// last-opened file if one was recorded.
-	async function openRecent(item: RecentItem) {
-		if (recentItemKind(item) === 'file') {
-			setActiveRoot(null);
-			setExpanded(new Set());
-			setOverlay(null);
-			await openFileAtPath(item.path, { mode: 'preview', skipRecent: true });
-			const kind = fileKindFromPath(item.path);
-			setRecents((current) =>
-				recordRecentSingleFile(current, { path: item.path, name: item.name, kind })
-			);
-			return;
-		}
-
-		const location: Entry = { name: item.name, path: item.path, is_dir: true, kind: 'folder' };
-		await selectLocation(location);
-
-		if (item.lastFile) {
-			await openFileAtPath(item.lastFile.path);
-		}
-	}
-
-	function removeRecentItem(item: RecentItem) {
-		setRecents((current) => removeRecent(current, { path: item.path, kind: recentItemKind(item) }));
-	}
-
-	// Apply the onboarding result: pin starter folders, set the greeting name and
-	// default view mode, mark onboarding complete, and land on Home.
-	function completeOnboarding(result: OnboardingResult) {
-		setUserName(result.name);
-		setMode(result.viewMode);
-
-		// Pin every starter folder that isn't already a default/pin. The first entry
-		// is Home (or its re-pointed override) and is handled by the locations merge.
-		result.starterFolders.forEach((folder) => {
-			if (isPinnable(folder.path)) {
-				pinFolder(folder);
-			}
-		});
-
-		// Remove the default Documents pin if the user dropped it during setup.
-		const keptPaths = new Set(result.starterFolders.map((folder) => comparablePath(folder.path)));
-		defaultLocs.forEach((location) => {
-			const isHome = homePath ? comparablePath(homePath) === comparablePath(location.path) : false;
-			if (!isHome && !keptPaths.has(comparablePath(location.path))) {
-				unpinLocation(location);
-			}
-		});
-
-		setOnboardingCompleted(true);
-		setOverlay('home');
-	}
-
-	function skipOnboarding() {
-		setOnboardingCompleted(true);
-		setOverlay('home');
-	}
-
-	// Open a folder via the native picker and make it the explorer root, without
-	// adding it to Saved. The user can pin it afterwards (right-click the explorer).
-	async function openFolderAsRoot() {
-		try {
-			const folder = await pickFolder();
-			if (!folder) {
-				return;
-			}
-			await selectLocation(folder);
-		} catch (cause) {
-			setError(`Unable to open folder: ${String(cause)}`);
-		}
-	}
-
-	// Remove a Saved location. Home cannot be unpinned. Removing a default is
-	// recorded so it stays hidden; removing a custom pin drops it.
-	function unpinLocation(location: Entry) {
-		if (!isUnpinnable(location)) {
-			return;
-		}
-
-		const key = comparablePath(location.path);
-		const isDefault = defaultLocs.some((entry) => comparablePath(entry.path) === key);
-
-		if (isDefault) {
-			setRemovedDefaultPaths((current) =>
-				current.some((path) => comparablePath(path) === key) ? current : [...current, location.path]
-			);
-		} else {
-			setPinnedLocations((current) =>
-				current.filter((entry) => comparablePath(entry.path) !== key)
-			);
-		}
-	}
-
-	// Pin or unpin the current explorer root, with a confirmation prompt. Disabled
-	// for Home (and when there is no root).
-	function toggleRootPin() {
-		if (!activeRoot || !isUnpinnable(activeRoot)) {
-			return;
-		}
-
-		const pinned = !isPinnable(activeRoot.path);
-
-		if (pinned) {
-			const confirmed = window.confirm(`Remove "${activeRoot.name}" from your pinned folders?`);
-			if (!confirmed) {
-				return;
-			}
-			unpinLocation(activeRoot);
-		} else {
-			const confirmed = window.confirm(`Pin "${activeRoot.name}" to your saved folders?`);
-			if (!confirmed) {
-				return;
-			}
-			pinFolder(activeRoot);
-		}
-	}
-
 	async function handleSavedAction(action: SavedMenuAction, location: Entry) {
 		if (action === 'change-icon') {
 			// Keep the saved menu position to anchor the picker near it.
@@ -1170,191 +749,6 @@ function App() {
 					break;
 				default:
 					break;
-			}
-		} catch (cause) {
-			setError(`${String(cause)}`);
-		}
-	}
-
-	function applyLocationIcon(location: Entry, iconName: string) {
-		setLocationIcons((current) => ({ ...current, [location.path]: iconName }));
-	}
-
-	// Ensure a folder is expanded and its children are loaded so a new draft row
-	// is visible inside it.
-	async function ensureFolderOpen(path: string) {
-		if (!expanded.has(path)) {
-			setExpanded((current) => new Set(current).add(path));
-		}
-		await loadFolder(path);
-	}
-
-	async function startCreateDraft(parentPath: string, kind: 'file' | 'folder') {
-		const isRoot = activeRoot?.path === parentPath;
-		if (!isRoot) {
-			await ensureFolderOpen(parentPath);
-		}
-
-		setDraft({
-			parentPath,
-			mode: 'create',
-			kind,
-			initialValue: kind === 'file' ? '.md' : '',
-			// For new files the suggested ".md" stays visible with the caret at the
-			// start so the user types the name before the extension.
-			selection: 'start',
-		});
-	}
-
-	function startRenameDraft(entry: Entry) {
-		setDraft({
-			parentPath: parentPath(entry.path),
-			mode: 'rename',
-			kind: entry.is_dir ? 'folder' : 'file',
-			initialValue: entry.name,
-			selection: entry.is_dir ? 'all' : 'name',
-			targetPath: entry.path,
-		});
-	}
-
-	function cancelDraft() {
-		setDraft(null);
-	}
-
-	// Returns true if the caller should proceed (user confirmed or no warning
-	// needed). Folders and any already-visible name skip the prompt.
-	function confirmExtensionIfNeeded(name: string, kind: 'file' | 'folder') {
-		if (kind === 'folder' || isVisibleFileName(name)) {
-			return true;
-		}
-
-		const ext = fileExtension(name);
-		const detail = ext ? `".${ext}" files` : 'files without a .md, .markdown, or .txt extension';
-		return window.confirm(
-			`"${name}" will not be visible in Markdown Viewer because ${detail} aren't shown here.\n\nCreate it anyway?`
-		);
-	}
-
-	function defaultCreateName(rawName: string, kind: 'file' | 'folder') {
-		if (kind === 'folder') {
-			return rawName || 'New Folder';
-		}
-		return !rawName || rawName.toLowerCase() === '.md' ? 'New File.md' : rawName;
-	}
-
-	async function submitDraft(rawValue: string) {
-		const current = draft;
-		if (!current) {
-			return;
-		}
-
-		const rawName = rawValue.trim();
-		const name = current.mode === 'create' ? defaultCreateName(rawName, current.kind) : rawName;
-		setDraft(null);
-
-		// Empty rename remains a cancel; empty creates use the default name above.
-		if (!name) {
-			return;
-		}
-		if (/[\\/]/.test(name)) {
-			setError('Names cannot contain slashes.');
-			return;
-		}
-
-		try {
-			if (current.mode === 'create') {
-				if (!confirmExtensionIfNeeded(name, current.kind)) {
-					return;
-				}
-
-				const targetPath = joinPath(current.parentPath, name);
-				if (current.kind === 'folder') {
-					await createFolder(targetPath);
-				} else {
-					await createFile(targetPath);
-				}
-
-				await refreshFolder(current.parentPath);
-
-				// Open the new file in the editor so the user can start typing.
-				if (current.kind === 'file' && isVisibleFileName(name)) {
-					await openFileAtPath(targetPath, { mode: 'edit' });
-				}
-				return;
-			}
-
-			// Rename
-			const originalPath = current.targetPath;
-			if (!originalPath || name === fileName(originalPath)) {
-				return;
-			}
-			if (current.kind === 'file' && !confirmExtensionIfNeeded(name, 'file')) {
-				return;
-			}
-
-			const targetPath = joinPath(current.parentPath, name);
-			await renamePath(originalPath, targetPath);
-			await refreshFolder(current.parentPath);
-
-			updateUnsavedFileDrafts((drafts) => {
-				const next = { ...drafts };
-
-				Object.entries(drafts).forEach(([key, fileDraft]) => {
-					const draftIsAffected =
-						current.kind === 'folder'
-							? containsPath(originalPath, fileDraft.path)
-							: comparablePath(fileDraft.path) === comparablePath(originalPath);
-
-					if (!draftIsAffected) {
-						return;
-					}
-
-					delete next[key];
-
-					const nextPath =
-						current.kind === 'folder'
-							? rebasePath(fileDraft.path, originalPath, targetPath)
-							: targetPath;
-
-					if (!isVisibleFileName(nextPath)) {
-						return;
-					}
-
-					next[comparablePath(nextPath)] = {
-						...fileDraft,
-						path: nextPath,
-						name: fileName(nextPath),
-						kind: fileKindFromPath(nextPath) as OpenFile['kind'],
-					};
-				});
-
-				return next;
-			});
-
-			// Keep keyboard focus on the renamed entry at its new path.
-			setFocusedEntry((focused) =>
-				focused?.path === originalPath ? { ...focused, name, path: targetPath } : focused
-			);
-
-			// If the open file was renamed directly or inside a renamed folder, follow
-			// it (or close it when it is no longer a visible kind).
-			if (
-				openFilePath &&
-				(current.kind === 'folder'
-					? containsPath(originalPath, openFilePath)
-					: comparablePath(openFilePath) === comparablePath(originalPath))
-			) {
-				const nextOpenPath =
-					current.kind === 'folder'
-						? rebasePath(openFilePath, originalPath, targetPath)
-						: targetPath;
-
-				if (isVisibleFileName(nextOpenPath)) {
-					await openFileAtPath(nextOpenPath);
-				} else {
-					setOpenFile(null);
-					setOpenFilePath(null);
-				}
 			}
 		} catch (cause) {
 			setError(`${String(cause)}`);
@@ -1489,21 +883,6 @@ function App() {
 		} catch (cause) {
 			setError(`${String(cause)}`);
 		}
-	}
-
-	function updateOpenFileContent(content: string) {
-		if (!openFile) {
-			return;
-		}
-
-		const nextFile = { ...openFile, content };
-		const draftKey = comparablePath(openFile.path);
-
-		setOpenFile(nextFile);
-		updateUnsavedFileDrafts((current) => ({
-			...current,
-			[draftKey]: nextFile,
-		}));
 	}
 
 	// Dispatch a menu-bar action to the matching existing handler. Edit clipboard
@@ -1659,173 +1038,124 @@ function App() {
 		<div
 			className={`app-window ${explorerHidden ? 'explorer-hidden' : ''} ${isMaximized ? 'fullscreen' : ''} ${theme === 'light' ? 'theme-light' : ''} ${overlay ? 'overlay-active' : ''}`}
 		>
-			<TitleBar
-				fileActionsSlot={barMerged ? fileActionControls : null}
-				explorerHidden={explorerHidden || overlay !== null}
-				menuState={menuState}
-				rootName={overlay ? undefined : activeRoot?.name}
-				scopeName={overlay ? null : breadcrumbScope}
-				title={overlay ? 'Markdown Viewer' : title}
-				onMenuAction={handleMenuAction}
-				onToggleExplorer={() => setExplorerHidden((hidden) => !hidden)}
-				hideExplorerToggle={overlay !== null}
+			<AppWorkspace
+				shell={{
+					activeRoot,
+					barMerged,
+					breadcrumbScope,
+					explorerHidden,
+					fileActionsSlot: fileActionControls,
+					menuState,
+					overlay,
+					title,
+					onMenuAction: handleMenuAction,
+					onToggleExplorer: () => setExplorerHidden((hidden) => !hidden),
+				}}
+				sidebar={{
+					activeFilePath: openFilePath ?? undefined,
+					activeRoot,
+					beginInternalDrag,
+					childrenCache,
+					contextPath: contextMenu?.path,
+					draft,
+					expanded,
+					explorerHeaderActionsVisible,
+					focusedPath: focusedEntry?.path ?? undefined,
+					homePath,
+					loadingPaths,
+					locations,
+					locationIcons,
+					mode: sidebarMode,
+					rootChildren,
+					rootDropActive,
+					rootPinned: activeRoot ? !isPinnable(activeRoot.path) : false,
+					rootPinDisabled: !activeRoot || !isUnpinnable(activeRoot),
+					search: {
+						query: searchQuery,
+						searchedQuery,
+						results: searchResults,
+						loading: searchLoading,
+						error: searchError,
+						truncated: searchTruncated,
+						onQueryChange: setSearchQuery,
+						onClear: clearCrossFileSearch,
+						onSubmit: () => {
+							setSidebarMode('search');
+							void runCrossFileSearch();
+						},
+						onOpenResult: (result) => void openSearchResult(result),
+					},
+					selectedFolderPath: selectedFolderPath ?? undefined,
+					sidebarWidth,
+					sourcesHeaderActionsVisible,
+					theme,
+					treeDropTargetPath,
+					unsavedFilePathKeys,
+					onCreateRootFile: () => {
+						const targetFolder = getCreateTargetFolder();
+						if (targetFolder) {
+							void startCreateDraft(targetFolder, 'file');
+						}
+					},
+					onCreateRootFolder: () => {
+						const targetFolder = getCreateTargetFolder();
+						if (targetFolder) {
+							void startCreateDraft(targetFolder, 'folder');
+						}
+					},
+					onDraftCancel: cancelDraft,
+					onDraftSubmit: submitDraft,
+					onEntryContextMenu: openEntryContextMenu,
+					onExplorerHeaderContextMenu: openExplorerHeaderContextMenu,
+					onOpenFolder: () => void openFolderAsRoot(),
+					onRefreshRoot: () => {
+						if (activeRoot) {
+							void refreshFolder(activeRoot.path);
+						}
+					},
+					onRootContextMenu: openRootContextMenu,
+					onSavedContextMenu: openSavedContextMenu,
+					onSelectFile: selectFile,
+					onSelectHeading: (id) => scrollToAnchor(id),
+					onSelectLocation: selectLocation,
+					onSidebarModeChange: setSidebarMode,
+					onSourcesHeaderContextMenu: openSourcesHeaderContextMenu,
+					onToggleFolder: toggleFolder,
+					onToggleRootPin: toggleRootPin,
+					onToggleTheme: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
+				}}
+				home={{
+					dropActive: dropState.target?.kind === 'home',
+					homePath,
+					locationIcons,
+					locations,
+					recents,
+					userName,
+					onEditSetup: () => setOverlay('onboarding'),
+					onLocationContextMenu: openSavedContextMenu,
+					onOpenFolder: () => void openFolderAsRoot(),
+					onOpenRecent: (item) => void openRecent(item),
+					onRecentContextMenu: openRecentContextMenu,
+					onSelectLocation: (location) => void selectLocation(location),
+				}}
+				preview={{
+					actionBar: previewActionBar,
+					dropCount,
+					dropState,
+					error,
+					find,
+					findTargetRef,
+					mode,
+					openFile,
+					outlinePanelVisible,
+					pendingFormatAction,
+					renderedMarkdown,
+					onContentChange: updateOpenFileContent,
+					onLinkClick: (href) => void handleLinkClick(href),
+					onSelectHeading: (id) => scrollToAnchor(id),
+				}}
+				resize={{ onPointerDown: startSidebarResize }}
 			/>
-
-			<div className="workspace">
-				{overlay === null ? (
-					<AppSidebar
-						layout={{
-							explorerHidden,
-							sidebarWidth,
-							mode: sidebarMode,
-							onModeChange: setSidebarMode,
-						}}
-						locations={{
-							items: locations,
-							activeRoot,
-							selectedFolderPath: selectedFolderPath ?? undefined,
-							icons: locationIcons,
-							homePath,
-							rootPinned: activeRoot ? !isPinnable(activeRoot.path) : false,
-							rootPinDisabled: !activeRoot || !isUnpinnable(activeRoot),
-							onSelect: selectLocation,
-							onContextMenu: openSavedContextMenu,
-							onOpenFolder: () => void openFolderAsRoot(),
-							onToggleRootPin: toggleRootPin,
-						}}
-						tree={{
-							rootChildren,
-							expanded,
-							childrenCache,
-							loadingPaths,
-							activeFilePath: openFilePath ?? undefined,
-							unsavedFilePathKeys,
-							contextPath: contextMenu?.path,
-							focusedPath: focusedEntry?.path ?? undefined,
-							draft,
-							rootRefreshing: activeRoot ? loadingPaths.has(activeRoot.path) : false,
-							dropTargetPath: treeDropTargetPath,
-							rootDropActive,
-							onToggleFolder: toggleFolder,
-							onSelectFile: selectFile,
-							onEntryContextMenu: openEntryContextMenu,
-							onRootContextMenu: openRootContextMenu,
-							onDraftSubmit: submitDraft,
-							onDraftCancel: cancelDraft,
-							onEntryPointerDown: beginInternalDrag,
-						}}
-						headers={{
-							explorerActionsVisible: explorerHeaderActionsVisible,
-							sourcesActionsVisible: sourcesHeaderActionsVisible,
-							onRefreshRoot: () => {
-								if (activeRoot) {
-									void refreshFolder(activeRoot.path);
-								}
-							},
-							onCreateRootFile: () => {
-								const targetFolder = getCreateTargetFolder();
-								if (targetFolder) {
-									void startCreateDraft(targetFolder, 'file');
-								}
-							},
-							onCreateRootFolder: () => {
-								const targetFolder = getCreateTargetFolder();
-								if (targetFolder) {
-									void startCreateDraft(targetFolder, 'folder');
-								}
-							},
-							onExplorerContextMenu: openExplorerHeaderContextMenu,
-							onSourcesContextMenu: openSourcesHeaderContextMenu,
-						}}
-						search={{
-							query: searchQuery,
-							searchedQuery,
-							results: searchResults,
-							loading: searchLoading,
-							error: searchError,
-							truncated: searchTruncated,
-							onQueryChange: setSearchQuery,
-							onClear: clearCrossFileSearch,
-							onSubmit: () => {
-								setSidebarMode('search');
-								void runCrossFileSearch();
-							},
-							onOpenResult: (result) => void openSearchResult(result),
-						}}
-						outline={{
-							html: openFile?.kind === 'md' ? renderedMarkdown : null,
-							hasOpenFile: Boolean(openFile),
-							showTab: !outlinePanelVisible,
-							onSelectHeading: (id) => scrollToAnchor(id),
-						}}
-						appearance={{
-							theme,
-							onToggleTheme: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
-						}}
-					/>
-				) : null}
-
-				{overlay === null ? <SidebarResizeHandle onPointerDown={startSidebarResize} /> : null}
-
-				{overlay === 'home' ? (
-					<HomeView
-						userName={userName}
-						locations={locations}
-						recents={recents}
-						homePath={homePath}
-						locationIcons={locationIcons}
-						onOpenFolder={() => void openFolderAsRoot()}
-						onSelectLocation={(location) => void selectLocation(location)}
-						onOpenRecent={(item) => void openRecent(item)}
-						onLocationContextMenu={openSavedContextMenu}
-						onRecentContextMenu={openRecentContextMenu}
-						onEditSetup={() => setOverlay('onboarding')}
-						dropActive={dropState.target?.kind === 'home'}
-					/>
-				) : (
-					<PreviewPanel
-						outlinePanel={
-							outlinePanelVisible ? (
-								<FloatingOutlinePanel
-									renderedHtml={openFile?.kind === 'md' ? renderedMarkdown : null}
-									hasOpenFile={Boolean(openFile)}
-									onSelectHeading={(id) => scrollToAnchor(id)}
-								/>
-							) : null
-						}
-						dropOverlay={
-							<MainDropOverlay
-								target={dropState.target}
-								hint={dropState.renderHint}
-								count={dropCount}
-							/>
-						}
-						actionBar={previewActionBar}
-						error={error}
-						findBar={
-							openFile ? (
-								<FindBar
-									current={find.current}
-									open={find.open}
-									query={find.query}
-									total={find.total}
-									onClose={find.close}
-									onNext={find.goToNext}
-									onPrevious={find.goToPrevious}
-									onQueryChange={find.setQuery}
-								/>
-							) : null
-						}
-						findTargetRef={findTargetRef}
-						mode={mode}
-						openFile={openFile}
-						onContentChange={updateOpenFileContent}
-						onLinkClick={(href) => void handleLinkClick(href)}
-						pendingFormatAction={pendingFormatAction}
-						renderedMarkdown={renderedMarkdown}
-					/>
-				)}
-			</div>
 
 			<AppOnboardingOverlay
 				visible={overlay === 'onboarding'}
