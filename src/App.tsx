@@ -11,31 +11,19 @@ import {
 	readFile,
 	readFolder,
 	renamePath,
-	resolveLinkPath,
 	revealInExplorer,
 	writeFile,
 } from './features/files/api/filesApi';
-import { openPath, openUrl } from '@tauri-apps/plugin-opener';
-import { Sidebar, type SidebarMode } from './features/explorer/components/Sidebar';
-import {
-	ContextMenu,
-	type ContextMenuAction,
-	type ContextMenuTarget,
-	type ContextMenuVariant,
+import { openPath } from '@tauri-apps/plugin-opener';
+import type { SidebarMode } from './features/explorer/components/Sidebar';
+import type {
+	ContextMenuAction,
+	ContextMenuTarget,
+	ContextMenuVariant,
 } from './features/explorer/components/ContextMenu';
-import {
-	ExplorerHeaderContextMenu,
-	type ExplorerHeaderMenuAction,
-} from './features/explorer/components/context-menu/ExplorerHeaderContextMenu';
-import {
-	SourcesHeaderContextMenu,
-	type SourcesHeaderMenuAction,
-} from './features/explorer/components/context-menu/SourcesHeaderContextMenu';
-import {
-	SavedContextMenu,
-	type SavedMenuAction,
-} from './features/explorer/components/SavedContextMenu';
-import { IconPickerMenu } from './features/explorer/components/IconPickerMenu';
+import type { ExplorerHeaderMenuAction } from './features/explorer/components/context-menu/ExplorerHeaderContextMenu';
+import type { SourcesHeaderMenuAction } from './features/explorer/components/context-menu/SourcesHeaderContextMenu';
+import type { SavedMenuAction } from './features/explorer/components/SavedContextMenu';
 import type { InlineDraft } from './features/explorer/components/TreeInlineInput';
 import { SidebarResizeHandle } from './features/explorer/components/SidebarResizeHandle';
 import {
@@ -48,8 +36,8 @@ import { FindBar } from './features/file-actions/components/FindBar';
 import { useFindInPreview } from './features/file-actions/hooks/useFindInPreview';
 import type { MarkdownAction } from './features/preview/markdownActions';
 import { markdown } from './features/preview/markdown';
-import { slugify } from './features/preview/slug';
 import { PreviewPanel } from './features/preview/components/PreviewPanel';
+import { usePreviewNavigation } from './features/preview/hooks/usePreviewNavigation';
 import { FloatingOutlinePanel } from './features/outline/components/FloatingOutlinePanel';
 import { TitleBar } from './features/window-chrome/components/TitleBar';
 import { useFileDrop } from './features/dnd/useFileDrop';
@@ -59,7 +47,7 @@ import type { DragItem, DropMode, DropZone } from './features/dnd/dropTypes';
 import { MainDropOverlay } from './features/dnd/MainDropOverlay';
 import { TreeDropBadge } from './features/dnd/TreeDropBadge';
 import { HomeView } from './features/home/components/HomeView';
-import { OnboardingView, type OnboardingResult } from './features/home/components/OnboardingView';
+import type { OnboardingResult } from './features/home/components/OnboardingView';
 import type { Entry, OpenFile } from './shared/types/files';
 import {
 	comparablePath,
@@ -96,6 +84,10 @@ import {
 import { useThemeClass } from './shared/hooks/useThemeClass';
 import { useWindowFramePersistence } from './features/window-chrome/hooks/useWindowFramePersistence';
 import { useCrossFileSearch } from './features/search/hooks/useCrossFileSearch';
+import { useAppKeyboardShortcuts } from './features/app-shell/hooks/useAppKeyboardShortcuts';
+import { AppMenus } from './features/app-shell/components/AppMenus';
+import { AppOnboardingOverlay } from './features/app-shell/components/AppOnboardingOverlay';
+import { AppSidebar } from './features/app-shell/components/AppSidebar';
 import {
 	deriveSavedLocations,
 	findContainingLocation,
@@ -229,9 +221,6 @@ function App() {
 	const findTargetRef = useRef<HTMLElement | null>(null);
 	const unsavedFileDraftsRef = useRef<UnsavedFileDrafts>({});
 	const pendingFindQueryRef = useRef<string | null>(null);
-	// A heading fragment to scroll to once the just-opened file has rendered
-	// (set when following a cross-file link like `doc.md#section`).
-	const pendingAnchorRef = useRef<string | null>(null);
 	const updateUnsavedFileDrafts = useCallback(
 		(updater: (current: UnsavedFileDrafts) => UnsavedFileDrafts) => {
 			setUnsavedFileDrafts((current) => {
@@ -342,25 +331,6 @@ function App() {
 
 		return () => window.cancelAnimationFrame(frame);
 	}, [find, mode, openFile?.path, renderedMarkdown]);
-
-	// After following a cross-file link with a #fragment, scroll to the heading
-	// once the new document has rendered into the preview. The preview container
-	// (findTargetRef) only exists when its pane is visible, so this no-ops in the
-	// editor-only view; the pending anchor is cleared either way.
-	useEffect(() => {
-		const fragment = pendingAnchorRef.current;
-		if (!fragment) {
-			return;
-		}
-
-		const frame = window.requestAnimationFrame(() => {
-			scrollToAnchor(fragment);
-			pendingAnchorRef.current = null;
-		});
-
-		return () => window.cancelAnimationFrame(frame);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [openFile?.path, renderedMarkdown, mode]);
 
 	useEffect(() => {
 		unsavedFileDraftsRef.current = unsavedFileDrafts;
@@ -587,6 +557,15 @@ function App() {
 		}
 	}
 
+	const { scrollToAnchor, handleLinkClick } = usePreviewNavigation({
+		findTargetRef,
+		mode,
+		openFilePath,
+		renderedMarkdown,
+		openFileAtPath,
+		onError: setError,
+	});
+
 	const {
 		searchQuery,
 		setSearchQuery,
@@ -603,96 +582,6 @@ function App() {
 		openFileAtPath,
 		pendingFindQueryRef,
 	});
-
-	// Scroll the preview to a heading matching a URL fragment. Tries the raw
-	// fragment first (explicit ids/names), then the slugified form so a link like
-	// `#My Heading` matches the generated `my-heading` heading id. Returns whether
-	// a target was found.
-	function scrollToAnchor(fragment: string) {
-		const scope = findTargetRef.current;
-		if (!scope || !fragment) {
-			return false;
-		}
-
-		for (const candidate of [fragment, slugify(fragment)]) {
-			if (!candidate) {
-				continue;
-			}
-			const node = scope.querySelector(
-				`#${CSS.escape(candidate)}, [name="${CSS.escape(candidate)}"]`
-			);
-			if (node) {
-				node.scrollIntoView({ behavior: 'smooth', block: 'start' });
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	// Route a clicked link in the rendered preview by its target:
-	//  - anchors (#heading) scroll within the current document
-	//  - external links (http(s), mailto, etc.) open in the OS default handler
-	//  - everything else is treated as a file path resolved against the open
-	//    file's directory; supported files open in-app (jumping to the heading if
-	//    the link carries a #fragment), the rest fall back to the OS so e.g.
-	//    images or PDFs still open.
-	async function handleLinkClick(href: string) {
-		const target = href.trim();
-		if (!target) {
-			return;
-		}
-
-		// In-document anchor.
-		if (target.startsWith('#')) {
-			scrollToAnchor(decodeURIComponent(target.slice(1)));
-			return;
-		}
-
-		// External / non-file schemes (http, https, mailto, tel, …) — hand off to
-		// the OS. A leading "scheme:" that isn't a Windows drive letter (C:\) marks
-		// these.
-		if (/^[a-z][a-z0-9+.-]*:/i.test(target) && !/^[a-z]:[\\/]/i.test(target)) {
-			try {
-				await openUrl(target);
-			} catch (cause) {
-				setError(`Unable to open link: ${String(cause)}`);
-			}
-			return;
-		}
-
-		if (!openFilePath) {
-			return;
-		}
-
-		// File link, optionally with a heading fragment (`doc.md#section`). Split off
-		// the fragment, resolve the path against the open file's directory, open it,
-		// then scroll to the heading once the new content has rendered.
-		const hashIndex = target.indexOf('#');
-		const pathPart = hashIndex >= 0 ? target.slice(0, hashIndex) : target;
-		const fragment = hashIndex >= 0 ? decodeURIComponent(target.slice(hashIndex + 1)) : '';
-		const [cleanPath] = pathPart.split('?');
-
-		try {
-			const resolved = await resolveLinkPath(openFilePath, decodeURIComponent(cleanPath));
-
-			if (isVisibleFileName(resolved)) {
-				// Same file already open: just scroll. Otherwise open it and defer the
-				// scroll until the preview has re-rendered with the new headings.
-				if (fragment && comparablePath(resolved) === comparablePath(openFilePath)) {
-					scrollToAnchor(fragment);
-				} else {
-					pendingAnchorRef.current = fragment || null;
-					await openFileAtPath(resolved);
-				}
-			} else {
-				// Not a viewer-supported file (image, pdf, folder, …) — let the OS open it.
-				await openPath(resolved);
-			}
-		} catch (cause) {
-			setError(`Unable to open link: ${String(cause)}`);
-		}
-	}
 
 	// --- Drag and drop ---------------------------------------------------------
 	// Apply a copy/move of dropped paths into a tree folder, then refresh it and
@@ -1754,99 +1643,18 @@ function App() {
 			})),
 	});
 
-	useEffect(() => {
-		function handleKeyDown(event: KeyboardEvent) {
-			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
-				event.preventDefault();
-				void saveOpenFile();
-			}
-
-			if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'f') {
-				event.preventDefault();
-				setExplorerHidden(false);
-				setSidebarMode('search');
-				return;
-			}
-
-			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
-				event.preventDefault();
-				find.setOpen(true);
-			}
-		}
-
-		window.addEventListener('keydown', handleKeyDown);
-
-		return () => {
-			window.removeEventListener('keydown', handleKeyDown);
-		};
-	}, [find, saveOpenFile]);
-
-	// Explorer keyboard shortcuts: act on the focused tree item, mirroring the
-	// context menu. Only fire when focus is inside the explorer and not typing in
-	// the inline rename/create input.
-	useEffect(() => {
-		function handleExplorerKeyDown(event: KeyboardEvent) {
-			if (!focusedEntry || draft) {
-				return;
-			}
-
-			const active = document.activeElement as HTMLElement | null;
-			const insideExplorer = Boolean(active?.closest('.sidebar'));
-			if (!insideExplorer) {
-				return;
-			}
-			if (active?.classList.contains('tree-inline-input')) {
-				return;
-			}
-
-			const target = entryToContextTarget(focusedEntry);
-
-			// Rename — F2
-			if (event.key === 'F2') {
-				event.preventDefault();
-				void handleContextAction('rename', target);
-				return;
-			}
-
-			// Delete — Del (keeps the confirm dialog)
-			if (event.key === 'Delete') {
-				event.preventDefault();
-				void handleContextAction('delete', target);
-				return;
-			}
-
-			// Open / toggle — Enter
-			if (event.key === 'Enter') {
-				event.preventDefault();
-				if (focusedEntry.is_dir) {
-					void toggleFolder(focusedEntry);
-				} else {
-					void handleContextAction('open', target);
-				}
-				return;
-			}
-
-			// Reveal in File Explorer — Shift+Alt+R
-			if (event.shiftKey && event.altKey && event.key.toLowerCase() === 'r') {
-				event.preventDefault();
-				void handleContextAction('reveal', target);
-				return;
-			}
-
-			// Copy Path — Shift+Alt+C
-			if (event.shiftKey && event.altKey && event.key.toLowerCase() === 'c') {
-				event.preventDefault();
-				void handleContextAction('copy-path', target);
-			}
-		}
-
-		window.addEventListener('keydown', handleExplorerKeyDown);
-
-		return () => {
-			window.removeEventListener('keydown', handleExplorerKeyDown);
-		};
+	useAppKeyboardShortcuts({
+		draft,
+		find,
+		focusedEntry,
+		onFindInFiles: () => {
+			setExplorerHidden(false);
+			setSidebarMode('search');
+		},
+		onSave: () => void saveOpenFile(),
+		onContextAction: (action, target) => void handleContextAction(action, target),
+		onToggleFolder: (entry) => void toggleFolder(entry),
 	});
-
 	return (
 		<div
 			className={`app-window ${explorerHidden ? 'explorer-hidden' : ''} ${isMaximized ? 'fullscreen' : ''} ${theme === 'light' ? 'theme-light' : ''} ${overlay ? 'overlay-active' : ''}`}
@@ -1865,80 +1673,95 @@ function App() {
 
 			<div className="workspace">
 				{overlay === null ? (
-					<Sidebar
-						width={explorerHidden ? 0 : sidebarWidth}
-						locations={locations}
-						activeRoot={activeRoot}
-						rootChildren={rootChildren}
-						expanded={expanded}
-						childrenCache={childrenCache}
-						loadingPaths={loadingPaths}
-						selectedFolderPath={selectedFolderPath ?? undefined}
-						activeFilePath={openFilePath ?? undefined}
-						unsavedFilePathKeys={unsavedFilePathKeys}
-						contextPath={contextMenu?.path}
-						focusedPath={focusedEntry?.path ?? undefined}
-						draft={draft}
-						sidebarMode={sidebarMode}
-						searchQuery={searchQuery}
-						searchedQuery={searchedQuery}
-						searchResults={searchResults}
-						searchLoading={searchLoading}
-						searchError={searchError}
-						searchTruncated={searchTruncated}
-						rootRefreshing={activeRoot ? loadingPaths.has(activeRoot.path) : false}
-						explorerHeaderActionsVisible={explorerHeaderActionsVisible}
-						sourcesHeaderActionsVisible={sourcesHeaderActionsVisible}
-						outlineHtml={openFile?.kind === 'md' ? renderedMarkdown : null}
-						hasOpenFile={Boolean(openFile)}
-						showOutlineTab={!outlinePanelVisible}
-						onSelectHeading={(id) => scrollToAnchor(id)}
-						onSidebarModeChange={setSidebarMode}
-						onSearchQueryChange={setSearchQuery}
-						onSearchClear={clearCrossFileSearch}
-						onSearchSubmit={() => {
-							setSidebarMode('search');
-							void runCrossFileSearch();
+					<AppSidebar
+						layout={{
+							explorerHidden,
+							sidebarWidth,
+							mode: sidebarMode,
+							onModeChange: setSidebarMode,
 						}}
-						onOpenSearchResult={(result) => void openSearchResult(result)}
-						onRefreshRoot={() => {
-							if (activeRoot) {
-								void refreshFolder(activeRoot.path);
-							}
+						locations={{
+							items: locations,
+							activeRoot,
+							selectedFolderPath: selectedFolderPath ?? undefined,
+							icons: locationIcons,
+							homePath,
+							rootPinned: activeRoot ? !isPinnable(activeRoot.path) : false,
+							rootPinDisabled: !activeRoot || !isUnpinnable(activeRoot),
+							onSelect: selectLocation,
+							onContextMenu: openSavedContextMenu,
+							onOpenFolder: () => void openFolderAsRoot(),
+							onToggleRootPin: toggleRootPin,
 						}}
-						onCreateRootFile={() => {
-							const targetFolder = getCreateTargetFolder();
-							if (targetFolder) {
-								void startCreateDraft(targetFolder, 'file');
-							}
+						tree={{
+							rootChildren,
+							expanded,
+							childrenCache,
+							loadingPaths,
+							activeFilePath: openFilePath ?? undefined,
+							unsavedFilePathKeys,
+							contextPath: contextMenu?.path,
+							focusedPath: focusedEntry?.path ?? undefined,
+							draft,
+							rootRefreshing: activeRoot ? loadingPaths.has(activeRoot.path) : false,
+							dropTargetPath: treeDropTargetPath,
+							rootDropActive,
+							onToggleFolder: toggleFolder,
+							onSelectFile: selectFile,
+							onEntryContextMenu: openEntryContextMenu,
+							onRootContextMenu: openRootContextMenu,
+							onDraftSubmit: submitDraft,
+							onDraftCancel: cancelDraft,
+							onEntryPointerDown: beginInternalDrag,
 						}}
-						onCreateRootFolder={() => {
-							const targetFolder = getCreateTargetFolder();
-							if (targetFolder) {
-								void startCreateDraft(targetFolder, 'folder');
-							}
+						headers={{
+							explorerActionsVisible: explorerHeaderActionsVisible,
+							sourcesActionsVisible: sourcesHeaderActionsVisible,
+							onRefreshRoot: () => {
+								if (activeRoot) {
+									void refreshFolder(activeRoot.path);
+								}
+							},
+							onCreateRootFile: () => {
+								const targetFolder = getCreateTargetFolder();
+								if (targetFolder) {
+									void startCreateDraft(targetFolder, 'file');
+								}
+							},
+							onCreateRootFolder: () => {
+								const targetFolder = getCreateTargetFolder();
+								if (targetFolder) {
+									void startCreateDraft(targetFolder, 'folder');
+								}
+							},
+							onExplorerContextMenu: openExplorerHeaderContextMenu,
+							onSourcesContextMenu: openSourcesHeaderContextMenu,
 						}}
-						onExplorerHeaderContextMenu={openExplorerHeaderContextMenu}
-						onSourcesHeaderContextMenu={openSourcesHeaderContextMenu}
-						onSelectLocation={selectLocation}
-						onToggleFolder={toggleFolder}
-						onSelectFile={selectFile}
-						onEntryContextMenu={openEntryContextMenu}
-						onRootContextMenu={openRootContextMenu}
-						onSavedContextMenu={openSavedContextMenu}
-						onOpenFolder={() => void openFolderAsRoot()}
-						rootPinned={activeRoot ? !isPinnable(activeRoot.path) : false}
-						rootPinDisabled={!activeRoot || !isUnpinnable(activeRoot)}
-						onToggleRootPin={toggleRootPin}
-						onDraftSubmit={submitDraft}
-						onDraftCancel={cancelDraft}
-						dropTargetPath={treeDropTargetPath}
-						rootDropActive={rootDropActive}
-						onEntryPointerDown={beginInternalDrag}
-						locationIcons={locationIcons}
-						homePath={homePath}
-						theme={theme}
-						onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+						search={{
+							query: searchQuery,
+							searchedQuery,
+							results: searchResults,
+							loading: searchLoading,
+							error: searchError,
+							truncated: searchTruncated,
+							onQueryChange: setSearchQuery,
+							onClear: clearCrossFileSearch,
+							onSubmit: () => {
+								setSidebarMode('search');
+								void runCrossFileSearch();
+							},
+							onOpenResult: (result) => void openSearchResult(result),
+						}}
+						outline={{
+							html: openFile?.kind === 'md' ? renderedMarkdown : null,
+							hasOpenFile: Boolean(openFile),
+							showTab: !outlinePanelVisible,
+							onSelectHeading: (id) => scrollToAnchor(id),
+						}}
+						appearance={{
+							theme,
+							onToggleTheme: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
+						}}
 					/>
 				) : null}
 
@@ -2004,29 +1827,18 @@ function App() {
 				)}
 			</div>
 
-			{overlay === 'onboarding' ? (
-				<OnboardingView
-					home={
-						homePath
-							? {
-									name: defaultLocs[0]?.name ?? 'Home',
-									path: homePath,
-									is_dir: true,
-									kind: 'folder',
-								}
-							: undefined
-					}
-					initialStarterFolders={locations.filter((location) =>
-						homePath ? comparablePath(location.path) !== comparablePath(homePath) : true
-					)}
-					initialName={userName}
-					initialViewMode={mode}
-					firstRun={!onboardingCompleted}
-					onPickFolder={pickFolder}
-					onComplete={completeOnboarding}
-					onSkip={skipOnboarding}
-				/>
-			) : null}
+			<AppOnboardingOverlay
+				visible={overlay === 'onboarding'}
+				defaultHomeName={defaultLocs[0]?.name}
+				homePath={homePath}
+				locations={locations}
+				userName={userName}
+				viewMode={mode}
+				onboardingCompleted={onboardingCompleted}
+				onPickFolder={pickFolder}
+				onComplete={completeOnboarding}
+				onSkip={skipOnboarding}
+			/>
 
 			<DragLayer state={internalDragState} />
 			<TreeDropBadge
@@ -2036,67 +1848,53 @@ function App() {
 				count={dropCount}
 			/>
 
-			{contextMenu ? (
-				<ContextMenu
-					target={contextMenu}
-					variant={contextMenuVariant}
-					canPin={
+			<AppMenus
+				context={{
+					target: contextMenu,
+					variant: contextMenuVariant,
+					canPin:
 						contextMenuVariant === 'explorer' &&
-						contextMenu.kind === 'folder' &&
-						isPinnable(contextMenu.path)
-					}
-					onAction={(action, target) => void handleContextAction(action, target)}
-					onClose={() => {
+						contextMenu?.kind === 'folder' &&
+						isPinnable(contextMenu.path),
+					onAction: (action, target) => void handleContextAction(action, target),
+					onClose: () => {
 						setContextMenu(null);
 						setContextMenuRecent(null);
 						setContextMenuVariant('explorer');
-					}}
-				/>
-			) : null}
-
-			{explorerHeaderMenu ? (
-				<ExplorerHeaderContextMenu
-					x={explorerHeaderMenu.x}
-					y={explorerHeaderMenu.y}
-					visibleActions={explorerHeaderActionsVisible}
-					onAction={(action) => void handleExplorerHeaderMenuAction(action)}
-					onClose={() => setExplorerHeaderMenu(null)}
-				/>
-			) : null}
-
-			{sourcesHeaderMenu ? (
-				<SourcesHeaderContextMenu
-					x={sourcesHeaderMenu.x}
-					y={sourcesHeaderMenu.y}
-					visibleActions={sourcesHeaderActionsVisible}
-					showOutlineAction={!outlinePanelVisible}
-					rootPinned={activeRoot ? !isPinnable(activeRoot.path) : false}
-					rootPinDisabled={!activeRoot || !isUnpinnable(activeRoot)}
-					onAction={handleSourcesHeaderMenuAction}
-					onClose={() => setSourcesHeaderMenu(null)}
-				/>
-			) : null}
-
-			{savedMenu ? (
-				<SavedContextMenu
-					location={savedMenu.location}
-					x={savedMenu.x}
-					y={savedMenu.y}
-					canUnpin={isUnpinnable(savedMenu.location)}
-					onAction={(action, location) => void handleSavedAction(action, location)}
-					onClose={() => setSavedMenu(null)}
-				/>
-			) : null}
-
-			{iconPicker ? (
-				<IconPickerMenu
-					x={iconPicker.x}
-					y={iconPicker.y}
-					currentIcon={locationIcons[iconPicker.location.path]}
-					onSelect={(iconName) => applyLocationIcon(iconPicker.location, iconName)}
-					onClose={() => setIconPicker(null)}
-				/>
-			) : null}
+					},
+				}}
+				explorerHeader={{
+					menu: explorerHeaderMenu,
+					visibleActions: explorerHeaderActionsVisible,
+					onAction: (action) => void handleExplorerHeaderMenuAction(action),
+					onClose: () => setExplorerHeaderMenu(null),
+				}}
+				sourcesHeader={{
+					menu: sourcesHeaderMenu,
+					visibleActions: sourcesHeaderActionsVisible,
+					showOutlineAction: !outlinePanelVisible,
+					rootPinned: activeRoot ? !isPinnable(activeRoot.path) : false,
+					rootPinDisabled: !activeRoot || !isUnpinnable(activeRoot),
+					onAction: handleSourcesHeaderMenuAction,
+					onClose: () => setSourcesHeaderMenu(null),
+				}}
+				saved={{
+					menu: savedMenu,
+					canUnpin: isUnpinnable,
+					onAction: (action, location) => void handleSavedAction(action, location),
+					onClose: () => setSavedMenu(null),
+				}}
+				iconPicker={{
+					menu: iconPicker,
+					currentIcon: iconPicker ? locationIcons[iconPicker.location.path] : undefined,
+					onSelect: (iconName) => {
+						if (iconPicker) {
+							applyLocationIcon(iconPicker.location, iconName);
+						}
+					},
+					onClose: () => setIconPicker(null),
+				}}
+			/>
 		</div>
 	);
 }
