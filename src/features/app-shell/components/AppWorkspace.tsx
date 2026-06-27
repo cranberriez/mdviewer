@@ -8,7 +8,7 @@ import type {
 } from '../../../shared/state/persistence';
 import type { DragSessionState, InternalDragStart } from '../../dnd/dropTypes';
 import { SidebarResizeHandle } from '../../explorer/components/SidebarResizeHandle';
-import type { SidebarMode } from '../../explorer/components/Sidebar';
+import { Sidebar, type SidebarMode } from '../../explorer/components/Sidebar';
 import type { InlineDraft } from '../../explorer/components/TreeInlineInput';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
 import { HomeView } from '../../home/components/HomeView';
@@ -16,7 +16,6 @@ import type { MarkdownAction } from '../../preview/markdownActions';
 import type { MenuBarState } from '../../window-chrome/components/MenuBar';
 import { TitleBar } from '../../window-chrome/components/TitleBar';
 import { AppPreviewArea } from './AppPreviewArea';
-import { AppSidebar } from './AppSidebar';
 
 interface WorkspaceFindState {
 	current: number;
@@ -152,69 +151,65 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 
 			<div className="workspace">
 				{overlay === null ? (
-					<AppSidebar
-						layout={{
-							explorerHidden: shell.explorerHidden,
-							sidebarWidth: sidebar.sidebarWidth,
-							mode: sidebar.mode,
-							onModeChange: sidebar.onSidebarModeChange,
-						}}
-						locations={{
-							items: sidebar.locations,
-							activeRoot: sidebar.activeRoot,
-							selectedFolderPath: sidebar.selectedFolderPath,
-							icons: sidebar.locationIcons,
-							homePath: sidebar.homePath,
-							rootPinned: sidebar.rootPinned,
-							rootPinDisabled: sidebar.rootPinDisabled,
-							onSelect: sidebar.onSelectLocation,
-							onContextMenu: sidebar.onSavedContextMenu,
-							onOpenFolder: sidebar.onOpenFolder,
-							onToggleRootPin: sidebar.onToggleRootPin,
-						}}
-						tree={{
-							rootChildren: sidebar.rootChildren,
-							expanded: sidebar.expanded,
-							childrenCache: sidebar.childrenCache,
-							loadingPaths: sidebar.loadingPaths,
-							activeFilePath: sidebar.activeFilePath,
-							unsavedFilePathKeys: sidebar.unsavedFilePathKeys,
-							contextPath: sidebar.contextPath,
-							focusedPath: sidebar.focusedPath,
-							draft: sidebar.draft,
-							rootRefreshing: sidebar.activeRoot
-								? sidebar.loadingPaths.has(sidebar.activeRoot.path)
-								: false,
-							dropTargetPath: sidebar.treeDropTargetPath,
-							rootDropActive: sidebar.rootDropActive,
-							onToggleFolder: sidebar.onToggleFolder,
-							onSelectFile: sidebar.onSelectFile,
-							onEntryContextMenu: sidebar.onEntryContextMenu,
-							onRootContextMenu: sidebar.onRootContextMenu,
-							onDraftSubmit: sidebar.onDraftSubmit,
-							onDraftCancel: sidebar.onDraftCancel,
-							onEntryPointerDown: sidebar.beginInternalDrag,
-						}}
-						headers={{
-							explorerActionsVisible: sidebar.explorerHeaderActionsVisible,
-							sourcesActionsVisible: sidebar.sourcesHeaderActionsVisible,
-							onRefreshRoot: sidebar.onRefreshRoot,
-							onCreateRootFile: sidebar.onCreateRootFile,
-							onCreateRootFolder: sidebar.onCreateRootFolder,
-							onExplorerContextMenu: sidebar.onExplorerHeaderContextMenu,
-							onSourcesContextMenu: sidebar.onSourcesHeaderContextMenu,
-						}}
-						search={sidebar.search}
-						outline={{
-							html: preview.openFile?.kind === 'md' ? preview.renderedMarkdown : null,
-							hasOpenFile: Boolean(preview.openFile),
-							showTab: !preview.outlinePanelVisible,
-							onSelectHeading: sidebar.onSelectHeading,
-						}}
-						appearance={{
-							theme: sidebar.theme,
-							onToggleTheme: sidebar.onToggleTheme,
-						}}
+					<Sidebar
+						width={shell.explorerHidden ? 0 : sidebar.sidebarWidth}
+						locations={sidebar.locations}
+						activeRoot={sidebar.activeRoot}
+						rootChildren={sidebar.rootChildren}
+						expanded={sidebar.expanded}
+						childrenCache={sidebar.childrenCache}
+						loadingPaths={sidebar.loadingPaths}
+						selectedFolderPath={sidebar.selectedFolderPath}
+						activeFilePath={sidebar.activeFilePath}
+						unsavedFilePathKeys={sidebar.unsavedFilePathKeys}
+						contextPath={sidebar.contextPath}
+						focusedPath={sidebar.focusedPath}
+						draft={sidebar.draft}
+						sidebarMode={sidebar.mode}
+						searchQuery={sidebar.search.query}
+						searchedQuery={sidebar.search.searchedQuery}
+						searchResults={sidebar.search.results}
+						searchLoading={sidebar.search.loading}
+						searchError={sidebar.search.error}
+						searchTruncated={sidebar.search.truncated}
+						rootRefreshing={
+							sidebar.activeRoot ? sidebar.loadingPaths.has(sidebar.activeRoot.path) : false
+						}
+						explorerHeaderActionsVisible={sidebar.explorerHeaderActionsVisible}
+						sourcesHeaderActionsVisible={sidebar.sourcesHeaderActionsVisible}
+						outlineHtml={preview.openFile?.kind === 'md' ? preview.renderedMarkdown : null}
+						hasOpenFile={Boolean(preview.openFile)}
+						showOutlineTab={!preview.outlinePanelVisible}
+						onSelectHeading={sidebar.onSelectHeading}
+						onSidebarModeChange={sidebar.onSidebarModeChange}
+						onSearchQueryChange={sidebar.search.onQueryChange}
+						onSearchClear={sidebar.search.onClear}
+						onSearchSubmit={sidebar.search.onSubmit}
+						onOpenSearchResult={sidebar.search.onOpenResult}
+						onRefreshRoot={sidebar.onRefreshRoot}
+						onCreateRootFile={sidebar.onCreateRootFile}
+						onCreateRootFolder={sidebar.onCreateRootFolder}
+						onExplorerHeaderContextMenu={sidebar.onExplorerHeaderContextMenu}
+						onSourcesHeaderContextMenu={sidebar.onSourcesHeaderContextMenu}
+						onSelectLocation={sidebar.onSelectLocation}
+						onToggleFolder={sidebar.onToggleFolder}
+						onSelectFile={sidebar.onSelectFile}
+						onEntryContextMenu={sidebar.onEntryContextMenu}
+						onRootContextMenu={sidebar.onRootContextMenu}
+						onSavedContextMenu={sidebar.onSavedContextMenu}
+						onOpenFolder={sidebar.onOpenFolder}
+						rootPinned={sidebar.rootPinned}
+						rootPinDisabled={sidebar.rootPinDisabled}
+						onToggleRootPin={sidebar.onToggleRootPin}
+						onDraftSubmit={sidebar.onDraftSubmit}
+						onDraftCancel={sidebar.onDraftCancel}
+						dropTargetPath={sidebar.treeDropTargetPath}
+						rootDropActive={sidebar.rootDropActive}
+						onEntryPointerDown={sidebar.beginInternalDrag}
+						locationIcons={sidebar.locationIcons}
+						homePath={sidebar.homePath}
+						theme={sidebar.theme}
+						onToggleTheme={sidebar.onToggleTheme}
 					/>
 				) : null}
 

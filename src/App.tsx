@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
 	defaultLocations,
 	deletePath,
@@ -7,23 +8,17 @@ import {
 	readFolder,
 	revealInExplorer,
 } from './features/files/api/filesApi';
-import type { SidebarMode } from './features/explorer/components/Sidebar';
 import type {
 	ContextMenuAction,
 	ContextMenuTarget,
-	ContextMenuVariant,
 } from './features/explorer/components/ContextMenu';
 import type { ExplorerHeaderMenuAction } from './features/explorer/components/context-menu/ExplorerHeaderContextMenu';
 import type { SourcesHeaderMenuAction } from './features/explorer/components/context-menu/SourcesHeaderContextMenu';
 import type { SavedMenuAction } from './features/explorer/components/SavedContextMenu';
-import {
-	DEFAULT_SIDEBAR_WIDTH,
-	useSidebarResize,
-} from './features/explorer/hooks/useSidebarResize';
+import { useSidebarResize } from './features/explorer/hooks/useSidebarResize';
 import type { FileViewMode } from './features/file-actions/components/FileActionControls';
 import { useAppFileActionSlots } from './features/file-actions/components/AppFileActionSlots';
 import { useFindInPreview } from './features/file-actions/hooks/useFindInPreview';
-import type { MarkdownAction } from './features/preview/markdownActions';
 import { usePreviewNavigation } from './features/preview/hooks/usePreviewNavigation';
 import {
 	useOpenFileController,
@@ -47,14 +42,8 @@ import {
 	recentItemKind,
 	saveAppConfiguration,
 	saveAppSession,
-	DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE,
-	DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE,
 	type AppConfigurationState,
-	type AppTheme,
-	type ExplorerHeaderActionsVisibility,
 	type RecentItem,
-	type SourcesHeaderActionsVisibility,
-	type StoredWindowFrame,
 } from './shared/state/persistence';
 import { useThemeClass } from './shared/hooks/useThemeClass';
 import { useWindowFramePersistence } from './features/window-chrome/hooks/useWindowFramePersistence';
@@ -71,6 +60,14 @@ import {
 	pathIsDeletedTarget,
 } from './features/explorer/utils/contextTargets';
 import { useInlineDraftController } from './features/explorer/hooks/useInlineDraftController';
+import { selectUiConfiguration, useUiStore } from './features/app-shell/state/useUiStore';
+import { selectExplorerTree, useExplorerStore } from './features/explorer/state/useExplorerStore';
+import { useFileStore } from './features/files/state/useFileStore';
+import {
+	selectSavedConfiguration,
+	useSavedLocationsStore,
+} from './features/saved-locations/state/useSavedLocationsStore';
+import { selectMenuTargets, useMenuStore } from './features/app-shell/state/useMenuStore';
 import './App.css';
 
 // Run a built-in editing command (undo/redo/cut/copy/paste) on the focused
@@ -90,81 +87,88 @@ const execEditCommand = document.execCommand.bind(document) as (
 function App() {
 	const initialConfiguration = useMemo(() => loadAppConfiguration(), []);
 	const initialSession = useMemo(() => loadAppSession(), []);
-	const [defaultLocs, setDefaultLocs] = useState<Entry[]>([]);
-	const [activeRoot, setActiveRoot] = useState<Entry | null>(null);
-	const [expanded, setExpanded] = useState<Set<string>>(
-		() => new Set(initialSession.expandedPaths)
+	const storesHydratedRef = useRef(false);
+	if (!storesHydratedRef.current) {
+		useUiStore.getState().hydrate(initialConfiguration);
+		useExplorerStore.getState().hydrate(initialSession);
+		useFileStore.getState().hydrate(initialSession.openFilePath);
+		useSavedLocationsStore.getState().hydrate(initialConfiguration);
+		storesHydratedRef.current = true;
+	}
+
+	const {
+		activeRoot,
+		childrenCache,
+		defaultLocs,
+		error,
+		expanded,
+		focusedEntry,
+		loadingPaths,
+		selectedFolderPath,
+		sessionHydrated,
+	} = useExplorerStore(useShallow(selectExplorerTree));
+	const setActiveRoot = useExplorerStore((state) => state.setActiveRoot);
+	const setChildrenCache = useExplorerStore((state) => state.setChildrenCache);
+	const setDefaultLocs = useExplorerStore((state) => state.setDefaultLocs);
+	const setError = useExplorerStore((state) => state.setError);
+	const setExpanded = useExplorerStore((state) => state.setExpanded);
+	const setFocusedEntry = useExplorerStore((state) => state.setFocusedEntry);
+	const setLoadingPaths = useExplorerStore((state) => state.setLoadingPaths);
+	const setSelectedFolderPath = useExplorerStore((state) => state.setSelectedFolderPath);
+	const setSessionHydrated = useExplorerStore((state) => state.setSessionHydrated);
+
+	const {
+		barMerged,
+		explorerHeaderActionsVisible,
+		explorerHidden,
+		mode,
+		outlinePanelVisible,
+		overlay,
+		pendingFormatAction,
+		sidebarMode,
+		sidebarWidth,
+		sourcesHeaderActionsVisible,
+		theme,
+	} = useUiStore(
+		useShallow((state) => ({
+			barMerged: state.barMerged,
+			explorerHeaderActionsVisible: state.explorerHeaderActionsVisible,
+			explorerHidden: state.explorerHidden,
+			mode: state.mode,
+			outlinePanelVisible: state.outlinePanelVisible,
+			overlay: state.overlay,
+			pendingFormatAction: state.pendingFormatAction,
+			sidebarMode: state.sidebarMode,
+			sidebarWidth: state.sidebarWidth,
+			sourcesHeaderActionsVisible: state.sourcesHeaderActionsVisible,
+			theme: state.theme,
+		}))
 	);
-	const [childrenCache, setChildrenCache] = useState<Record<string, Entry[]>>({});
-	const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
-	const [error, setError] = useState<string | null>(null);
-	const [explorerHidden, setExplorerHidden] = useState(
-		() => initialConfiguration.explorerHidden ?? false
-	);
-	const [outlinePanelVisible, setOutlinePanelVisible] = useState(
-		() => initialConfiguration.outlinePanelVisible ?? false
-	);
-	const { sidebarWidth, startSidebarResize } = useSidebarResize(
-		initialConfiguration.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH
-	);
-	const [mode, setMode] = useState<FileViewMode>(() => initialConfiguration.viewMode ?? 'preview');
-	const [pendingFormatAction, setPendingFormatAction] = useState<{
-		action: MarkdownAction;
-		id: number;
-	} | null>(null);
-	const [barMerged, setBarMerged] = useState(() => initialConfiguration.barMerged ?? false);
-	const [theme, setTheme] = useState<AppTheme>(() => initialConfiguration.theme ?? 'dark');
-	const [explorerHeaderActionsVisible, setExplorerHeaderActionsVisible] =
-		useState<ExplorerHeaderActionsVisibility>(
-			() =>
-				initialConfiguration.explorerHeaderActionsVisible ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE
-		);
-	const [sourcesHeaderActionsVisible, setSourcesHeaderActionsVisible] =
-		useState<SourcesHeaderActionsVisibility>(
-			() =>
-				initialConfiguration.sourcesHeaderActionsVisible ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE
-		);
-	const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(
-		() =>
-			initialSession.selectedFolderPath ??
-			(initialSession.openFilePath ? parentPath(initialSession.openFilePath) : null)
-	);
-	const [windowFrame, setWindowFrame] = useState<StoredWindowFrame | undefined>(
-		() => initialConfiguration.windowFrame
-	);
-	const [contextMenu, setContextMenu] = useState<ContextMenuTarget | null>(null);
-	// When the context menu is opened from the Home screen, this captures the
-	// variant (trimmed action set) and the recent item it refers to (for the
-	// "Remove from Recent" action). null = opened from the explorer.
-	const [contextMenuVariant, setContextMenuVariant] = useState<ContextMenuVariant>('explorer');
-	const [contextMenuRecent, setContextMenuRecent] = useState<RecentItem | null>(null);
-	const [savedMenu, setSavedMenu] = useState<{
-		location: Entry;
-		x: number;
-		y: number;
-	} | null>(null);
-	const [explorerHeaderMenu, setExplorerHeaderMenu] = useState<{
-		x: number;
-		y: number;
-	} | null>(null);
-	const [sourcesHeaderMenu, setSourcesHeaderMenu] = useState<{
-		x: number;
-		y: number;
-	} | null>(null);
-	const [iconPicker, setIconPicker] = useState<{
-		location: Entry;
-		x: number;
-		y: number;
-	} | null>(null);
-	// Which overlay screen (if any) is showing. "onboarding" forces the setup
-	// flow; "home" is the default landing until the user opens a file/root.
-	// null = the normal preview/editor workspace.
-	const [overlay, setOverlay] = useState<'onboarding' | 'home' | null>(
-		initialConfiguration.onboardingCompleted ? 'home' : 'onboarding'
-	);
-	const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
-	const [sidebarMode, setSidebarMode] = useState<SidebarMode>('explorer');
-	const [sessionHydrated, setSessionHydrated] = useState(false);
+	const setBarMerged = useUiStore((state) => state.setBarMerged);
+	const setExplorerHidden = useUiStore((state) => state.setExplorerHidden);
+	const setMode = useUiStore((state) => state.setMode);
+	const setOutlinePanelVisible = useUiStore((state) => state.setOutlinePanelVisible);
+	const setOverlay = useUiStore((state) => state.setOverlay);
+	const setPendingFormatAction = useUiStore((state) => state.setPendingFormatAction);
+	const setSidebarMode = useUiStore((state) => state.setSidebarMode);
+	const setSidebarWidth = useUiStore((state) => state.setSidebarWidth);
+	const setTheme = useUiStore((state) => state.setTheme);
+	const setWindowFrame = useUiStore((state) => state.setWindowFrame);
+	const toggleExplorerHeaderActionStore = useUiStore((state) => state.toggleExplorerHeaderAction);
+	const toggleSourcesHeaderActionStore = useUiStore((state) => state.toggleSourcesHeaderAction);
+	const { startSidebarResize } = useSidebarResize(sidebarWidth, setSidebarWidth);
+
+	const { contextMenu, contextMenuRecent, contextMenuVariant, iconPicker, savedMenu } =
+		useMenuStore(useShallow(selectMenuTargets));
+	const closeContextMenu = useMenuStore((state) => state.closeContextMenu);
+	const closeExplorerHeaderMenu = useMenuStore((state) => state.closeExplorerHeaderMenu);
+	const closeSavedMenu = useMenuStore((state) => state.closeSavedMenu);
+	const closeSourcesHeaderMenu = useMenuStore((state) => state.closeSourcesHeaderMenu);
+	const openContextMenuStore = useMenuStore((state) => state.openContextMenu);
+	const openExplorerHeaderMenuStore = useMenuStore((state) => state.openExplorerHeaderMenu);
+	const openIconPickerStore = useMenuStore((state) => state.openIconPicker);
+	const openSavedMenuStore = useMenuStore((state) => state.openSavedMenu);
+	const openSourcesHeaderMenuStore = useMenuStore((state) => state.openSourcesHeaderMenu);
 	const findTargetRef = useRef<HTMLElement | null>(null);
 	const closeFindAfterOpenRef = useRef<(() => void) | null>(null);
 	const openFileAtPathRef = useRef<
@@ -175,7 +179,6 @@ function App() {
 	const savedLocations = useSavedLocationsController({
 		activeRoot,
 		defaultLocations: defaultLocs,
-		initialConfiguration,
 		onActiveRootChange: setActiveRoot,
 		onError: setError,
 		onExpandedChange: setExpanded,
@@ -192,9 +195,7 @@ function App() {
 		locationIcons,
 		locations,
 		onboardingCompleted,
-		pinnedLocations,
 		recents,
-		removedDefaultPaths,
 		userName,
 		setRecents,
 		applyLocationIcon,
@@ -233,22 +234,11 @@ function App() {
 		onViewModeChange: setMode,
 	});
 	openFileAtPathRef.current = openFileAtPath;
+	const uiConfiguration = useUiStore(useShallow(selectUiConfiguration));
+	const savedConfiguration = useSavedLocationsStore(useShallow(selectSavedConfiguration));
 	const configurationRef = useRef<AppConfigurationState>({
-		explorerHidden,
-		outlinePanelVisible,
-		sidebarWidth,
-		barMerged,
-		viewMode: mode,
-		theme,
-		explorerHeaderActionsVisible,
-		sourcesHeaderActionsVisible,
-		windowFrame,
-		pinnedLocations,
-		removedDefaultPaths,
-		locationIcons,
-		onboardingCompleted,
-		userName,
-		recents,
+		...uiConfiguration,
+		...savedConfiguration,
 	});
 	const { isMaximized } = useWindowFramePersistence({
 		initialFrame: initialConfiguration.windowFrame,
@@ -289,42 +279,13 @@ function App() {
 
 	useEffect(() => {
 		const nextConfiguration: AppConfigurationState = {
-			explorerHidden,
-			outlinePanelVisible,
-			sidebarWidth,
-			barMerged,
-			viewMode: mode,
-			theme,
-			explorerHeaderActionsVisible,
-			sourcesHeaderActionsVisible,
-			windowFrame,
-			pinnedLocations,
-			removedDefaultPaths,
-			locationIcons,
-			onboardingCompleted,
-			userName,
-			recents,
+			...uiConfiguration,
+			...savedConfiguration,
 		};
 
 		configurationRef.current = nextConfiguration;
 		saveAppConfiguration(nextConfiguration);
-	}, [
-		barMerged,
-		explorerHidden,
-		outlinePanelVisible,
-		mode,
-		theme,
-		explorerHeaderActionsVisible,
-		sourcesHeaderActionsVisible,
-		sidebarWidth,
-		windowFrame,
-		pinnedLocations,
-		removedDefaultPaths,
-		locationIcons,
-		onboardingCompleted,
-		userName,
-		recents,
-	]);
+	}, [savedConfiguration, uiConfiguration]);
 
 	useEffect(() => {
 		if (!sessionHydrated) {
@@ -547,12 +508,8 @@ function App() {
 		event.preventDefault();
 		event.stopPropagation();
 		cancelDraft();
-		setExplorerHeaderMenu(null);
-		setSourcesHeaderMenu(null);
 		setFocusedEntry(entry);
-		setContextMenuVariant('explorer');
-		setContextMenuRecent(null);
-		setContextMenu(entryToContextTarget(entry, event.clientX, event.clientY));
+		openContextMenuStore(entryToContextTarget(entry, event.clientX, event.clientY));
 	}
 
 	// Right-click on a Recent item from the Home screen. Root recents use the
@@ -562,19 +519,17 @@ function App() {
 	function openRecentContextMenu(item: RecentItem, event: ReactMouseEvent) {
 		event.preventDefault();
 		event.stopPropagation();
-		setExplorerHeaderMenu(null);
-		setSourcesHeaderMenu(null);
-		setSavedMenu(null);
-		setContextMenuRecent(item);
 		const isFile = recentItemKind(item) === 'file';
-		setContextMenuVariant(isFile ? 'recent-file' : 'recent-root');
-		setContextMenu({
-			kind: isFile ? 'file' : 'folder',
-			path: item.path,
-			name: item.name,
-			x: event.clientX,
-			y: event.clientY,
-		});
+		openContextMenuStore(
+			{
+				kind: isFile ? 'file' : 'folder',
+				path: item.path,
+				name: item.name,
+				x: event.clientX,
+				y: event.clientY,
+			},
+			{ variant: isFile ? 'recent-file' : 'recent-root', recent: item }
+		);
 	}
 
 	function openRootContextMenu(event: ReactMouseEvent) {
@@ -584,11 +539,7 @@ function App() {
 		event.preventDefault();
 		event.stopPropagation();
 		cancelDraft();
-		setExplorerHeaderMenu(null);
-		setSourcesHeaderMenu(null);
-		setContextMenuVariant('explorer');
-		setContextMenuRecent(null);
-		setContextMenu({
+		openContextMenuStore({
 			kind: 'folder',
 			path: activeRoot.path,
 			name: activeRoot.name,
@@ -600,10 +551,7 @@ function App() {
 	function openSavedContextMenu(location: Entry, event: ReactMouseEvent) {
 		event.preventDefault();
 		event.stopPropagation();
-		setContextMenu(null);
-		setExplorerHeaderMenu(null);
-		setSourcesHeaderMenu(null);
-		setSavedMenu({ location, x: event.clientX, y: event.clientY });
+		openSavedMenuStore({ location, x: event.clientX, y: event.clientY });
 	}
 
 	function openExplorerHeaderContextMenu(event: ReactMouseEvent) {
@@ -613,42 +561,18 @@ function App() {
 		event.preventDefault();
 		event.stopPropagation();
 		cancelDraft();
-		setContextMenu(null);
-		setContextMenuRecent(null);
-		setContextMenuVariant('explorer');
-		setSavedMenu(null);
-		setSourcesHeaderMenu(null);
-		setExplorerHeaderMenu({ x: event.clientX, y: event.clientY });
+		openExplorerHeaderMenuStore({ x: event.clientX, y: event.clientY });
 	}
 
 	function openSourcesHeaderContextMenu(event: ReactMouseEvent) {
 		event.preventDefault();
 		event.stopPropagation();
 		cancelDraft();
-		setContextMenu(null);
-		setContextMenuRecent(null);
-		setContextMenuVariant('explorer');
-		setSavedMenu(null);
-		setExplorerHeaderMenu(null);
-		setSourcesHeaderMenu({ x: event.clientX, y: event.clientY });
-	}
-
-	function toggleExplorerHeaderAction(action: keyof ExplorerHeaderActionsVisibility) {
-		setExplorerHeaderActionsVisible((current) => ({
-			...current,
-			[action]: !current[action],
-		}));
-	}
-
-	function toggleSourcesHeaderAction(action: keyof SourcesHeaderActionsVisibility) {
-		setSourcesHeaderActionsVisible((current) => ({
-			...current,
-			[action]: !current[action],
-		}));
+		openSourcesHeaderMenuStore({ x: event.clientX, y: event.clientY });
 	}
 
 	async function handleExplorerHeaderMenuAction(action: ExplorerHeaderMenuAction) {
-		setExplorerHeaderMenu(null);
+		closeExplorerHeaderMenu();
 		const targetFolder = getCreateTargetFolder();
 
 		try {
@@ -669,13 +593,13 @@ function App() {
 					}
 					break;
 				case 'toggle-new-file':
-					toggleExplorerHeaderAction('newFile');
+					toggleExplorerHeaderActionStore('newFile');
 					break;
 				case 'toggle-new-folder':
-					toggleExplorerHeaderAction('newFolder');
+					toggleExplorerHeaderActionStore('newFolder');
 					break;
 				case 'toggle-refresh':
-					toggleExplorerHeaderAction('refresh');
+					toggleExplorerHeaderActionStore('refresh');
 					break;
 				default:
 					break;
@@ -686,7 +610,7 @@ function App() {
 	}
 
 	function handleSourcesHeaderMenuAction(action: SourcesHeaderMenuAction) {
-		setSourcesHeaderMenu(null);
+		closeSourcesHeaderMenu();
 
 		switch (action) {
 			case 'switch-explorer':
@@ -705,13 +629,13 @@ function App() {
 				void openFolderAsRoot();
 				break;
 			case 'toggle-search':
-				toggleSourcesHeaderAction('search');
+				toggleSourcesHeaderActionStore('search');
 				break;
 			case 'toggle-outline':
-				toggleSourcesHeaderAction('outline');
+				toggleSourcesHeaderActionStore('outline');
 				break;
 			case 'toggle-pin':
-				toggleSourcesHeaderAction('pin');
+				toggleSourcesHeaderActionStore('pin');
 				break;
 			default:
 				break;
@@ -722,14 +646,14 @@ function App() {
 		if (action === 'change-icon') {
 			// Keep the saved menu position to anchor the picker near it.
 			const menu = savedMenu;
-			setSavedMenu(null);
+			closeSavedMenu();
 			if (menu) {
-				setIconPicker({ location, x: menu.x + 240, y: menu.y });
+				openIconPickerStore({ location, x: menu.x + 240, y: menu.y });
 			}
 			return;
 		}
 
-		setSavedMenu(null);
+		closeSavedMenu();
 
 		try {
 			switch (action) {
@@ -756,10 +680,8 @@ function App() {
 	}
 
 	async function handleContextAction(action: ContextMenuAction, target: ContextMenuTarget) {
-		setContextMenu(null);
 		const recentForAction = contextMenuRecent;
-		setContextMenuRecent(null);
-		setContextMenuVariant('explorer');
+		closeContextMenu();
 
 		try {
 			switch (action) {
@@ -1180,49 +1102,33 @@ function App() {
 
 			<AppMenus
 				context={{
-					target: contextMenu,
-					variant: contextMenuVariant,
 					canPin:
 						contextMenuVariant === 'explorer' &&
 						contextMenu?.kind === 'folder' &&
 						isPinnable(contextMenu.path),
 					onAction: (action, target) => void handleContextAction(action, target),
-					onClose: () => {
-						setContextMenu(null);
-						setContextMenuRecent(null);
-						setContextMenuVariant('explorer');
-					},
 				}}
 				explorerHeader={{
-					menu: explorerHeaderMenu,
 					visibleActions: explorerHeaderActionsVisible,
 					onAction: (action) => void handleExplorerHeaderMenuAction(action),
-					onClose: () => setExplorerHeaderMenu(null),
 				}}
 				sourcesHeader={{
-					menu: sourcesHeaderMenu,
 					visibleActions: sourcesHeaderActionsVisible,
 					showOutlineAction: !outlinePanelVisible,
 					rootPinned: activeRoot ? !isPinnable(activeRoot.path) : false,
 					rootPinDisabled: !activeRoot || !isUnpinnable(activeRoot),
 					onAction: handleSourcesHeaderMenuAction,
-					onClose: () => setSourcesHeaderMenu(null),
 				}}
 				saved={{
-					menu: savedMenu,
 					canUnpin: isUnpinnable,
 					onAction: (action, location) => void handleSavedAction(action, location),
-					onClose: () => setSavedMenu(null),
 				}}
 				iconPicker={{
-					menu: iconPicker,
-					currentIcon: iconPicker ? locationIcons[iconPicker.location.path] : undefined,
 					onSelect: (iconName) => {
 						if (iconPicker) {
 							applyLocationIcon(iconPicker.location, iconName);
 						}
 					},
-					onClose: () => setIconPicker(null),
 				}}
 			/>
 		</div>

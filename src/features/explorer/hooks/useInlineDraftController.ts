@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { createFile, createFolder, renamePath } from '../../files/api/filesApi';
 import type { OpenFile, Entry } from '../../../shared/types/files';
 import {
@@ -13,8 +13,8 @@ import {
 	rebasePath,
 } from '../../../shared/utils/path';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
-import type { InlineDraft } from '../components/TreeInlineInput';
 import type { UnsavedFileDrafts } from '../../files/hooks/useOpenFileController';
+import { useDraftStore } from '../state/useDraftStore';
 
 interface UseInlineDraftControllerOptions {
 	activeRootPath?: string;
@@ -67,7 +67,8 @@ export function useInlineDraftController({
 	onOpenFilePathChange,
 	onUnsavedFileDraftsChange,
 }: UseInlineDraftControllerOptions) {
-	const [draft, setDraft] = useState<InlineDraft | null>(null);
+	const draft = useDraftStore((state) => state.draft);
+	const setDraft = useDraftStore((state) => state.setDraft);
 
 	const ensureFolderOpen = useCallback(
 		async (path: string) => {

@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { readFile, writeFile } from '../api/filesApi';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
-import { markdown } from '../../preview/markdown';
 import type { OpenFile } from '../../../shared/types/files';
 import { comparablePath, fileKindFromPath, fileName, parentPath } from '../../../shared/utils/path';
+import { selectOpenFileStatus, useFileStore, type UnsavedFileDrafts } from '../state/useFileStore';
 
-export type UnsavedFileDrafts = Record<string, OpenFile>;
+export type { UnsavedFileDrafts } from '../state/useFileStore';
 
 interface UseOpenFileControllerOptions {
 	activeRoot: { path: string; name: string } | null;
@@ -29,38 +30,23 @@ export function useOpenFileController({
 	onSelectedFolderPathChange,
 	onViewModeChange,
 }: UseOpenFileControllerOptions) {
-	const [openFile, setOpenFile] = useState<OpenFile | null>(null);
-	const [openFilePath, setOpenFilePath] = useState<string | null>(
-		() => initialOpenFilePath ?? null
-	);
-	const [unsavedFileDrafts, setUnsavedFileDrafts] = useState<UnsavedFileDrafts>({});
-	const [saving, setSaving] = useState(false);
+	const { dirty, openFile, openFilePath, renderedMarkdown, saving, unsavedFileDrafts } =
+		useFileStore(useShallow(selectOpenFileStatus));
+	const hydrate = useFileStore((state) => state.hydrate);
+	const setOpenFile = useFileStore((state) => state.setOpenFile);
+	const setOpenFilePath = useFileStore((state) => state.setOpenFilePath);
+	const setSaving = useFileStore((state) => state.setSaving);
+	const storeUpdateOpenFileContent = useFileStore((state) => state.updateOpenFileContent);
+	const updateUnsavedFileDrafts = useFileStore((state) => state.updateUnsavedFileDrafts);
 	const unsavedFileDraftsRef = useRef<UnsavedFileDrafts>({});
 
-	const updateUnsavedFileDrafts = useCallback(
-		(updater: (current: UnsavedFileDrafts) => UnsavedFileDrafts) => {
-			setUnsavedFileDrafts((current) => {
-				const next = updater(current);
-				unsavedFileDraftsRef.current = next;
-				return next;
-			});
-		},
-		[]
-	);
+	useEffect(() => {
+		hydrate(initialOpenFilePath);
+	}, [hydrate, initialOpenFilePath]);
 
 	useEffect(() => {
 		unsavedFileDraftsRef.current = unsavedFileDrafts;
 	}, [unsavedFileDrafts]);
-
-	const dirty = openFile ? Boolean(unsavedFileDrafts[comparablePath(openFile.path)]) : false;
-
-	const renderedMarkdown = useMemo(() => {
-		if (!openFile || openFile.kind !== 'md') {
-			return '';
-		}
-
-		return markdown.render(openFile.content);
-	}, [openFile]);
 
 	const saveOpenFile = useCallback(async () => {
 		if (!openFile || saving) {
@@ -136,20 +122,9 @@ export function useOpenFileController({
 
 	const updateOpenFileContent = useCallback(
 		(content: string) => {
-			if (!openFile) {
-				return;
-			}
-
-			const nextFile = { ...openFile, content };
-			const draftKey = comparablePath(openFile.path);
-
-			setOpenFile(nextFile);
-			updateUnsavedFileDrafts((current) => ({
-				...current,
-				[draftKey]: nextFile,
-			}));
+			storeUpdateOpenFileContent(content);
 		},
-		[openFile, updateUnsavedFileDrafts]
+		[storeUpdateOpenFileContent]
 	);
 
 	return {

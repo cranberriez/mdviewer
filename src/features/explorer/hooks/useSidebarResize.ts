@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 
 export const DEFAULT_SIDEBAR_WIDTH = 280;
@@ -15,11 +15,7 @@ export function clampSidebarWidth(width: number) {
 	return Math.min(availableMax, Math.max(MIN_SIDEBAR_WIDTH, width));
 }
 
-export function useSidebarResize(initialWidth?: number) {
-	const [sidebarWidth, setSidebarWidth] = useState(() =>
-		clampSidebarWidth(initialWidth ?? DEFAULT_SIDEBAR_WIDTH)
-	);
-
+export function useSidebarResize(sidebarWidth: number, setSidebarWidth: (width: number) => void) {
 	const startSidebarResize = useCallback(
 		(event: ReactPointerEvent<HTMLDivElement>) => {
 			event.preventDefault();
@@ -39,8 +35,8 @@ export function useSidebarResize(initialWidth?: number) {
 			window.addEventListener('pointermove', resize);
 			window.addEventListener('pointerup', stopResize);
 		},
-		[sidebarWidth]
+		[setSidebarWidth, sidebarWidth]
 	);
 
-	return { sidebarWidth, startSidebarResize };
+	return { startSidebarResize };
 }

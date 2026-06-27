@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import type { Entry } from '../../../shared/types/files';
 import type {
 	ExplorerHeaderActionsVisibility,
@@ -7,7 +8,6 @@ import {
 	ContextMenu,
 	type ContextMenuAction,
 	type ContextMenuTarget,
-	type ContextMenuVariant,
 } from '../../explorer/components/ContextMenu';
 import {
 	ExplorerHeaderContextMenu,
@@ -19,50 +19,31 @@ import {
 } from '../../explorer/components/context-menu/SourcesHeaderContextMenu';
 import { SavedContextMenu, type SavedMenuAction } from '../../explorer/components/SavedContextMenu';
 import { IconPickerMenu } from '../../explorer/components/IconPickerMenu';
-
-interface PositionedMenu {
-	x: number;
-	y: number;
-}
-
-interface PositionedLocation extends PositionedMenu {
-	location: Entry;
-}
+import { selectMenuTargets, useMenuStore } from '../state/useMenuStore';
+import { useSavedLocationsStore } from '../../saved-locations/state/useSavedLocationsStore';
 
 interface AppMenusProps {
 	context: {
-		target: ContextMenuTarget | null;
-		variant: ContextMenuVariant;
 		canPin: boolean;
 		onAction: (action: ContextMenuAction, target: ContextMenuTarget) => void;
-		onClose: () => void;
 	};
 	explorerHeader: {
-		menu: PositionedMenu | null;
 		visibleActions: ExplorerHeaderActionsVisibility;
 		onAction: (action: ExplorerHeaderMenuAction) => void;
-		onClose: () => void;
 	};
 	sourcesHeader: {
-		menu: PositionedMenu | null;
 		visibleActions: SourcesHeaderActionsVisibility;
 		showOutlineAction: boolean;
 		rootPinned: boolean;
 		rootPinDisabled: boolean;
 		onAction: (action: SourcesHeaderMenuAction) => void;
-		onClose: () => void;
 	};
 	saved: {
-		menu: PositionedLocation | null;
 		canUnpin: (location: Entry) => boolean;
 		onAction: (action: SavedMenuAction, location: Entry) => void;
-		onClose: () => void;
 	};
 	iconPicker: {
-		menu: PositionedLocation | null;
-		currentIcon?: string;
 		onSelect: (iconName: string) => void;
-		onClose: () => void;
 	};
 }
 
@@ -73,59 +54,76 @@ export function AppMenus({
 	saved,
 	iconPicker,
 }: AppMenusProps) {
+	const {
+		contextMenu,
+		contextMenuVariant,
+		explorerHeaderMenu,
+		iconPicker: iconPickerMenu,
+		savedMenu,
+		sourcesHeaderMenu,
+	} = useMenuStore(useShallow(selectMenuTargets));
+	const closeContextMenu = useMenuStore((state) => state.closeContextMenu);
+	const closeExplorerHeaderMenu = useMenuStore((state) => state.closeExplorerHeaderMenu);
+	const closeIconPicker = useMenuStore((state) => state.closeIconPicker);
+	const closeSavedMenu = useMenuStore((state) => state.closeSavedMenu);
+	const closeSourcesHeaderMenu = useMenuStore((state) => state.closeSourcesHeaderMenu);
+	const currentIcon = useSavedLocationsStore((state) =>
+		iconPickerMenu ? state.locationIcons[iconPickerMenu.location.path] : undefined
+	);
+
 	return (
 		<>
-			{context.target ? (
+			{contextMenu ? (
 				<ContextMenu
-					target={context.target}
-					variant={context.variant}
+					target={contextMenu}
+					variant={contextMenuVariant}
 					canPin={context.canPin}
 					onAction={context.onAction}
-					onClose={context.onClose}
+					onClose={closeContextMenu}
 				/>
 			) : null}
 
-			{explorerHeader.menu ? (
+			{explorerHeaderMenu ? (
 				<ExplorerHeaderContextMenu
-					x={explorerHeader.menu.x}
-					y={explorerHeader.menu.y}
+					x={explorerHeaderMenu.x}
+					y={explorerHeaderMenu.y}
 					visibleActions={explorerHeader.visibleActions}
 					onAction={explorerHeader.onAction}
-					onClose={explorerHeader.onClose}
+					onClose={closeExplorerHeaderMenu}
 				/>
 			) : null}
 
-			{sourcesHeader.menu ? (
+			{sourcesHeaderMenu ? (
 				<SourcesHeaderContextMenu
-					x={sourcesHeader.menu.x}
-					y={sourcesHeader.menu.y}
+					x={sourcesHeaderMenu.x}
+					y={sourcesHeaderMenu.y}
 					visibleActions={sourcesHeader.visibleActions}
 					showOutlineAction={sourcesHeader.showOutlineAction}
 					rootPinned={sourcesHeader.rootPinned}
 					rootPinDisabled={sourcesHeader.rootPinDisabled}
 					onAction={sourcesHeader.onAction}
-					onClose={sourcesHeader.onClose}
+					onClose={closeSourcesHeaderMenu}
 				/>
 			) : null}
 
-			{saved.menu ? (
+			{savedMenu ? (
 				<SavedContextMenu
-					location={saved.menu.location}
-					x={saved.menu.x}
-					y={saved.menu.y}
-					canUnpin={saved.canUnpin(saved.menu.location)}
+					location={savedMenu.location}
+					x={savedMenu.x}
+					y={savedMenu.y}
+					canUnpin={saved.canUnpin(savedMenu.location)}
 					onAction={saved.onAction}
-					onClose={saved.onClose}
+					onClose={closeSavedMenu}
 				/>
 			) : null}
 
-			{iconPicker.menu ? (
+			{iconPickerMenu ? (
 				<IconPickerMenu
-					x={iconPicker.menu.x}
-					y={iconPicker.menu.y}
-					currentIcon={iconPicker.currentIcon}
+					x={iconPickerMenu.x}
+					y={iconPickerMenu.y}
+					currentIcon={currentIcon}
 					onSelect={iconPicker.onSelect}
-					onClose={iconPicker.onClose}
+					onClose={closeIconPicker}
 				/>
 			) : null}
 		</>
