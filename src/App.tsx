@@ -1,68 +1,41 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import {
-	defaultLocations,
-	deletePath,
-	pickFolder,
-	readFolder,
-	revealInExplorer,
-} from './features/files/api/filesApi';
-import type {
-	ContextMenuAction,
-	ContextMenuTarget,
-} from './features/explorer/components/ContextMenu';
-import type { ExplorerHeaderMenuAction } from './features/explorer/components/context-menu/ExplorerHeaderContextMenu';
-import type { SourcesHeaderMenuAction } from './features/explorer/components/context-menu/SourcesHeaderContextMenu';
-import type { SavedMenuAction } from './features/explorer/components/SavedContextMenu';
+import { pickFolder } from './features/files/api/filesApi';
 import { useSidebarResize } from './features/explorer/hooks/useSidebarResize';
 import type { FileViewMode } from './features/file-actions/components/FileActionControls';
 import { useAppFileActionSlots } from './features/file-actions/components/AppFileActionSlots';
 import { useFindInPreview } from './features/file-actions/hooks/useFindInPreview';
 import { usePreviewNavigation } from './features/preview/hooks/usePreviewNavigation';
-import {
-	useOpenFileController,
-	type UnsavedFileDrafts,
-} from './features/files/hooks/useOpenFileController';
+import { useOpenFileController } from './features/files/hooks/useOpenFileController';
 import { useAppDragDropController } from './features/dnd/useAppDragDropController';
 import { DragLayer } from './features/dnd/DragLayer';
 import { TreeDropBadge } from './features/dnd/TreeDropBadge';
 import type { Entry } from './shared/types/files';
+import { comparablePath, parentName, parentPath } from './shared/utils/path';
 import {
-	comparablePath,
-	fileKindFromPath,
-	fileName,
-	parentName,
-	parentPath,
-	relativePath,
-} from './shared/utils/path';
-import {
-	loadAppConfiguration,
-	loadAppSession,
 	recentItemKind,
-	saveAppConfiguration,
-	saveAppSession,
 	type AppConfigurationState,
 	type RecentItem,
 } from './shared/state/persistence';
-import { useThemeClass } from './shared/hooks/useThemeClass';
-import { useWindowFramePersistence } from './features/window-chrome/hooks/useWindowFramePersistence';
 import { useCrossFileSearch } from './features/search/hooks/useCrossFileSearch';
 import { useAppKeyboardShortcuts } from './features/app-shell/hooks/useAppKeyboardShortcuts';
+import { useAppBootstrap } from './features/app-shell/hooks/useAppBootstrap';
+import { useHeaderMenuActions } from './features/app-shell/hooks/useHeaderMenuActions';
+import { useAppMenuActions } from './features/app-shell/hooks/useAppMenuActions';
+import { useAppPersistence } from './features/app-shell/hooks/useAppPersistence';
+import { useInitialLocations } from './features/app-shell/hooks/useInitialLocations';
 import { AppMenus } from './features/app-shell/components/AppMenus';
 import { AppOnboardingOverlay } from './features/app-shell/components/AppOnboardingOverlay';
 import { AppWorkspace } from './features/app-shell/components/AppWorkspace';
-import { findContainingLocation } from './features/saved-locations/savedLocations';
 import { useSavedLocationsController } from './features/saved-locations/hooks/useSavedLocationsController';
-import {
-	confirmDeleteTarget,
-	entryToContextTarget,
-	pathIsDeletedTarget,
-} from './features/explorer/utils/contextTargets';
+import { useSavedLocationMenuActions } from './features/saved-locations/hooks/useSavedLocationMenuActions';
+import { entryToContextTarget } from './features/explorer/utils/contextTargets';
 import { useInlineDraftController } from './features/explorer/hooks/useInlineDraftController';
+import { useFolderTreeController } from './features/explorer/hooks/useFolderTreeController';
+import { useExplorerContextActions } from './features/explorer/hooks/useExplorerContextActions';
 import { selectUiConfiguration, useUiStore } from './features/app-shell/state/useUiStore';
 import { selectExplorerTree, useExplorerStore } from './features/explorer/state/useExplorerStore';
-import { useFileStore } from './features/files/state/useFileStore';
 import {
 	selectSavedConfiguration,
 	useSavedLocationsStore,
@@ -70,31 +43,16 @@ import {
 import { selectMenuTargets, useMenuStore } from './features/app-shell/state/useMenuStore';
 import './App.css';
 
-// Run a built-in editing command (undo/redo/cut/copy/paste) on the focused
-// editor. document.execCommand is formally deprecated, but inside a
-// contentEditable it remains the only API that performs these actions from a
-// programmatic trigger — synthetic keyboard events are untrusted and won't drive
-// the webview's native clipboard/history, and an Electron-style native menu role
-// (how VS Code does this) isn't available under Tauri. The existing markdown
-// editor already relies on execCommand for the same reason. The cast keeps the
-// deprecation off the call site without disabling type-checking.
-const execEditCommand = document.execCommand.bind(document) as (
-	commandId: string,
-	showUI?: boolean,
-	value?: string
-) => boolean;
+type AppContextMenuRequest =
+	| { kind: 'entry'; entry: Entry }
+	| { kind: 'recent'; item: RecentItem }
+	| { kind: 'root' }
+	| { kind: 'saved'; location: Entry }
+	| { kind: 'explorer-header' }
+	| { kind: 'sources-header' };
 
 function App() {
-	const initialConfiguration = useMemo(() => loadAppConfiguration(), []);
-	const initialSession = useMemo(() => loadAppSession(), []);
-	const storesHydratedRef = useRef(false);
-	if (!storesHydratedRef.current) {
-		useUiStore.getState().hydrate(initialConfiguration);
-		useExplorerStore.getState().hydrate(initialSession);
-		useFileStore.getState().hydrate(initialSession.openFilePath);
-		useSavedLocationsStore.getState().hydrate(initialConfiguration);
-		storesHydratedRef.current = true;
-	}
+	const { initialConfiguration, initialSession } = useAppBootstrap();
 
 	const {
 		activeRoot,
@@ -105,17 +63,12 @@ function App() {
 		focusedEntry,
 		loadingPaths,
 		selectedFolderPath,
-		sessionHydrated,
 	} = useExplorerStore(useShallow(selectExplorerTree));
 	const setActiveRoot = useExplorerStore((state) => state.setActiveRoot);
-	const setChildrenCache = useExplorerStore((state) => state.setChildrenCache);
-	const setDefaultLocs = useExplorerStore((state) => state.setDefaultLocs);
 	const setError = useExplorerStore((state) => state.setError);
 	const setExpanded = useExplorerStore((state) => state.setExpanded);
 	const setFocusedEntry = useExplorerStore((state) => state.setFocusedEntry);
-	const setLoadingPaths = useExplorerStore((state) => state.setLoadingPaths);
 	const setSelectedFolderPath = useExplorerStore((state) => state.setSelectedFolderPath);
-	const setSessionHydrated = useExplorerStore((state) => state.setSessionHydrated);
 
 	const {
 		barMerged,
@@ -147,26 +100,16 @@ function App() {
 	const setBarMerged = useUiStore((state) => state.setBarMerged);
 	const setExplorerHidden = useUiStore((state) => state.setExplorerHidden);
 	const setMode = useUiStore((state) => state.setMode);
-	const setOutlinePanelVisible = useUiStore((state) => state.setOutlinePanelVisible);
 	const setOverlay = useUiStore((state) => state.setOverlay);
 	const setPendingFormatAction = useUiStore((state) => state.setPendingFormatAction);
 	const setSidebarMode = useUiStore((state) => state.setSidebarMode);
 	const setSidebarWidth = useUiStore((state) => state.setSidebarWidth);
 	const setTheme = useUiStore((state) => state.setTheme);
-	const setWindowFrame = useUiStore((state) => state.setWindowFrame);
-	const toggleExplorerHeaderActionStore = useUiStore((state) => state.toggleExplorerHeaderAction);
-	const toggleSourcesHeaderActionStore = useUiStore((state) => state.toggleSourcesHeaderAction);
 	const { startSidebarResize } = useSidebarResize(sidebarWidth, setSidebarWidth);
 
-	const { contextMenu, contextMenuRecent, contextMenuVariant, iconPicker, savedMenu } =
-		useMenuStore(useShallow(selectMenuTargets));
-	const closeContextMenu = useMenuStore((state) => state.closeContextMenu);
-	const closeExplorerHeaderMenu = useMenuStore((state) => state.closeExplorerHeaderMenu);
-	const closeSavedMenu = useMenuStore((state) => state.closeSavedMenu);
-	const closeSourcesHeaderMenu = useMenuStore((state) => state.closeSourcesHeaderMenu);
+	const { contextMenu, contextMenuVariant } = useMenuStore(useShallow(selectMenuTargets));
 	const openContextMenuStore = useMenuStore((state) => state.openContextMenu);
 	const openExplorerHeaderMenuStore = useMenuStore((state) => state.openExplorerHeaderMenu);
-	const openIconPickerStore = useMenuStore((state) => state.openIconPicker);
 	const openSavedMenuStore = useMenuStore((state) => state.openSavedMenu);
 	const openSourcesHeaderMenuStore = useMenuStore((state) => state.openSourcesHeaderMenu);
 	const findTargetRef = useRef<HTMLElement | null>(null);
@@ -204,7 +147,6 @@ function App() {
 		openRecent,
 		pinFolder,
 		recordFileRecent,
-		removeRecentItem,
 		skipOnboarding,
 		touchRootRecent,
 		toggleRootPin,
@@ -234,29 +176,18 @@ function App() {
 		onViewModeChange: setMode,
 	});
 	openFileAtPathRef.current = openFileAtPath;
-	const uiConfiguration = useUiStore(useShallow(selectUiConfiguration));
-	const savedConfiguration = useSavedLocationsStore(useShallow(selectSavedConfiguration));
+	const { getCreateTargetFolder, loadFolder, refreshFolder, selectFile, toggleFolder } =
+		useFolderTreeController({ openFileAtPath });
 	const configurationRef = useRef<AppConfigurationState>({
-		...uiConfiguration,
-		...savedConfiguration,
+		...selectUiConfiguration(useUiStore.getState()),
+		...selectSavedConfiguration(useSavedLocationsStore.getState()),
 	});
-	const { isMaximized } = useWindowFramePersistence({
+	const { isMaximized } = useAppPersistence({
 		initialFrame: initialConfiguration.windowFrame,
 		configurationRef,
+		theme,
 		unsavedFileDraftsRef,
-		onFrameChange: setWindowFrame,
 	});
-
-	useThemeClass(theme);
-
-	function getCreateTargetFolder() {
-		return (
-			selectedFolderPath ??
-			(openFilePath ? parentPath(openFilePath) : null) ??
-			activeRoot?.path ??
-			null
-		);
-	}
 
 	const findContentKey =
 		mode === 'preview' && openFile?.kind === 'md' ? renderedMarkdown : (openFile?.content ?? '');
@@ -277,128 +208,7 @@ function App() {
 		return () => window.cancelAnimationFrame(frame);
 	}, [find, mode, openFile?.path, renderedMarkdown]);
 
-	useEffect(() => {
-		const nextConfiguration: AppConfigurationState = {
-			...uiConfiguration,
-			...savedConfiguration,
-		};
-
-		configurationRef.current = nextConfiguration;
-		saveAppConfiguration(nextConfiguration);
-	}, [savedConfiguration, uiConfiguration]);
-
-	useEffect(() => {
-		if (!sessionHydrated) {
-			return;
-		}
-
-		saveAppSession({
-			activeRootPath: activeRoot?.path,
-			selectedFolderPath: selectedFolderPath ?? undefined,
-			openFilePath: openFilePath ?? undefined,
-			expandedPaths: Array.from(expanded),
-		});
-	}, [activeRoot?.path, expanded, openFilePath, selectedFolderPath, sessionHydrated]);
-
-	useEffect(() => {
-		let cancelled = false;
-
-		async function loadLocations() {
-			try {
-				const defaults = await defaultLocations();
-				if (cancelled) {
-					return;
-				}
-
-				setDefaultLocs(defaults);
-				const restorable = [...defaults, ...(initialConfiguration.pinnedLocations ?? [])];
-				const restoredRoot =
-					restorable.find((location) => location.path === initialSession.activeRootPath) ??
-					restorable.find((location) => location.path === initialSession.selectedFolderPath) ??
-					findContainingLocation(restorable, initialSession.openFilePath) ??
-					findContainingLocation(restorable, initialSession.selectedFolderPath) ??
-					// Fall back to reconstructing the root from the saved path if it isn't
-					// a pinned/default location (e.g. a folder opened via the native picker).
-					(initialSession.activeRootPath
-						? {
-								name: fileName(initialSession.activeRootPath),
-								path: initialSession.activeRootPath,
-								is_dir: true,
-								kind: 'folder' as const,
-							}
-						: null);
-				const first = restoredRoot ?? defaults[0] ?? null;
-				const restoredSelectedFolder =
-					initialSession.selectedFolderPath ??
-					(initialSession.openFilePath
-						? parentPath(initialSession.openFilePath)
-						: (first?.path ?? null));
-
-				setActiveRoot(first);
-				setSelectedFolderPath(restoredSelectedFolder);
-
-				if (first) {
-					await loadFolder(first.path);
-					await Promise.all(
-						initialSession.expandedPaths
-							.filter((path) => path !== first.path)
-							.map((path) => loadFolder(path, { quiet: true }))
-					);
-				}
-
-				// The app always launches on the Home screen (or onboarding on first
-				// run). The tree is pre-loaded above so the explorer is ready, but we
-				// deliberately do NOT auto-open the last file: Home is the landing
-				// place, and opening anything from Home or the explorer dismisses it.
-			} catch (cause) {
-				if (!cancelled) {
-					setError(`Unable to load default locations: ${String(cause)}`);
-				}
-			} finally {
-				if (!cancelled) {
-					setSessionHydrated(true);
-				}
-			}
-		}
-
-		void loadLocations();
-
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
-	async function loadFolder(path: string, options?: { quiet?: boolean; force?: boolean }) {
-		if (childrenCache[path] && !options?.force) {
-			return;
-		}
-
-		if (!options?.quiet) {
-			setError(null);
-		}
-		setLoadingPaths((current) => new Set(current).add(path));
-
-		try {
-			const children = await readFolder(path);
-			setChildrenCache((current) => ({ ...current, [path]: children }));
-		} catch (cause) {
-			if (!options?.quiet) {
-				setError(`Unable to read folder: ${String(cause)}`);
-			}
-		} finally {
-			setLoadingPaths((current) => {
-				const next = new Set(current);
-				next.delete(path);
-				return next;
-			});
-		}
-	}
-
-	// Re-read a folder from disk and refresh its cached children. The active root
-	// is keyed by its own path in childrenCache, so this covers it too.
-	async function refreshFolder(path: string) {
-		await loadFolder(path, { force: true, quiet: true });
-	}
+	useInitialLocations({ initialConfiguration, initialSession, loadFolder });
 
 	const { scrollToAnchor, handleLinkClick } = usePreviewNavigation({
 		findTargetRef,
@@ -462,6 +272,32 @@ function App() {
 			onOpenFilePathChange: setOpenFilePath,
 			onUnsavedFileDraftsChange: updateUnsavedFileDrafts,
 		});
+	const handleContextAction = useExplorerContextActions({
+		locations,
+		loadFolder,
+		openFileAtPath,
+		pinFolder,
+		refreshFolder,
+		startCreateDraft,
+		startRenameDraft,
+	});
+	const { handleMenuAction, menuState } = useAppMenuActions({
+		find,
+		openFolderAsRoot,
+		saveOpenFile,
+		startCreateDraft,
+	});
+	const { handleExplorerHeaderMenuAction, handleSourcesHeaderMenuAction } = useHeaderMenuActions({
+		getCreateTargetFolder,
+		openFolderAsRoot,
+		refreshFolder,
+		startCreateDraft,
+		toggleRootPin,
+	});
+	const { handleIconSelect, handleSavedAction } = useSavedLocationMenuActions({
+		applyLocationIcon,
+		unpinLocation,
+	});
 
 	async function selectLocation(location: Entry) {
 		setActiveRoot(location);
@@ -478,440 +314,63 @@ function App() {
 		await loadFolder(location.path);
 	}
 
-	async function toggleFolder(entry: Entry) {
-		const willExpand = !expanded.has(entry.path);
-		setSelectedFolderPath(entry.path);
-		setFocusedEntry(entry);
+	function openAppContextMenu(request: AppContextMenuRequest, event: ReactMouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
 
-		setExpanded((current) => {
-			const next = new Set(current);
-			if (willExpand) {
-				next.add(entry.path);
-			} else {
-				next.delete(entry.path);
+		switch (request.kind) {
+			case 'entry':
+				cancelDraft();
+				setFocusedEntry(request.entry);
+				openContextMenuStore(entryToContextTarget(request.entry, event.clientX, event.clientY));
+				break;
+			case 'recent': {
+				const isFile = recentItemKind(request.item) === 'file';
+				openContextMenuStore(
+					{
+						kind: isFile ? 'file' : 'folder',
+						path: request.item.path,
+						name: request.item.name,
+						x: event.clientX,
+						y: event.clientY,
+					},
+					{ variant: isFile ? 'recent-file' : 'recent-root', recent: request.item }
+				);
+				break;
 			}
-			return next;
-		});
-
-		if (willExpand) {
-			await loadFolder(entry.path);
-		}
-	}
-
-	async function selectFile(entry: Entry) {
-		setFocusedEntry(entry);
-		setOverlay(null);
-		await openFileAtPath(entry.path);
-	}
-
-	function openEntryContextMenu(entry: Entry, event: ReactMouseEvent) {
-		event.preventDefault();
-		event.stopPropagation();
-		cancelDraft();
-		setFocusedEntry(entry);
-		openContextMenuStore(entryToContextTarget(entry, event.clientX, event.clientY));
-	}
-
-	// Right-click on a Recent item from the Home screen. Root recents use the
-	// trimmed "recent-root" menu (remove, rename, delete, reveal, copy path); the
-	// rootless "file" recent uses the "recent-file" menu and a file-kind target so
-	// Open/reveal/delete act on the file itself.
-	function openRecentContextMenu(item: RecentItem, event: ReactMouseEvent) {
-		event.preventDefault();
-		event.stopPropagation();
-		const isFile = recentItemKind(item) === 'file';
-		openContextMenuStore(
-			{
-				kind: isFile ? 'file' : 'folder',
-				path: item.path,
-				name: item.name,
-				x: event.clientX,
-				y: event.clientY,
-			},
-			{ variant: isFile ? 'recent-file' : 'recent-root', recent: item }
-		);
-	}
-
-	function openRootContextMenu(event: ReactMouseEvent) {
-		if (!activeRoot) {
-			return;
-		}
-		event.preventDefault();
-		event.stopPropagation();
-		cancelDraft();
-		openContextMenuStore({
-			kind: 'folder',
-			path: activeRoot.path,
-			name: activeRoot.name,
-			x: event.clientX,
-			y: event.clientY,
-		});
-	}
-
-	function openSavedContextMenu(location: Entry, event: ReactMouseEvent) {
-		event.preventDefault();
-		event.stopPropagation();
-		openSavedMenuStore({ location, x: event.clientX, y: event.clientY });
-	}
-
-	function openExplorerHeaderContextMenu(event: ReactMouseEvent) {
-		if (!activeRoot) {
-			return;
-		}
-		event.preventDefault();
-		event.stopPropagation();
-		cancelDraft();
-		openExplorerHeaderMenuStore({ x: event.clientX, y: event.clientY });
-	}
-
-	function openSourcesHeaderContextMenu(event: ReactMouseEvent) {
-		event.preventDefault();
-		event.stopPropagation();
-		cancelDraft();
-		openSourcesHeaderMenuStore({ x: event.clientX, y: event.clientY });
-	}
-
-	async function handleExplorerHeaderMenuAction(action: ExplorerHeaderMenuAction) {
-		closeExplorerHeaderMenu();
-		const targetFolder = getCreateTargetFolder();
-
-		try {
-			switch (action) {
-				case 'new-file':
-					if (targetFolder) {
-						await startCreateDraft(targetFolder, 'file');
-					}
-					break;
-				case 'new-folder':
-					if (targetFolder) {
-						await startCreateDraft(targetFolder, 'folder');
-					}
-					break;
-				case 'refresh':
-					if (activeRoot) {
-						await refreshFolder(activeRoot.path);
-					}
-					break;
-				case 'toggle-new-file':
-					toggleExplorerHeaderActionStore('newFile');
-					break;
-				case 'toggle-new-folder':
-					toggleExplorerHeaderActionStore('newFolder');
-					break;
-				case 'toggle-refresh':
-					toggleExplorerHeaderActionStore('refresh');
-					break;
-				default:
-					break;
-			}
-		} catch (cause) {
-			setError(`${String(cause)}`);
-		}
-	}
-
-	function handleSourcesHeaderMenuAction(action: SourcesHeaderMenuAction) {
-		closeSourcesHeaderMenu();
-
-		switch (action) {
-			case 'switch-explorer':
-				setSidebarMode('explorer');
+			case 'root':
+				if (activeRoot) {
+					cancelDraft();
+					openContextMenuStore({
+						kind: 'folder',
+						path: activeRoot.path,
+						name: activeRoot.name,
+						x: event.clientX,
+						y: event.clientY,
+					});
+				}
 				break;
-			case 'switch-search':
-				setSidebarMode('search');
+			case 'saved':
+				openSavedMenuStore({
+					location: request.location,
+					x: event.clientX,
+					y: event.clientY,
+				});
 				break;
-			case 'switch-outline':
-				setSidebarMode('outline');
+			case 'explorer-header':
+				if (activeRoot) {
+					cancelDraft();
+					openExplorerHeaderMenuStore({ x: event.clientX, y: event.clientY });
+				}
 				break;
-			case 'toggle-root-pin':
-				toggleRootPin();
-				break;
-			case 'open-folder':
-				void openFolderAsRoot();
-				break;
-			case 'toggle-search':
-				toggleSourcesHeaderActionStore('search');
-				break;
-			case 'toggle-outline':
-				toggleSourcesHeaderActionStore('outline');
-				break;
-			case 'toggle-pin':
-				toggleSourcesHeaderActionStore('pin');
+			case 'sources-header':
+				cancelDraft();
+				openSourcesHeaderMenuStore({ x: event.clientX, y: event.clientY });
 				break;
 			default:
 				break;
 		}
 	}
-
-	async function handleSavedAction(action: SavedMenuAction, location: Entry) {
-		if (action === 'change-icon') {
-			// Keep the saved menu position to anchor the picker near it.
-			const menu = savedMenu;
-			closeSavedMenu();
-			if (menu) {
-				openIconPickerStore({ location, x: menu.x + 240, y: menu.y });
-			}
-			return;
-		}
-
-		closeSavedMenu();
-
-		try {
-			switch (action) {
-				case 'reveal':
-					await revealInExplorer(location.path);
-					break;
-				case 'copy-path':
-					await navigator.clipboard?.writeText(location.path);
-					break;
-				case 'copy-relative-path':
-					await navigator.clipboard?.writeText(
-						activeRoot ? relativePath(activeRoot.path, location.path) : location.path
-					);
-					break;
-				case 'unpin':
-					unpinLocation(location);
-					break;
-				default:
-					break;
-			}
-		} catch (cause) {
-			setError(`${String(cause)}`);
-		}
-	}
-
-	async function handleContextAction(action: ContextMenuAction, target: ContextMenuTarget) {
-		const recentForAction = contextMenuRecent;
-		closeContextMenu();
-
-		try {
-			switch (action) {
-				case 'remove-recent':
-					if (recentForAction) {
-						removeRecentItem(recentForAction);
-					}
-					break;
-				case 'open':
-					if (target.kind === 'file') {
-						await openFileAtPath(target.path);
-					}
-					break;
-				case 'new-file':
-					await startCreateDraft(target.path, 'file');
-					break;
-				case 'new-folder':
-					await startCreateDraft(target.path, 'folder');
-					break;
-				case 'pin':
-					pinFolder({
-						name: target.name,
-						path: target.path,
-						is_dir: true,
-						kind: 'folder',
-					});
-					break;
-				case 'rename':
-					startRenameDraft({
-						name: target.name,
-						path: target.path,
-						is_dir: target.kind === 'folder',
-						kind: target.kind === 'folder' ? 'folder' : fileKindFromPath(target.path),
-					});
-					break;
-				case 'reveal':
-					await revealInExplorer(target.path);
-					break;
-				case 'copy-path':
-					await navigator.clipboard?.writeText(target.path);
-					break;
-				case 'copy-relative-path':
-					await navigator.clipboard?.writeText(
-						activeRoot ? relativePath(activeRoot.path, target.path) : target.path
-					);
-					break;
-				case 'delete': {
-					const confirmed = await confirmDeleteTarget(target);
-					if (!confirmed) {
-						break;
-					}
-
-					await deletePath(target.path);
-
-					if (pathIsDeletedTarget(target, openFilePath)) {
-						setOpenFile(null);
-						setOpenFilePath(null);
-					}
-					updateUnsavedFileDrafts((current) => {
-						const next: UnsavedFileDrafts = {};
-						Object.entries(current).forEach(([key, draft]) => {
-							if (!pathIsDeletedTarget(target, draft.path)) {
-								next[key] = draft;
-							}
-						});
-						return next;
-					});
-					setSelectedFolderPath((current) =>
-						pathIsDeletedTarget(target, current) ? parentPath(target.path) : current
-					);
-					setFocusedEntry((current) =>
-						pathIsDeletedTarget(target, current?.path) ? null : current
-					);
-					setExpanded((current) => {
-						const next = new Set<string>();
-						current.forEach((path) => {
-							if (!pathIsDeletedTarget(target, path)) {
-								next.add(path);
-							}
-						});
-						return next;
-					});
-					setChildrenCache((current) => {
-						const next: Record<string, Entry[]> = {};
-						Object.entries(current).forEach(([path, entries]) => {
-							if (!pathIsDeletedTarget(target, path)) {
-								next[path] = entries;
-							}
-						});
-						return next;
-					});
-
-					// Update recents: drop any root whose folder was deleted, and clear
-					// the lastFile of any root whose recorded file was deleted.
-					setRecents((current) =>
-						current
-							.filter((item) => !pathIsDeletedTarget(target, item.path))
-							.map((item) =>
-								item.lastFile && pathIsDeletedTarget(target, item.lastFile.path)
-									? { ...item, lastFile: undefined }
-									: item
-							)
-					);
-
-					if (pathIsDeletedTarget(target, activeRoot?.path)) {
-						const fallbackRoot =
-							locations.find((location) => !pathIsDeletedTarget(target, location.path)) ?? null;
-						setActiveRoot(fallbackRoot);
-						setSelectedFolderPath(fallbackRoot?.path ?? null);
-						if (fallbackRoot) {
-							await loadFolder(fallbackRoot.path, { force: true });
-						}
-					} else {
-						await refreshFolder(parentPath(target.path));
-					}
-					break;
-				}
-				default:
-					break;
-			}
-		} catch (cause) {
-			setError(`${String(cause)}`);
-		}
-	}
-
-	// Dispatch a menu-bar action to the matching existing handler. Edit clipboard
-	// / history actions defer to the browser's built-in commands so they behave
-	// exactly like the native Ctrl+Z / Ctrl+X / … keybinds on the focused editor.
-	const handleMenuAction = useCallback(
-		(id: string) => {
-			const targetFolder = selectedFolderPath ?? activeRoot?.path ?? null;
-
-			switch (id) {
-				case 'new-file':
-					if (targetFolder) {
-						void startCreateDraft(targetFolder, 'file');
-					}
-					return;
-				case 'new-folder':
-					if (targetFolder) {
-						void startCreateDraft(targetFolder, 'folder');
-					}
-					return;
-				case 'open-folder':
-					void openFolderAsRoot();
-					return;
-				case 'save':
-					void saveOpenFile();
-					return;
-				case 'reveal':
-					if (openFilePath) {
-						void revealInExplorer(openFilePath);
-					}
-					return;
-				case 'find':
-					if (openFile) {
-						find.setOpen(true);
-					}
-					return;
-				case 'find-in-files':
-					setExplorerHidden(false);
-					setSidebarMode('search');
-					return;
-				case 'toggle-explorer':
-					setExplorerHidden((hidden) => !hidden);
-					return;
-				case 'toggle-outline-panel':
-					setOutlinePanelVisible((visible) => !visible);
-					return;
-				case 'mode-preview':
-					setMode('preview');
-					return;
-				case 'mode-edit':
-					setMode('edit');
-					return;
-				case 'mode-code':
-					setMode('code');
-					return;
-				case 'toggle-bar':
-					setBarMerged((merged) => !merged);
-					return;
-				case 'toggle-theme':
-					setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
-					return;
-				// Editor clipboard / history — run the webview's built-in editing
-				// commands on the focused editor (see execEditCommand above).
-				case 'undo':
-					execEditCommand('undo');
-					return;
-				case 'redo':
-					execEditCommand('redo');
-					return;
-				case 'cut':
-					execEditCommand('cut');
-					return;
-				case 'copy':
-					execEditCommand('copy');
-					return;
-				case 'paste':
-					// execCommand("paste") is a no-op in some engines; fall back to the
-					// async Clipboard API and insert the text at the caret.
-					if (!execEditCommand('paste')) {
-						void navigator.clipboard
-							?.readText()
-							.then((text) => execEditCommand('insertText', false, text))
-							.catch(() => undefined);
-					}
-					return;
-				default:
-					return;
-			}
-		},
-		[activeRoot?.path, find, openFile, openFilePath, saveOpenFile, selectedFolderPath]
-	);
-
-	const menuState = useMemo(
-		() => ({
-			hasOpenFile: Boolean(openFile),
-			dirty,
-			isMarkdown: openFile?.kind === 'md',
-			isEditing: mode === 'edit' || mode === 'code',
-			canCopy: Boolean(openFile),
-			explorerHidden,
-			outlinePanelVisible,
-			barMerged,
-			theme,
-			mode,
-		}),
-		[openFile, dirty, mode, explorerHidden, outlinePanelVisible, barMerged, theme]
-	);
 
 	const title = openFile?.name ?? activeRoot?.name ?? 'Markdown Viewer';
 	// Show the open file's parent folder as a middle crumb, but only when it
@@ -1027,21 +486,24 @@ function App() {
 					},
 					onDraftCancel: cancelDraft,
 					onDraftSubmit: submitDraft,
-					onEntryContextMenu: openEntryContextMenu,
-					onExplorerHeaderContextMenu: openExplorerHeaderContextMenu,
+					onEntryContextMenu: (entry, event) => openAppContextMenu({ kind: 'entry', entry }, event),
+					onExplorerHeaderContextMenu: (event) =>
+						openAppContextMenu({ kind: 'explorer-header' }, event),
 					onOpenFolder: () => void openFolderAsRoot(),
 					onRefreshRoot: () => {
 						if (activeRoot) {
 							void refreshFolder(activeRoot.path);
 						}
 					},
-					onRootContextMenu: openRootContextMenu,
-					onSavedContextMenu: openSavedContextMenu,
+					onRootContextMenu: (event) => openAppContextMenu({ kind: 'root' }, event),
+					onSavedContextMenu: (location, event) =>
+						openAppContextMenu({ kind: 'saved', location }, event),
 					onSelectFile: selectFile,
 					onSelectHeading: (id) => scrollToAnchor(id),
 					onSelectLocation: selectLocation,
 					onSidebarModeChange: setSidebarMode,
-					onSourcesHeaderContextMenu: openSourcesHeaderContextMenu,
+					onSourcesHeaderContextMenu: (event) =>
+						openAppContextMenu({ kind: 'sources-header' }, event),
 					onToggleFolder: toggleFolder,
 					onToggleRootPin: toggleRootPin,
 					onToggleTheme: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
@@ -1054,10 +516,11 @@ function App() {
 					recents,
 					userName,
 					onEditSetup: () => setOverlay('onboarding'),
-					onLocationContextMenu: openSavedContextMenu,
+					onLocationContextMenu: (location, event) =>
+						openAppContextMenu({ kind: 'saved', location }, event),
 					onOpenFolder: () => void openFolderAsRoot(),
 					onOpenRecent: (item) => void openRecent(item),
-					onRecentContextMenu: openRecentContextMenu,
+					onRecentContextMenu: (item, event) => openAppContextMenu({ kind: 'recent', item }, event),
 					onSelectLocation: (location) => void selectLocation(location),
 				}}
 				preview={{
@@ -1124,11 +587,7 @@ function App() {
 					onAction: (action, location) => void handleSavedAction(action, location),
 				}}
 				iconPicker={{
-					onSelect: (iconName) => {
-						if (iconPicker) {
-							applyLocationIcon(iconPicker.location, iconName);
-						}
-					},
+					onSelect: handleIconSelect,
 				}}
 			/>
 		</div>
