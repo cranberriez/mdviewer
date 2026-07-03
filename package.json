@@ -1,7 +1,7 @@
 {
 	"name": "mdviewer",
 	"private": true,
-	"version": "0.2.2",
+	"version": "0.3.3",
 	"packageManager": "pnpm@11.8.0",
 	"type": "module",
 	"scripts": {
@@ -35,7 +35,8 @@
 		"markdown-it": "^14.2.0",
 		"markdown-it-task-lists": "^2.1.1",
 		"react": "^19.1.0",
-		"react-dom": "^19.1.0"
+		"react-dom": "^19.1.0",
+		"zustand": "^5.0.14"
 	},
 	"devDependencies": {
 		"@tailwindcss/vite": "^4.3.1",

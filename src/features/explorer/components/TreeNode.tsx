@@ -79,12 +79,24 @@ export function TreeNode({
     draft?.mode === "create" && draft.parentPath === entry.path ? draft : null;
 
   useEffect(() => {
-    if (!isActiveFile) {
+    const row = rowRef.current;
+    if (!isActiveFile || !row) {
       return;
     }
 
-    rowRef.current?.scrollIntoView({
-      block: "center",
+    const tree = row.closest(".tree");
+    if (!(tree instanceof HTMLElement)) {
+      return;
+    }
+
+    const rowRect = row.getBoundingClientRect();
+    const treeRect = tree.getBoundingClientRect();
+    if (rowRect.top >= treeRect.top && rowRect.bottom <= treeRect.bottom) {
+      return;
+    }
+
+    row.scrollIntoView({
+      block: "nearest",
       inline: "nearest",
     });
   }, [isActiveFile]);
