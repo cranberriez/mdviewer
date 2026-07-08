@@ -3,6 +3,7 @@ import {
 	useEffect,
 	useId,
 	useLayoutEffect,
+	useMemo,
 	useRef,
 	useState,
 	type MouseEvent as ReactMouseEvent,
@@ -331,6 +332,7 @@ export function MenuBar({ state, compact, onAction }: MenuBarProps) {
 	const [openId, setOpenId] = useState<string | null>(null);
 	const [anchor, setAnchor] = useState<DOMRect | null>(null);
 	const barRef = useRef<HTMLDivElement | null>(null);
+	const dismissIgnoreRefs = useMemo<RefObject<Element | null>[]>(() => [barRef], []);
 	const reactId = useId();
 
 	const close = useCallback(() => {
@@ -393,7 +395,7 @@ export function MenuBar({ state, compact, onAction }: MenuBarProps) {
 					<CompactMenu
 						menus={menus}
 						anchor={anchor}
-						ignoreRefs={[barRef]}
+						ignoreRefs={dismissIgnoreRefs}
 						onAction={handleAction}
 						onClose={close}
 					/>
@@ -424,7 +426,7 @@ export function MenuBar({ state, compact, onAction }: MenuBarProps) {
 				<DropdownPanel
 					menu={activeMenu}
 					anchor={anchor}
-					ignoreRefs={[barRef]}
+					ignoreRefs={dismissIgnoreRefs}
 					onAction={handleAction}
 					onClose={close}
 				/>

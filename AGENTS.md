@@ -59,8 +59,8 @@ src/
                               SidebarFooter, SidebarHeaderActions, TreeNode,
                               TreeInlineInput, EmptySidebar, SavedContextMenu,
                               IconPickerMenu
-      components/context-menu/ ContextMenuSurface (generic), *ContextMenu, *FilterMenu,
-                              treeContextMenuEntries, menuPosition
+      components/context-menu/ *ContextMenu, *FilterMenu, savedContextMenuEntries,
+                              treeContextMenuEntries
       hooks/                  useExplorerContextActions, useFolderTreeController,
                               useInlineDraftController, useSidebarResize, …
       state/                  useExplorerStore, useDraftStore
@@ -71,9 +71,10 @@ src/
       state/useFileStore
     preview/                  Rendering + editing (markdown-it + Lexical)
       components/             PreviewPanel, MarkdownPreview, PlainTextPreview,
-                              LexicalMarkdownEditor, VisualMarkdownEditor, lexical/*
+                              LexicalMarkdownEditor, VisualMarkdownEditor, lexical/*,
+                              visual-markdown/*
       markdown.ts, markdownActions.ts, domToMarkdown.ts, slug.ts
-      hooks/usePreviewNavigation
+      hooks/                  useCodeEditorToolbar, usePreviewNavigation, useScrollSync
     file-actions/             Action bar / toolbar + find-in-preview
       components/             FileActionBar, FileActionControls, FindBar,
                               IconActionButton, MarkdownFormatToolbar
@@ -94,6 +95,7 @@ src/
     utils/path.ts             comparablePath, parentPath, relativePath, fileKindFromPath…
     hooks/useThemeClass.ts
     ui/components/Notice.tsx
+    ui/menu/                  ContextMenuSurface, useAnchoredPosition, useMenuDismiss
 ```
 
 ---
@@ -117,7 +119,8 @@ directly. Adding native behavior = new Rust command → new wrapper here.
 ### 4. Data-driven context menus (**the reusable menu system**)
 - `ContextMenuSurface<Action>` is the generic renderer: takes `entries: MenuEntry<Action>[]`
   (`MenuItem` or `MenuSeparator`), handles portal, viewport clamping, dismissal, checkbox
-  items, icons, shortcuts, danger styling.
+  items, icons, shortcuts, danger styling. It lives in `shared/ui/menu/` with the shared
+  positioning and dismissal hooks.
 - Each menu is a thin component that builds an `entries` array and renders the surface —
   see `ExplorerFilterMenu`, `SourcesHeaderContextMenu`, `ExplorerHeaderContextMenu`,
   `SavedContextMenu`, and `treeContextMenuEntries.ts` (which composes shared fragments).
@@ -125,12 +128,19 @@ directly. Adding native behavior = new Rust command → new wrapper here.
 > Note: `IconPickerMenu` keeps a custom grid body, but still uses the shared positioning
 > and dismissal hooks. New list-style menus should use `ContextMenuSurface`.
 
-### 5. Single action-dispatcher hooks
+### 5. Preview/editor serializers
+Preview copy and visual editing currently serialize different inputs:
+`preview/domToMarkdown.ts` converts rendered preview DOM selections back to Markdown, while
+`preview/components/visual-markdown/serialize.ts` serializes the contenteditable visual
+editor. Treat them as separate implementations unless a future consolidation normalizes
+both inputs behind one serializer contract.
+
+### 6. Single action-dispatcher hooks
 Menu actions are strings routed through one `switch`. `useExplorerContextActions` is the
 model: `(action, target) => { switch(action) … }`. Add an action = extend the action union
 + add a `case`. Don't scatter handlers across components.
 
-### 6. Controller hooks own workflows
+### 7. Controller hooks own workflows
 `use*Controller` / `use*Actions` hooks encapsulate multi-step flows (open file, saved
 locations, drag/drop, inline draft rename/create). `App.tsx` wires their inputs/outputs.
 
@@ -142,7 +152,7 @@ Use feature-scoped action hooks such as `useExplorerActions()`, `useUiActions()`
 `useMenuActions()` when a coordinator needs several store actions. Keep the existing
 `select*` state selectors for rendering state.
 
-### 7. Sidebar panels own their display state
+### 8. Sidebar panels own their display state
 `Sidebar.tsx` is a coordinator for the sources panel, explorer panel, and footer. Keep
 panel-specific display state in `SidebarSourceList`, `SidebarExplorerHeader`, and
 `SidebarFooter`, reading Zustand stores directly where appropriate. Pass workflow
