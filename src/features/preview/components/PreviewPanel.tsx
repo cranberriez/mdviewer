@@ -267,7 +267,8 @@ export function PreviewPanel({
 			}
 
 			const snapshot = scrollSnapshotsRef.current[scrollSnapshotKey(panel)];
-			const restoreRatio = sharedFileTopRatioRef.current[filePositionKey] ?? snapshot?.topRatio ?? 0;
+			const restoreRatio =
+				sharedFileTopRatioRef.current[filePositionKey] ?? snapshot?.topRatio ?? 0;
 			const nextScrollTop = clampScrollTop(restoreRatio * element.scrollHeight, element);
 
 			if (Math.abs(element.scrollTop - nextScrollTop) < 1) {
@@ -302,50 +303,56 @@ export function PreviewPanel({
 		findTargetRef.current = previewScrollRef.current;
 	}, [findTargetRef, mode, openFile]);
 
-	const applyCenterRatio = useCallback((panel: ScrollPanel, ratio: number) => {
-		const element = getPanelElement(panel);
+	const applyCenterRatio = useCallback(
+		(panel: ScrollPanel, ratio: number) => {
+			const element = getPanelElement(panel);
 
-		if (!element || element.clientHeight === 0 || element.scrollHeight === 0) {
-			return;
-		}
+			if (!element || element.clientHeight === 0 || element.scrollHeight === 0) {
+				return;
+			}
 
-		const nextScrollTop = clampScrollTop(
-			ratio * element.scrollHeight - element.clientHeight / 2,
-			element
-		);
+			const nextScrollTop = clampScrollTop(
+				ratio * element.scrollHeight - element.clientHeight / 2,
+				element
+			);
 
-		if (Math.abs(element.scrollTop - nextScrollTop) < 1) {
-			return;
-		}
+			if (Math.abs(element.scrollTop - nextScrollTop) < 1) {
+				return;
+			}
 
-		ignoredScrollPanelsRef.current.add(panel);
-		element.scrollTop = nextScrollTop;
+			ignoredScrollPanelsRef.current.add(panel);
+			element.scrollTop = nextScrollTop;
 
-		window.requestAnimationFrame(() => {
-			ignoredScrollPanelsRef.current.delete(panel);
-		});
-	}, [getPanelElement]);
+			window.requestAnimationFrame(() => {
+				ignoredScrollPanelsRef.current.delete(panel);
+			});
+		},
+		[getPanelElement]
+	);
 
-	const applyTopRatio = useCallback((panel: ScrollPanel, ratio: number) => {
-		const element = getPanelElement(panel);
+	const applyTopRatio = useCallback(
+		(panel: ScrollPanel, ratio: number) => {
+			const element = getPanelElement(panel);
 
-		if (!element || element.clientHeight === 0 || element.scrollHeight === 0) {
-			return;
-		}
+			if (!element || element.clientHeight === 0 || element.scrollHeight === 0) {
+				return;
+			}
 
-		const nextScrollTop = clampScrollTop(ratio * element.scrollHeight, element);
+			const nextScrollTop = clampScrollTop(ratio * element.scrollHeight, element);
 
-		if (Math.abs(element.scrollTop - nextScrollTop) < 1) {
-			return;
-		}
+			if (Math.abs(element.scrollTop - nextScrollTop) < 1) {
+				return;
+			}
 
-		ignoredScrollPanelsRef.current.add(panel);
-		element.scrollTop = nextScrollTop;
+			ignoredScrollPanelsRef.current.add(panel);
+			element.scrollTop = nextScrollTop;
 
-		window.requestAnimationFrame(() => {
-			ignoredScrollPanelsRef.current.delete(panel);
-		});
-	}, [getPanelElement]);
+			window.requestAnimationFrame(() => {
+				ignoredScrollPanelsRef.current.delete(panel);
+			});
+		},
+		[getPanelElement]
+	);
 
 	const syncFromPanel = useCallback(
 		(panel: ScrollPanel, element: HTMLElement) => {
@@ -476,14 +483,14 @@ export function PreviewPanel({
 			window.requestAnimationFrame(() => {
 				const el = editorScrollRef.current;
 				if (el) {
-						el.selectionStart = caret;
-						el.selectionEnd = caret;
-						rememberSelectionSnapshot(mode, {
-							start: caret,
-							end: caret,
-						});
-					}
-				});
+					el.selectionStart = caret;
+					el.selectionEnd = caret;
+					rememberSelectionSnapshot(mode, {
+						start: caret,
+						end: caret,
+					});
+				}
+			});
 		},
 		[handleEditorContentChange, mode, rememberSelectionSnapshot, rememberTextareaSelection]
 	);
@@ -687,7 +694,14 @@ export function PreviewPanel({
 			currentEditor.setSelectionRange(result.selection.start, result.selection.end);
 			rememberSelectionSnapshot(mode, result.selection);
 		});
-	}, [mode, onContentChange, openFile, pendingFormatAction, pushToolbarHistory, rememberSelectionSnapshot]);
+	}, [
+		mode,
+		onContentChange,
+		openFile,
+		pendingFormatAction,
+		pushToolbarHistory,
+		rememberSelectionSnapshot,
+	]);
 
 	const previewContent = openFile ? (
 		openFile.kind === 'md' ? (
