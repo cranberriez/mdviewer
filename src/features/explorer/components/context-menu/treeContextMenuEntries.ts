@@ -13,7 +13,7 @@ import {
 	Trash2,
 	X,
 } from 'lucide-react';
-import type { MenuEntry, MenuItem } from './ContextMenuSurface';
+import type { MenuEntry, MenuItem } from '../../../../shared/ui/menu/ContextMenuSurface';
 
 export type ContextMenuTargetKind = 'folder' | 'file';
 

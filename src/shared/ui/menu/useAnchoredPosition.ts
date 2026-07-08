@@ -3,10 +3,15 @@ import type { DependencyList } from 'react';
 
 const VIEWPORT_PADDING = 8;
 
+export interface AnchoredPositionOptions {
+	fallbackY?: (height: number) => number;
+}
+
 export function useAnchoredPosition<T extends HTMLElement>(
 	x: number,
 	y: number,
-	deps: DependencyList = []
+	deps: DependencyList = [],
+	options: AnchoredPositionOptions = {}
 ) {
 	const menuRef = useRef<T | null>(null);
 	const [position, setPosition] = useState({ x, y });
@@ -26,13 +31,17 @@ export function useAnchoredPosition<T extends HTMLElement>(
 			nextX = Math.max(VIEWPORT_PADDING, window.innerWidth - width - VIEWPORT_PADDING);
 		}
 		if (nextY + height + VIEWPORT_PADDING > window.innerHeight) {
-			nextY = Math.max(VIEWPORT_PADDING, window.innerHeight - height - VIEWPORT_PADDING);
+			const fallbackY = options.fallbackY?.(height);
+			nextY =
+				fallbackY === undefined
+					? Math.max(VIEWPORT_PADDING, window.innerHeight - height - VIEWPORT_PADDING)
+					: Math.max(VIEWPORT_PADDING, fallbackY);
 		}
 
 		setPosition({ x: nextX, y: nextY });
 		setReady(true);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [x, y, ...deps]);
+	}, [x, y, options.fallbackY, ...deps]);
 
 	return { menuRef, position, ready };
 }

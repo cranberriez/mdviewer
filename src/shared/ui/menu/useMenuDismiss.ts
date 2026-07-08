@@ -1,13 +1,38 @@
 import { useEffect } from 'react';
 import type { RefObject } from 'react';
 
+interface UseMenuDismissOptions {
+	enabled?: boolean;
+	ignoreRefs?: RefObject<Element | null>[];
+	ignoreSelector?: string;
+}
+
 export function useMenuDismiss<T extends HTMLElement>(
 	menuRef: RefObject<T | null>,
-	onClose: () => void
+	onClose: () => void,
+	options: UseMenuDismissOptions = {}
 ) {
 	useEffect(() => {
+		if (options.enabled === false) {
+			return;
+		}
+
+		function isIgnoredTarget(target: Node) {
+			if (menuRef.current?.contains(target)) {
+				return true;
+			}
+			if (options.ignoreRefs?.some((ref) => ref.current?.contains(target))) {
+				return true;
+			}
+			return Boolean(
+				options.ignoreSelector &&
+					target instanceof HTMLElement &&
+					target.closest(options.ignoreSelector)
+			);
+		}
+
 		function handlePointerDown(event: MouseEvent) {
-			if (!menuRef.current?.contains(event.target as Node)) {
+			if (!isIgnoredTarget(event.target as Node)) {
 				onClose();
 			}
 		}
@@ -30,5 +55,5 @@ export function useMenuDismiss<T extends HTMLElement>(
 			window.removeEventListener('blur', onClose);
 			window.removeEventListener('resize', onClose);
 		};
-	}, [menuRef, onClose]);
+	}, [menuRef, onClose, options.enabled, options.ignoreRefs, options.ignoreSelector]);
 }

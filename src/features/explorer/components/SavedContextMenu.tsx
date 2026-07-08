@@ -1,5 +1,5 @@
 import type { Entry } from '../../../shared/types/files';
-import { ContextMenuSurface } from './context-menu/ContextMenuSurface';
+import { ContextMenuSurface } from '../../../shared/ui/menu/ContextMenuSurface';
 import {
 	entriesForSavedLocation,
 	type SavedMenuAction,

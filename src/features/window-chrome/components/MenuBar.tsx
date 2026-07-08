@@ -6,6 +6,7 @@ import {
 	useRef,
 	useState,
 	type MouseEvent as ReactMouseEvent,
+	type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -33,33 +34,19 @@ import {
 	Sun,
 	Undo2,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import {
+	ContextMenuSurface,
+	type MenuEntry,
+} from '../../../shared/ui/menu/ContextMenuSurface';
+import { useAnchoredPosition } from '../../../shared/ui/menu/useAnchoredPosition';
+import { useMenuDismiss } from '../../../shared/ui/menu/useMenuDismiss';
 
-// A single command in a menu. `disabled` items render greyed-out (features that
-// are part of the planned surface but not yet wired). `danger` is reserved for
-// destructive items if any are added later.
-export interface MenuItemDef {
-	id: string;
-	label: string;
-	icon: LucideIcon;
-	shortcut?: string;
-	disabled?: boolean;
-}
-
-interface MenuSeparator {
-	separator: true;
-}
-
-type MenuEntry = MenuItemDef | MenuSeparator;
-
-function isSeparator(entry: MenuEntry): entry is MenuSeparator {
-	return 'separator' in entry;
-}
+type MenuBarAction = string;
 
 export interface TopMenuDef {
 	id: string;
 	label: string;
-	entries: MenuEntry[];
+	entries: MenuEntry<MenuBarAction>[];
 }
 
 // State surfaced from the app so menus can reflect/disable items contextually
@@ -219,102 +206,32 @@ function buildMenus(state: MenuBarState): TopMenuDef[] {
 	];
 }
 
-const VIEWPORT_PADDING = 8;
-
 // A flat dropdown panel anchored to a rect (the menu button). Used for the
 // full-width File/Edit/View menus.
 function DropdownPanel({
 	menu,
 	anchor,
+	ignoreRefs,
 	onAction,
 	onClose,
 }: {
 	menu: TopMenuDef;
 	anchor: DOMRect;
-	onAction: (id: string) => void;
-	onClose: () => void;
-}) {
-	const ref = useRef<HTMLDivElement | null>(null);
-	const [pos, setPos] = useState<{ x: number; y: number }>({
-		x: anchor.left,
-		y: anchor.bottom + 4,
-	});
-	const [ready, setReady] = useState(false);
-
-	useLayoutEffect(() => {
-		const el = ref.current;
-		if (!el) {
-			return;
-		}
-		const { offsetWidth: w, offsetHeight: h } = el;
-		let x = anchor.left;
-		let y = anchor.bottom + 4;
-		if (x + w + VIEWPORT_PADDING > window.innerWidth) {
-			x = Math.max(VIEWPORT_PADDING, window.innerWidth - w - VIEWPORT_PADDING);
-		}
-		if (y + h + VIEWPORT_PADDING > window.innerHeight) {
-			// Flip above the button if there's no room below.
-			y = Math.max(VIEWPORT_PADDING, anchor.top - h - 4);
-		}
-		setPos({ x, y });
-		setReady(true);
-	}, [anchor, menu.id]);
-
-	return createPortal(
-		<div
-			ref={ref}
-			className={`menu-dropdown ctx-menu ${ready ? 'show' : ''}`}
-			role="menu"
-			style={{ left: pos.x, top: pos.y }}
-		>
-			<MenuItems entries={menu.entries} onAction={onAction} onClose={onClose} />
-		</div>,
-		document.body
-	);
-}
-
-// Shared renderer for a list of menu entries.
-function MenuItems({
-	entries,
-	onAction,
-	onClose,
-}: {
-	entries: MenuEntry[];
+	ignoreRefs: RefObject<Element | null>[];
 	onAction: (id: string) => void;
 	onClose: () => void;
 }) {
 	return (
-		<>
-			{entries.map((entry, index) => {
-				if (isSeparator(entry)) {
-					// eslint-disable-next-line react/no-array-index-key
-					return <div key={`sep-${index}`} className="ctx-sep" />;
-				}
-				const Icon = entry.icon;
-				return (
-					<button
-						key={entry.id}
-						type="button"
-						role="menuitem"
-						className="ctx-item"
-						disabled={entry.disabled}
-						onClick={() => {
-							if (entry.disabled) {
-								return;
-							}
-							onAction(entry.id);
-							onClose();
-						}}
-					>
-						<span className="ci-ico">
-							<Icon size={15} />
-						</span>
-						<span className="ci-label">{entry.label}</span>
-						{entry.shortcut ? <span className="ci-key">{entry.shortcut}</span> : null}
-					</button>
-				);
-			})}
-		</>
+		<ContextMenuSurface
+			x={anchor.left}
+			y={anchor.bottom + 4}
+			entries={menu.entries}
+			className="menu-dropdown"
+			positionOptions={{ fallbackY: (height) => anchor.top - height - 4 }}
+			dismissIgnoreRefs={ignoreRefs}
+			onSelect={onAction}
+			onClose={onClose}
+		/>
 	);
 }
 
@@ -323,41 +240,30 @@ function MenuItems({
 function CompactMenu({
 	menus,
 	anchor,
+	ignoreRefs,
 	onAction,
 	onClose,
 }: {
 	menus: TopMenuDef[];
 	anchor: DOMRect;
+	ignoreRefs: RefObject<Element | null>[];
 	onAction: (id: string) => void;
 	onClose: () => void;
 }) {
-	const rootRef = useRef<HTMLDivElement | null>(null);
 	const rowRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 	const [activeId, setActiveId] = useState<string>(menus[0]?.id ?? '');
-	const [pos, setPos] = useState<{ x: number; y: number }>({
-		x: anchor.left,
-		y: anchor.bottom + 4,
-	});
 	const [subPos, setSubPos] = useState<{ x: number; y: number } | null>(null);
-	const [ready, setReady] = useState(false);
-
-	useLayoutEffect(() => {
-		const el = rootRef.current;
-		if (!el) {
-			return;
-		}
-		const { offsetWidth: w, offsetHeight: h } = el;
-		let x = anchor.left;
-		let y = anchor.bottom + 4;
-		if (x + w + VIEWPORT_PADDING > window.innerWidth) {
-			x = Math.max(VIEWPORT_PADDING, window.innerWidth - w - VIEWPORT_PADDING);
-		}
-		if (y + h + VIEWPORT_PADDING > window.innerHeight) {
-			y = Math.max(VIEWPORT_PADDING, anchor.top - h - 4);
-		}
-		setPos({ x, y });
-		setReady(true);
-	}, [anchor]);
+	const {
+		menuRef: rootRef,
+		position,
+		ready,
+	} = useAnchoredPosition<HTMLDivElement>(anchor.left, anchor.bottom + 4, [anchor], {
+		fallbackY: (height) => anchor.top - height - 4,
+	});
+	useMenuDismiss(rootRef, onClose, {
+		ignoreRefs,
+		ignoreSelector: '.menu-dropdown',
+	});
 
 	// Position the submenu beside the active row.
 	useLayoutEffect(() => {
@@ -369,7 +275,7 @@ function CompactMenu({
 		const rootRect = root.getBoundingClientRect();
 		const rowRect = row.getBoundingClientRect();
 		setSubPos({ x: rootRect.right + 4, y: rowRect.top });
-	}, [activeId, pos]);
+	}, [activeId, position, rootRef]);
 
 	const activeMenu = menus.find((m) => m.id === activeId) ?? menus[0];
 
@@ -379,7 +285,7 @@ function CompactMenu({
 				ref={rootRef}
 				className={`menu-dropdown menu-compact-root ctx-menu ${ready ? 'show' : ''}`}
 				role="menu"
-				style={{ left: pos.x, top: pos.y }}
+				style={{ left: position.x, top: position.y }}
 			>
 				{menus.map((menu) => (
 					<button
@@ -403,13 +309,15 @@ function CompactMenu({
 			</div>
 
 			{activeMenu && subPos ? (
-				<div
-					className={`menu-dropdown menu-compact-sub ctx-menu ${ready ? 'show' : ''}`}
-					role="menu"
-					style={{ left: subPos.x, top: subPos.y }}
-				>
-					<MenuItems entries={activeMenu.entries} onAction={onAction} onClose={onClose} />
-				</div>
+				<ContextMenuSurface
+					x={subPos.x}
+					y={subPos.y}
+					entries={activeMenu.entries}
+					className="menu-dropdown menu-compact-sub"
+					dismiss={false}
+					onSelect={onAction}
+					onClose={onClose}
+				/>
 			) : null}
 		</>,
 		document.body
@@ -430,40 +338,7 @@ export function MenuBar({ state, compact, onAction }: MenuBarProps) {
 		setAnchor(null);
 	}, []);
 
-	// Close on outside interaction / escape / window changes.
-	useEffect(() => {
-		if (!openId) {
-			return;
-		}
-		function onPointerDown(event: MouseEvent) {
-			const target = event.target as Node;
-			if (barRef.current?.contains(target)) {
-				return;
-			}
-			// Clicks inside a portalled menu are handled by the item itself.
-			if ((target as HTMLElement)?.closest?.('.menu-dropdown')) {
-				return;
-			}
-			close();
-		}
-		function onKey(event: KeyboardEvent) {
-			if (event.key === 'Escape') {
-				close();
-			}
-		}
-		window.addEventListener('mousedown', onPointerDown);
-		window.addEventListener('keydown', onKey);
-		window.addEventListener('blur', close);
-		window.addEventListener('resize', close);
-		return () => {
-			window.removeEventListener('mousedown', onPointerDown);
-			window.removeEventListener('keydown', onKey);
-			window.removeEventListener('blur', close);
-			window.removeEventListener('resize', close);
-		};
-	}, [openId, close]);
-
-	// When the bar collapses/expands, any open menu would be stale — close it.
+	// When the bar collapses/expands, any open menu would be stale - close it.
 	useEffect(() => {
 		close();
 	}, [compact, close]);
@@ -515,7 +390,13 @@ export function MenuBar({ state, compact, onAction }: MenuBarProps) {
 					<MenuIcon size={16} />
 				</button>
 				{openId === '__compact__' && anchor ? (
-					<CompactMenu menus={menus} anchor={anchor} onAction={handleAction} onClose={close} />
+					<CompactMenu
+						menus={menus}
+						anchor={anchor}
+						ignoreRefs={[barRef]}
+						onAction={handleAction}
+						onClose={close}
+					/>
 				) : null}
 			</div>
 		);
@@ -540,7 +421,13 @@ export function MenuBar({ state, compact, onAction }: MenuBarProps) {
 				</button>
 			))}
 			{activeMenu && anchor ? (
-				<DropdownPanel menu={activeMenu} anchor={anchor} onAction={handleAction} onClose={close} />
+				<DropdownPanel
+					menu={activeMenu}
+					anchor={anchor}
+					ignoreRefs={[barRef]}
+					onAction={handleAction}
+					onClose={close}
+				/>
 			) : null}
 		</div>
 	);
