@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import type { SidebarMode } from '../../explorer/components/Sidebar';
 import { DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth } from '../../explorer/hooks/useSidebarResize';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
@@ -162,3 +163,17 @@ export const selectUiConfiguration = (state: UiStore) => ({
 	sourcesHeaderActionsVisible: state.sourcesHeaderActionsVisible,
 	windowFrame: state.windowFrame,
 });
+
+export const selectUiActions = (state: UiStore) => ({
+	setBarMerged: state.setBarMerged,
+	setExplorerHidden: state.setExplorerHidden,
+	setMode: state.setMode,
+	setOverlay: state.setOverlay,
+	setPendingFormatAction: state.setPendingFormatAction,
+	setSidebarMode: state.setSidebarMode,
+	setSidebarWidth: state.setSidebarWidth,
+});
+
+export function useUiActions() {
+	return useUiStore(useShallow(selectUiActions));
+}

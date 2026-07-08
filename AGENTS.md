@@ -29,9 +29,9 @@ Scripts: `pnpm dev`, `pnpm check` (tsc), `pnpm build`, `pnpm format`, `pnpm bund
 The app is organized by **feature folder**, not by file type. Each feature owns its
 `components/`, `hooks/`, and `state/`. Cross-cutting code lives in `shared/`. All native
 calls go through one boundary: `features/files/api/filesApi.ts` (thin `invoke()` wrappers).
-`App.tsx` is a **wiring hub** — it composes feature hooks and passes their output into
-`AppWorkspace` (layout) and `AppMenus` (all popovers). Business logic lives in hooks and
-Zustand stores, not in `App.tsx`.
+`App.tsx` is a **wiring hub** — it composes feature hooks and passes memoized prop bundles
+into `AppWorkspace` (layout) and `AppMenus` (all popovers). Business logic lives in hooks
+and Zustand stores, not in `App.tsx`.
 
 Data flow: **UI event → controller/action hook → `filesApi` (IPC) and/or Zustand store →
 re-render**. Menus are data-driven: a component builds a `MenuEntry[]` array and hands it to
@@ -51,6 +51,7 @@ src/
     app-shell/                Top-level composition & app-wide concerns
       components/             AppWorkspace, AppMenus, AppPreviewArea, AppOnboardingOverlay
       hooks/                  useAppBootstrap, useApp{Menu,Keyboard,Persistence}…,
+                              useFileWorkspace, useAppContextMenuRouter,
                               useHeaderMenuActions, useInitialLocations
       state/                  useUiStore, useMenuStore   (Zustand)
     explorer/                 Sidebar tree, saved locations, context menus
@@ -133,6 +134,14 @@ model: `(action, target) => { switch(action) … }`. Add an action = extend the 
 `use*Controller` / `use*Actions` hooks encapsulate multi-step flows (open file, saved
 locations, drag/drop, inline draft rename/create). `App.tsx` wires their inputs/outputs.
 
+`useFileWorkspace` is the app-level coordinator for file opening, folder-tree helpers,
+saved-location workflows, and location selection. Keep `selectLocation` there so file,
+explorer, UI, and recents updates stay ordered without cross-hook refs in `App.tsx`.
+
+Use feature-scoped action hooks such as `useExplorerActions()`, `useUiActions()`, and
+`useMenuActions()` when a coordinator needs several store actions. Keep the existing
+`select*` state selectors for rendering state.
+
 ### 7. Sidebar panels own their display state
 `Sidebar.tsx` is a coordinator for the sources panel, explorer panel, and footer. Keep
 panel-specific display state in `SidebarSourceList`, `SidebarExplorerHeader`, and
@@ -157,7 +166,8 @@ callbacks down from `AppWorkspace` only when they come from controller hooks.
 **Add a new popover menu**
 1. New component that builds `MenuEntry[]` + renders `ContextMenuSurface`.
 2. Add open/close state to `useMenuStore`.
-3. Render it in `app-shell/components/AppMenus.tsx`.
+3. Route app-level open events through `useAppContextMenuRouter` when they are triggered
+   from `AppWorkspace`; render the popover in `app-shell/components/AppMenus.tsx`.
 
 **Add a Tauri command** → `src-tauri/src/lib.rs` (`generate_handler!`) → wrapper in
 `filesApi.ts` → call from a hook. See `docs/tauri-commands.md`.
@@ -186,8 +196,7 @@ keep the count a multiple of 6).
 
 ## Known rough edges — see `../fixer-tasks.md`
 
-- `App.tsx` uses cross-hook refs to paper over a hook dependency cycle; some logic
-  (`openAppContextMenu`, `selectLocation`) still lives inline.
+- No open Priority 3 App wiring cleanup remains; check `../fixer-tasks.md` for newer items.
 
 ---
 
