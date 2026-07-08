@@ -37,7 +37,9 @@ function entriesForSourcesHeader({
 		{ id: 'switch-explorer', label: 'Switch to Explorer', icon: Folder },
 		{ id: 'switch-search', label: 'Switch to Search', icon: Search },
 		...(showOutlineAction
-			? ([{ id: 'switch-outline', label: 'Switch to Outline', icon: List }] as MenuEntry<SourcesHeaderMenuAction>[])
+			? ([
+					{ id: 'switch-outline', label: 'Switch to Outline', icon: List },
+				] as MenuEntry<SourcesHeaderMenuAction>[])
 			: []),
 		{
 			id: 'toggle-root-pin',

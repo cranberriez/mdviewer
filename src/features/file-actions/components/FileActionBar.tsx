@@ -1,13 +1,9 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
 interface FileActionBarProps {
-  children: ReactNode;
+	children: ReactNode;
 }
 
 export function FileActionBar({ children }: FileActionBarProps) {
-  return (
-    <div className="file-action-row">
-      {children}
-    </div>
-  );
+	return <div className="file-action-row">{children}</div>;
 }

@@ -1,46 +1,56 @@
-import type { Entry, EntryKind } from "../types/files";
+import type { Entry, EntryKind } from '../types/files';
 
-export type StoredFileViewMode = "preview" | "edit" | "code";
+export type StoredFileViewMode = 'preview' | 'edit' | 'code';
 
 export interface StoredWindowFrame {
-  width: number;
-  height: number;
-  x: number;
-  y: number;
-  maximized: boolean;
+	width: number;
+	height: number;
+	x: number;
+	y: number;
+	maximized: boolean;
 }
 
-export type AppTheme = "dark" | "light";
+export type AppTheme = 'dark' | 'light';
 
 export interface ExplorerHeaderActionsVisibility {
-  newFile: boolean;
-  newFolder: boolean;
-  refresh: boolean;
+	newFile: boolean;
+	newFolder: boolean;
+	refresh: boolean;
 }
 
 export interface SourcesHeaderActionsVisibility {
-  search: boolean;
-  outline: boolean;
-  pin: boolean;
+	search: boolean;
+	outline: boolean;
+	pin: boolean;
+}
+
+export interface ExplorerFilterOptions {
+	showHiddenItems: boolean;
+	showNonTextFiles: boolean;
 }
 
 export const DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE: ExplorerHeaderActionsVisibility = {
-  newFile: true,
-  newFolder: true,
-  refresh: true,
+	newFile: true,
+	newFolder: true,
+	refresh: true,
 };
 
 export const DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE: SourcesHeaderActionsVisibility = {
-  search: true,
-  outline: true,
-  pin: true,
+	search: true,
+	outline: true,
+	pin: true,
+};
+
+export const DEFAULT_EXPLORER_FILTERS: ExplorerFilterOptions = {
+	showHiddenItems: false,
+	showNonTextFiles: false,
 };
 
 /** The last file opened within a recent root, if any. */
 export interface RecentFile {
-  path: string;
-  name: string;
-  kind: Exclude<EntryKind, "folder">;
+	path: string;
+	name: string;
+	kind: Extract<EntryKind, 'md' | 'text'>;
 }
 
 /**
@@ -58,257 +68,267 @@ export interface RecentFile {
  * field existed are roots, and `recentItemKind` treats a missing value as such.
  */
 export interface RecentItem {
-  /** "root" (default) or "file". Optional so pre-existing data reads as a root. */
-  kind?: "root" | "file";
-  /** Absolute path of the root folder, or of the file for `kind: "file"`. */
-  path: string;
-  /** Display name of the folder, or of the file for `kind: "file"`. */
-  name: string;
-  /** For `kind: "file"`, the file's kind (drives its icon). */
-  fileKind?: Exclude<EntryKind, "folder">;
-  /** The most-recently-opened file within this root, or undefined if the root
-   *  was selected but no file was ever opened. Unused for `kind: "file"`. */
-  lastFile?: RecentFile;
-  /** Epoch millis when this root was last touched; drives ordering. */
-  openedAt: number;
+	/** "root" (default) or "file". Optional so pre-existing data reads as a root. */
+	kind?: 'root' | 'file';
+	/** Absolute path of the root folder, or of the file for `kind: "file"`. */
+	path: string;
+	/** Display name of the folder, or of the file for `kind: "file"`. */
+	name: string;
+	/** For `kind: "file"`, the file's kind (drives its icon). */
+	fileKind?: Extract<EntryKind, 'md' | 'text'>;
+	/** The most-recently-opened file within this root, or undefined if the root
+	 *  was selected but no file was ever opened. Unused for `kind: "file"`. */
+	lastFile?: RecentFile;
+	/** Epoch millis when this root was last touched; drives ordering. */
+	openedAt: number;
 }
 
 /** A recent entry's effective kind, treating legacy (missing) values as roots. */
-export function recentItemKind(item: RecentItem): "root" | "file" {
-  return item.kind === "file" ? "file" : "root";
+export function recentItemKind(item: RecentItem): 'root' | 'file' {
+	return item.kind === 'file' ? 'file' : 'root';
 }
 
 /** Maximum number of recent roots kept. */
 export const MAX_RECENTS = 5;
 
 export interface AppConfigurationState {
-  explorerHidden: boolean;
-  /** Whether the floating left-side outline panel is shown. */
-  outlinePanelVisible?: boolean;
-  sidebarWidth: number;
-  barMerged: boolean;
-  viewMode: StoredFileViewMode;
-  theme?: AppTheme;
-  windowFrame?: StoredWindowFrame;
-  /** Folders the user explicitly pinned to Saved (beyond the defaults). */
-  pinnedLocations?: Entry[];
-  /** Paths of default locations (e.g. Documents) the user has unpinned. */
-  removedDefaultPaths?: string[];
-  /** Custom icon name per saved-location path. Home icon is never stored here. */
-  locationIcons?: Record<string, string>;
-  /** True once the user has completed (or skipped) first-run onboarding. */
-  onboardingCompleted?: boolean;
-  /** Optional display name from onboarding, used to greet on the Home screen. */
-  userName?: string;
-  /** Recently opened files and roots, newest first, capped at MAX_RECENTS. */
-  recents?: RecentItem[];
-  /** Visibility of compact action buttons in the Explorer section header. */
-  explorerHeaderActionsVisible?: ExplorerHeaderActionsVisibility;
-  /** Visibility of optional buttons in the Sources header. */
-  sourcesHeaderActionsVisible?: SourcesHeaderActionsVisibility;
+	explorerHidden: boolean;
+	/** Whether the floating left-side outline panel is shown. */
+	outlinePanelVisible?: boolean;
+	sidebarWidth: number;
+	barMerged: boolean;
+	viewMode: StoredFileViewMode;
+	theme?: AppTheme;
+	windowFrame?: StoredWindowFrame;
+	/** Folders the user explicitly pinned to Saved (beyond the defaults). */
+	pinnedLocations?: Entry[];
+	/** Paths of default locations (e.g. Documents) the user has unpinned. */
+	removedDefaultPaths?: string[];
+	/** Custom icon name per saved-location path. Home icon is never stored here. */
+	locationIcons?: Record<string, string>;
+	/** True once the user has completed (or skipped) first-run onboarding. */
+	onboardingCompleted?: boolean;
+	/** Optional display name from onboarding, used to greet on the Home screen. */
+	userName?: string;
+	/** Recently opened files and roots, newest first, capped at MAX_RECENTS. */
+	recents?: RecentItem[];
+	/** Visibility of compact action buttons in the Explorer section header. */
+	explorerHeaderActionsVisible?: ExplorerHeaderActionsVisibility;
+	/** Visibility of optional buttons in the Sources header. */
+	sourcesHeaderActionsVisible?: SourcesHeaderActionsVisibility;
+	/** Explorer tree filtering options. */
+	explorerFilters?: ExplorerFilterOptions;
 }
 
 export interface AppSessionState {
-  activeRootPath?: string;
-  selectedFolderPath?: string;
-  openFilePath?: string;
-  expandedPaths: string[];
+	activeRootPath?: string;
+	selectedFolderPath?: string;
+	openFilePath?: string;
+	expandedPaths: string[];
 }
 
-const CONFIGURATION_KEY = "mdviewer.configuration.v1";
-const SESSION_KEY = "mdviewer.session.v1";
+const CONFIGURATION_KEY = 'mdviewer.configuration.v1';
+const SESSION_KEY = 'mdviewer.session.v1';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function readRecord(key: string) {
-  if (typeof window === "undefined") {
-    return null;
-  }
+	if (typeof window === 'undefined') {
+		return null;
+	}
 
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
-      return null;
-    }
+	try {
+		const raw = window.localStorage.getItem(key);
+		if (!raw) {
+			return null;
+		}
 
-    const parsed: unknown = JSON.parse(raw);
-    return isRecord(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+		const parsed: unknown = JSON.parse(raw);
+		return isRecord(parsed) ? parsed : null;
+	} catch {
+		return null;
+	}
 }
 
 function writeRecord(key: string, value: unknown) {
-  if (typeof window === "undefined") {
-    return;
-  }
+	if (typeof window === 'undefined') {
+		return;
+	}
 
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Persistence should never break the viewer itself.
-  }
+	try {
+		window.localStorage.setItem(key, JSON.stringify(value));
+	} catch {
+		// Persistence should never break the viewer itself.
+	}
 }
 
 function readString(value: unknown) {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+	return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function readStringArray(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
+	if (!Array.isArray(value)) {
+		return [];
+	}
 
-  return value.filter(
-    (item): item is string => typeof item === "string" && item.length > 0,
-  );
+	return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
 }
 
 function readNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+	return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function readStringRecord(value: unknown): Record<string, string> {
-  if (!isRecord(value)) {
-    return {};
-  }
+	if (!isRecord(value)) {
+		return {};
+	}
 
-  const result: Record<string, string> = {};
-  for (const [key, val] of Object.entries(value)) {
-    if (typeof val === "string" && val.length > 0) {
-      result[key] = val;
-    }
-  }
-  return result;
+	const result: Record<string, string> = {};
+	for (const [key, val] of Object.entries(value)) {
+		if (typeof val === 'string' && val.length > 0) {
+			result[key] = val;
+		}
+	}
+	return result;
 }
 
 function readEntry(value: unknown): Entry | null {
-  if (!isRecord(value)) {
-    return null;
-  }
+	if (!isRecord(value)) {
+		return null;
+	}
 
-  const name = readString(value.name);
-  const path = readString(value.path);
-  const kind = value.kind;
+	const name = readString(value.name);
+	const path = readString(value.path);
+	const kind = value.kind;
 
-  if (
-    name === undefined ||
-    path === undefined ||
-    typeof value.is_dir !== "boolean" ||
-    (kind !== "folder" && kind !== "md" && kind !== "text")
-  ) {
-    return null;
-  }
+	if (
+		name === undefined ||
+		path === undefined ||
+		typeof value.is_dir !== 'boolean' ||
+		(kind !== 'folder' && kind !== 'md' && kind !== 'text' && kind !== 'unsupported')
+	) {
+		return null;
+	}
 
-  return { name, path, is_dir: value.is_dir, kind };
+	return { name, path, is_dir: value.is_dir, kind };
 }
 
 function readEntryArray(value: unknown): Entry[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
+	if (!Array.isArray(value)) {
+		return [];
+	}
 
-  return value
-    .map(readEntry)
-    .filter((entry): entry is Entry => entry !== null);
+	return value.map(readEntry).filter((entry): entry is Entry => entry !== null);
 }
 
 function readBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
+	return typeof value === 'boolean' ? value : undefined;
 }
 
 function readExplorerHeaderActionsVisibility(
-  value: unknown,
+	value: unknown
 ): ExplorerHeaderActionsVisibility | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
+	if (!isRecord(value)) {
+		return undefined;
+	}
 
-  return {
-    newFile: readBoolean(value.newFile) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFile,
-    newFolder: readBoolean(value.newFolder) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFolder,
-    refresh: readBoolean(value.refresh) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.refresh,
-  };
+	return {
+		newFile: readBoolean(value.newFile) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFile,
+		newFolder: readBoolean(value.newFolder) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.newFolder,
+		refresh: readBoolean(value.refresh) ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE.refresh,
+	};
 }
 
 function readSourcesHeaderActionsVisibility(
-  value: unknown,
+	value: unknown
 ): SourcesHeaderActionsVisibility | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
+	if (!isRecord(value)) {
+		return undefined;
+	}
 
-  return {
-    search: readBoolean(value.search) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.search,
-    outline: readBoolean(value.outline) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.outline,
-    pin: readBoolean(value.pin) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.pin,
-  };
+	return {
+		search: readBoolean(value.search) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.search,
+		outline: readBoolean(value.outline) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.outline,
+		pin: readBoolean(value.pin) ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE.pin,
+	};
 }
 
-function readRecentKind(value: unknown): Exclude<EntryKind, "folder"> | undefined {
-  return value === "md" || value === "text" ? value : undefined;
+function readExplorerFilters(value: unknown): ExplorerFilterOptions | undefined {
+	if (!isRecord(value)) {
+		return undefined;
+	}
+
+	return {
+		showHiddenItems: readBoolean(value.showHiddenItems) ?? DEFAULT_EXPLORER_FILTERS.showHiddenItems,
+		showNonTextFiles:
+			readBoolean(value.showNonTextFiles) ?? DEFAULT_EXPLORER_FILTERS.showNonTextFiles,
+	};
+}
+
+function readRecentKind(value: unknown): Extract<EntryKind, 'md' | 'text'> | undefined {
+	return value === 'md' || value === 'text' ? value : undefined;
 }
 
 function readRecentFile(value: unknown): RecentFile | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
+	if (!isRecord(value)) {
+		return undefined;
+	}
 
-  const path = readString(value.path);
-  const name = readString(value.name);
-  const kind = readRecentKind(value.kind);
+	const path = readString(value.path);
+	const name = readString(value.name);
+	const kind = readRecentKind(value.kind);
 
-  if (path === undefined || name === undefined || kind === undefined) {
-    return undefined;
-  }
+	if (path === undefined || name === undefined || kind === undefined) {
+		return undefined;
+	}
 
-  return { path, name, kind };
+	return { path, name, kind };
 }
 
 function readRecent(value: unknown): RecentItem | null {
-  if (!isRecord(value)) {
-    return null;
-  }
+	if (!isRecord(value)) {
+		return null;
+	}
 
-  const path = readString(value.path);
-  const name = readString(value.name);
-  const openedAt = readNumber(value.openedAt);
+	const path = readString(value.path);
+	const name = readString(value.name);
+	const openedAt = readNumber(value.openedAt);
 
-  if (path === undefined || name === undefined || openedAt === undefined) {
-    return null;
-  }
+	if (path === undefined || name === undefined || openedAt === undefined) {
+		return null;
+	}
 
-  // A persisted "file" recent carries kind:"file" and a fileKind; anything else
-  // (including legacy data with no kind) is a root.
-  const isFile = value.kind === "file";
+	// A persisted "file" recent carries kind:"file" and a fileKind; anything else
+	// (including legacy data with no kind) is a root.
+	const isFile = value.kind === 'file';
 
-  return {
-    kind: isFile ? "file" : "root",
-    path,
-    name,
-    fileKind: isFile ? readRecentKind(value.fileKind) : undefined,
-    lastFile: isFile ? undefined : readRecentFile(value.lastFile),
-    openedAt,
-  };
+	return {
+		kind: isFile ? 'file' : 'root',
+		path,
+		name,
+		fileKind: isFile ? readRecentKind(value.fileKind) : undefined,
+		lastFile: isFile ? undefined : readRecentFile(value.lastFile),
+		openedAt,
+	};
 }
 
 function readRecents(value: unknown): RecentItem[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
+	if (!Array.isArray(value)) {
+		return [];
+	}
 
-  return value
-    .map(readRecent)
-    .filter((item): item is RecentItem => item !== null)
-    .sort((left, right) => right.openedAt - left.openedAt)
-    .slice(0, MAX_RECENTS);
+	return value
+		.map(readRecent)
+		.filter((item): item is RecentItem => item !== null)
+		.sort((left, right) => right.openedAt - left.openedAt)
+		.slice(0, MAX_RECENTS);
 }
 
 /** Normalize a root path for stable, case-insensitive comparison. */
 function recentKey(path: string) {
-  return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+	return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }
 
 /**
@@ -316,24 +336,24 @@ function recentKey(path: string) {
  * any existing `lastFile`. Creates the entry if it doesn't exist yet. Pure.
  */
 export function touchRecentRoot(
-  current: RecentItem[],
-  root: { path: string; name: string },
+	current: RecentItem[],
+	root: { path: string; name: string }
 ): RecentItem[] {
-  const key = recentKey(root.path);
-  const existing = current.find(
-    (item) => recentItemKind(item) === "root" && recentKey(item.path) === key,
-  );
-  const next: RecentItem = {
-    kind: "root",
-    path: root.path,
-    name: root.name,
-    lastFile: existing?.lastFile,
-    openedAt: Date.now(),
-  };
-  const rest = current.filter(
-    (item) => !(recentItemKind(item) === "root" && recentKey(item.path) === key),
-  );
-  return [next, ...rest].slice(0, MAX_RECENTS);
+	const key = recentKey(root.path);
+	const existing = current.find(
+		(item) => recentItemKind(item) === 'root' && recentKey(item.path) === key
+	);
+	const next: RecentItem = {
+		kind: 'root',
+		path: root.path,
+		name: root.name,
+		lastFile: existing?.lastFile,
+		openedAt: Date.now(),
+	};
+	const rest = current.filter(
+		(item) => !(recentItemKind(item) === 'root' && recentKey(item.path) === key)
+	);
+	return [next, ...rest].slice(0, MAX_RECENTS);
 }
 
 /**
@@ -343,21 +363,21 @@ export function touchRecentRoot(
  * file to the recents list. Pure.
  */
 export function recordRecentSingleFile(
-  current: RecentItem[],
-  file: { path: string; name: string; kind: Exclude<EntryKind, "folder"> },
+	current: RecentItem[],
+	file: { path: string; name: string; kind: Extract<EntryKind, 'md' | 'text'> }
 ): RecentItem[] {
-  const key = recentKey(file.path);
-  const next: RecentItem = {
-    kind: "file",
-    path: file.path,
-    name: file.name,
-    fileKind: file.kind,
-    openedAt: Date.now(),
-  };
-  const rest = current.filter(
-    (item) => !(recentItemKind(item) === "file" && recentKey(item.path) === key),
-  );
-  return [next, ...rest].slice(0, MAX_RECENTS);
+	const key = recentKey(file.path);
+	const next: RecentItem = {
+		kind: 'file',
+		path: file.path,
+		name: file.name,
+		fileKind: file.kind,
+		openedAt: Date.now(),
+	};
+	const rest = current.filter(
+		(item) => !(recentItemKind(item) === 'file' && recentKey(item.path) === key)
+	);
+	return [next, ...rest].slice(0, MAX_RECENTS);
 }
 
 /**
@@ -365,22 +385,22 @@ export function recordRecentSingleFile(
  * and moves it to the top. Pure.
  */
 export function recordRecentFile(
-  current: RecentItem[],
-  root: { path: string; name: string },
-  file: RecentFile,
+	current: RecentItem[],
+	root: { path: string; name: string },
+	file: RecentFile
 ): RecentItem[] {
-  const key = recentKey(root.path);
-  const next: RecentItem = {
-    kind: "root",
-    path: root.path,
-    name: root.name,
-    lastFile: file,
-    openedAt: Date.now(),
-  };
-  const rest = current.filter(
-    (item) => !(recentItemKind(item) === "root" && recentKey(item.path) === key),
-  );
-  return [next, ...rest].slice(0, MAX_RECENTS);
+	const key = recentKey(root.path);
+	const next: RecentItem = {
+		kind: 'root',
+		path: root.path,
+		name: root.name,
+		lastFile: file,
+		openedAt: Date.now(),
+	};
+	const rest = current.filter(
+		(item) => !(recentItemKind(item) === 'root' && recentKey(item.path) === key)
+	);
+	return [next, ...rest].slice(0, MAX_RECENTS);
 }
 
 /**
@@ -388,96 +408,95 @@ export function recordRecentFile(
  * a file recent and a root recent that happen to share a path don't collide.
  */
 export function removeRecent(
-  current: RecentItem[],
-  target: { path: string; kind: "root" | "file" },
+	current: RecentItem[],
+	target: { path: string; kind: 'root' | 'file' }
 ): RecentItem[] {
-  const key = recentKey(target.path);
-  return current.filter(
-    (item) => !(recentItemKind(item) === target.kind && recentKey(item.path) === key),
-  );
+	const key = recentKey(target.path);
+	return current.filter(
+		(item) => !(recentItemKind(item) === target.kind && recentKey(item.path) === key)
+	);
 }
 
 function readViewMode(value: unknown): StoredFileViewMode | undefined {
-  return value === "edit" || value === "preview" || value === "code"
-    ? value
-    : undefined;
+	return value === 'edit' || value === 'preview' || value === 'code' ? value : undefined;
 }
 
 function readTheme(value: unknown): AppTheme | undefined {
-  return value === "dark" || value === "light" ? value : undefined;
+	return value === 'dark' || value === 'light' ? value : undefined;
 }
 
 function readWindowFrame(value: unknown): StoredWindowFrame | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
+	if (!isRecord(value)) {
+		return undefined;
+	}
 
-  const width = readNumber(value.width);
-  const height = readNumber(value.height);
-  const x = readNumber(value.x);
-  const y = readNumber(value.y);
-  const maximized = readBoolean(value.maximized);
+	const width = readNumber(value.width);
+	const height = readNumber(value.height);
+	const x = readNumber(value.x);
+	const y = readNumber(value.y);
+	const maximized = readBoolean(value.maximized);
 
-  if (
-    width === undefined ||
-    height === undefined ||
-    x === undefined ||
-    y === undefined ||
-    maximized === undefined
-  ) {
-    return undefined;
-  }
+	if (
+		width === undefined ||
+		height === undefined ||
+		x === undefined ||
+		y === undefined ||
+		maximized === undefined
+	) {
+		return undefined;
+	}
 
-  return { width, height, x, y, maximized };
+	return { width, height, x, y, maximized };
 }
 
 export function loadAppConfiguration(): Partial<AppConfigurationState> {
-  const record = readRecord(CONFIGURATION_KEY);
-  if (!record) {
-    return {};
-  }
+	const record = readRecord(CONFIGURATION_KEY);
+	if (!record) {
+		return {};
+	}
 
-  return {
-    explorerHidden: readBoolean(record.explorerHidden),
-    outlinePanelVisible: readBoolean(record.outlinePanelVisible),
-    sidebarWidth: readNumber(record.sidebarWidth),
-    barMerged: readBoolean(record.barMerged),
-    viewMode: readViewMode(record.viewMode),
-    theme: readTheme(record.theme),
-    windowFrame: readWindowFrame(record.windowFrame),
-    pinnedLocations: readEntryArray(record.pinnedLocations),
-    removedDefaultPaths: readStringArray(record.removedDefaultPaths),
-    locationIcons: readStringRecord(record.locationIcons),
-    onboardingCompleted: readBoolean(record.onboardingCompleted),
-    userName: readString(record.userName),
-    recents: readRecents(record.recents),
-    explorerHeaderActionsVisible: readExplorerHeaderActionsVisibility(
-      record.explorerHeaderActionsVisible,
-    ),
-    sourcesHeaderActionsVisible: readSourcesHeaderActionsVisibility(
-      record.sourcesHeaderActionsVisible,
-    ),
-  };
+	return {
+		explorerHidden: readBoolean(record.explorerHidden),
+		outlinePanelVisible: readBoolean(record.outlinePanelVisible),
+		sidebarWidth: readNumber(record.sidebarWidth),
+		barMerged: readBoolean(record.barMerged),
+		viewMode: readViewMode(record.viewMode),
+		theme: readTheme(record.theme),
+		windowFrame: readWindowFrame(record.windowFrame),
+		pinnedLocations: readEntryArray(record.pinnedLocations),
+		removedDefaultPaths: readStringArray(record.removedDefaultPaths),
+		locationIcons: readStringRecord(record.locationIcons),
+		onboardingCompleted: readBoolean(record.onboardingCompleted),
+		userName: readString(record.userName),
+		recents: readRecents(record.recents),
+		explorerHeaderActionsVisible: readExplorerHeaderActionsVisibility(
+			record.explorerHeaderActionsVisible
+		),
+		sourcesHeaderActionsVisible: readSourcesHeaderActionsVisibility(
+			record.sourcesHeaderActionsVisible
+		),
+		explorerFilters: readExplorerFilters(record.explorerFilters),
+	};
 }
 
 export function saveAppConfiguration(configuration: AppConfigurationState) {
-  writeRecord(CONFIGURATION_KEY, configuration);
+	writeRecord(CONFIGURATION_KEY, configuration);
 }
 
 export function loadAppSession(): AppSessionState {
-  const record = readRecord(SESSION_KEY);
-  if (!record) {
-    return { expandedPaths: [] };
-  }
+	const record = readRecord(SESSION_KEY);
+	if (!record) {
+		return { expandedPaths: [] };
+	}
 
-  return {
-    activeRootPath: readString(record.activeRootPath),
-    selectedFolderPath: readString(record.selectedFolderPath),
-    openFilePath: readString(record.openFilePath),
-    expandedPaths: readStringArray(record.expandedPaths),
-  };
+	return {
+		activeRootPath: readString(record.activeRootPath),
+		selectedFolderPath: readString(record.selectedFolderPath),
+		openFilePath: readString(record.openFilePath),
+		expandedPaths: readStringArray(record.expandedPaths),
+	};
 }
 
 export function saveAppSession(session: AppSessionState) {
-  writeRecord(SESSION_KEY, session);
+	writeRecord(SESSION_KEY, session);
 }
