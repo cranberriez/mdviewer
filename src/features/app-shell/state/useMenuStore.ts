@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import type { Entry } from '../../../shared/types/files';
 import type { RecentItem } from '../../../shared/state/persistence';
 import type { ContextMenuTarget, ContextMenuVariant } from '../../explorer/components/ContextMenu';
@@ -112,3 +113,14 @@ export const selectMenuTargets = (state: MenuStore) => ({
 	savedMenu: state.savedMenu,
 	sourcesHeaderMenu: state.sourcesHeaderMenu,
 });
+
+export const selectMenuActions = (state: MenuStore) => ({
+	openContextMenu: state.openContextMenu,
+	openExplorerHeaderMenu: state.openExplorerHeaderMenu,
+	openSavedMenu: state.openSavedMenu,
+	openSourcesHeaderMenu: state.openSourcesHeaderMenu,
+});
+
+export function useMenuActions() {
+	return useMenuStore(useShallow(selectMenuActions));
+}
