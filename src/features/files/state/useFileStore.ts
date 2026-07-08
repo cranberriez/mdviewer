@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { markdown } from '../../preview/markdown';
+import { stripYamlFrontmatterForPreview } from '../../preview/markdownDocument';
 import type { OpenFile } from '../../../shared/types/files';
 import { comparablePath } from '../../../shared/utils/path';
 
@@ -27,7 +28,7 @@ interface FileActions {
 export type FileStore = FileState & FileActions;
 
 function renderMarkdown(file: OpenFile | null) {
-	return file?.kind === 'md' ? markdown.render(file.content) : '';
+	return file?.kind === 'md' ? markdown.render(stripYamlFrontmatterForPreview(file.content)) : '';
 }
 
 export const useFileStore = create<FileStore>()((set) => ({

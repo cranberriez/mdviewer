@@ -22,6 +22,20 @@
 	min-height: 100%;
 }
 
+.lexical-editor-shell > .frontmatter-block {
+	margin-top: var(--document-top-padding);
+	margin-right: max(var(--content-gutter), (100% - var(--content-width)) / 2);
+	margin-left: max(
+		var(--outline-clearance, 0px),
+		var(--content-gutter),
+		(100% - var(--content-width)) / 2
+	);
+}
+
+.lexical-content.has-frontmatter {
+	padding-top: 0;
+}
+
 /* Placeholder is absolutely positioned over the empty editor. */
 .lexical-placeholder {
 	position: absolute;

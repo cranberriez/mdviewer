@@ -6,15 +6,17 @@ import {
 	type UIEventHandler,
 } from 'react';
 import { rangeToMarkdown } from '../domToMarkdown';
+import { FrontmatterBlock } from './FrontmatterBlock';
 
 interface MarkdownPreviewProps {
+	frontmatter?: string;
 	html: string;
 	onScroll: UIEventHandler<HTMLDivElement>;
 	onLinkClick: (href: string) => void;
 }
 
 export const MarkdownPreview = forwardRef<HTMLDivElement, MarkdownPreviewProps>(
-	function MarkdownPreview({ html, onScroll, onLinkClick }, ref) {
+	function MarkdownPreview({ frontmatter, html, onScroll, onLinkClick }, ref) {
 		// Copying from the read-only preview puts the Markdown *source* on the
 		// clipboard (symbols preserved) instead of the rendered plain text. Fired by
 		// Ctrl+C, right-click copy, and the Edit > Copy menu (which triggers a native
@@ -57,12 +59,10 @@ export const MarkdownPreview = forwardRef<HTMLDivElement, MarkdownPreviewProps>(
 
 		return (
 			<div ref={ref} className="preview-scroll" data-find-content="true" onScroll={onScroll}>
-				<div
-					className="preview-inner md"
-					onClick={handleClick}
-					onCopy={handleCopy}
-					dangerouslySetInnerHTML={{ __html: html }}
-				/>
+				<div className="preview-inner md" onClick={handleClick} onCopy={handleCopy}>
+					{frontmatter ? <FrontmatterBlock content={frontmatter} /> : null}
+					<div dangerouslySetInnerHTML={{ __html: html }} />
+				</div>
 			</div>
 		);
 	}

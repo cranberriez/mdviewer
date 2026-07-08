@@ -17,6 +17,7 @@ import { EmptyPreview } from './EmptyPreview';
 import { MarkdownPreview } from './MarkdownPreview';
 import { PlainTextPreview } from './PlainTextPreview';
 import { LexicalMarkdownEditor, type LexicalMarkdownEditorHandle } from './LexicalMarkdownEditor';
+import { splitYamlFrontmatter } from '../markdownDocument';
 
 interface PreviewPanelProps {
 	/** Floating outline overlay, rendered into the content area's left gutter. */
@@ -54,6 +55,7 @@ export function PreviewPanel({
 	pendingFormatAction,
 	renderedMarkdown,
 }: PreviewPanelProps) {
+	const frontmatter = openFile?.kind === 'md' ? splitYamlFrontmatter(openFile.content) : null;
 	const contentRef = useRef<HTMLElement | null>(null);
 	const editorScrollRef = useRef<HTMLTextAreaElement | null>(null);
 	const visualEditorRootRef = useRef<HTMLDivElement | null>(null);
@@ -140,6 +142,7 @@ export function PreviewPanel({
 		openFile.kind === 'md' ? (
 			<MarkdownPreview
 				ref={setPreviewScrollRef}
+				frontmatter={frontmatter?.frontmatter}
 				html={renderedMarkdown}
 				onScroll={handlePreviewScroll}
 				onLinkClick={onLinkClick}

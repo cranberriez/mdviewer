@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { readFile, writeFile } from '../api/filesApi';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
+import { normalizeMarkdownForSave } from '../../preview/markdownDocument';
 import type { OpenFile } from '../../../shared/types/files';
 import { comparablePath, fileKindFromPath, fileName, parentPath } from '../../../shared/utils/path';
 import { selectOpenFileStatus, useFileStore, type UnsavedFileDrafts } from '../state/useFileStore';
@@ -36,22 +37,33 @@ export function useOpenFileController({
 	const setSaving = useFileStore((state) => state.setSaving);
 	const storeUpdateOpenFileContent = useFileStore((state) => state.updateOpenFileContent);
 	const updateUnsavedFileDrafts = useFileStore((state) => state.updateUnsavedFileDrafts);
+	const autoSaveRef = useRef<{
+		dirty: boolean;
+		hasOpenFile: boolean;
+		saveOpenFile: () => Promise<void>;
+		saving: boolean;
+	}>({
+		dirty: false,
+		hasOpenFile: false,
+		saveOpenFile: async () => undefined,
+		saving: false,
+	});
 	const unsavedFileDraftsRef = useRef<UnsavedFileDrafts>({});
+	unsavedFileDraftsRef.current = unsavedFileDrafts;
 
 	useEffect(() => {
 		hydrate(initialOpenFilePath);
 	}, [hydrate, initialOpenFilePath]);
-
-	useEffect(() => {
-		unsavedFileDraftsRef.current = unsavedFileDrafts;
-	}, [unsavedFileDrafts]);
 
 	const saveOpenFile = useCallback(async () => {
 		if (!openFile || saving) {
 			return;
 		}
 
-		const fileToSave = openFile;
+		const originalContent = openFile.content;
+		const contentToSave =
+			openFile.kind === 'md' ? normalizeMarkdownForSave(originalContent) : originalContent;
+		const fileToSave = { ...openFile, content: contentToSave };
 		const draftKey = comparablePath(fileToSave.path);
 
 		setSaving(true);
@@ -61,7 +73,7 @@ export function useOpenFileController({
 			await writeFile(fileToSave.path, fileToSave.content);
 			updateUnsavedFileDrafts((current) => {
 				const currentDraft = current[draftKey];
-				if (currentDraft && currentDraft.content !== fileToSave.content) {
+				if (currentDraft && currentDraft.content !== originalContent) {
 					return current;
 				}
 
@@ -75,6 +87,28 @@ export function useOpenFileController({
 			setSaving(false);
 		}
 	}, [onError, openFile, saving, updateUnsavedFileDrafts]);
+
+	autoSaveRef.current = {
+		dirty,
+		hasOpenFile: Boolean(openFile),
+		saveOpenFile,
+		saving,
+	};
+
+	useEffect(() => {
+		const interval = window.setInterval(() => {
+			const autoSave = autoSaveRef.current;
+			if (!autoSave.hasOpenFile || !autoSave.dirty || autoSave.saving) {
+				return;
+			}
+
+			void autoSave.saveOpenFile();
+		}, 5000);
+
+		return () => {
+			window.clearInterval(interval);
+		};
+	}, []);
 
 	const openFileAtPath = useCallback(
 		async (path: string, options?: { mode?: FileViewMode; skipRecent?: boolean }) => {

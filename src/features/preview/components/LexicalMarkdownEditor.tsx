@@ -3,6 +3,7 @@ import {
 	useCallback,
 	useEffect,
 	useImperativeHandle,
+	useMemo,
 	useRef,
 	type RefObject,
 	type UIEventHandler,
@@ -38,6 +39,8 @@ import SlashCommandMenuPlugin from './lexical/plugins/SlashCommandMenuPlugin';
 import TableActionsPlugin from './lexical/plugins/TableActionsPlugin';
 import { lexicalTheme } from './lexical/theme';
 import { MARKDOWN_TRANSFORMERS } from './lexical/transformers';
+import { joinYamlFrontmatter, splitYamlFrontmatter } from '../markdownDocument';
+import { FrontmatterBlock } from './FrontmatterBlock';
 
 interface LexicalMarkdownEditorProps {
 	content: string;
@@ -104,8 +107,9 @@ const EditorBridge = forwardRef<
 		content: string;
 		lastIngestedRef: RefObject<string>;
 		lastEmittedRef: RefObject<string>;
+		serializeContentRef: RefObject<(content: string) => string>;
 	}
->(function EditorBridge({ content, lastIngestedRef, lastEmittedRef }, ref) {
+>(function EditorBridge({ content, lastIngestedRef, lastEmittedRef, serializeContentRef }, ref) {
 	const [editor] = useLexicalComposerContext();
 
 	// Push external content changes (file switches, toolbar undo/redo, edits made
@@ -139,7 +143,10 @@ const EditorBridge = forwardRef<
 					nextContent = $readMarkdown();
 				});
 				const cursor = nextContent.length;
-				return { content: nextContent, selection: { start: cursor, end: cursor } };
+				return {
+					content: serializeContentRef.current(nextContent),
+					selection: { start: cursor, end: cursor },
+				};
 			},
 			focus() {
 				editor.focus();
@@ -155,10 +162,15 @@ export const LexicalMarkdownEditor = forwardRef<
 	LexicalMarkdownEditorHandle,
 	LexicalMarkdownEditorProps
 >(function LexicalMarkdownEditor({ content, onChange, onScroll, rootRef }, ref) {
-	const lastIngestedRef = useRef<string>(content);
-	const lastEmittedRef = useRef<string>(content);
 	const onChangeRef = useRef(onChange);
+	const contentParts = useMemo(() => splitYamlFrontmatter(content), [content]);
+	const editorContent = contentParts?.body ?? content;
+	const lastIngestedRef = useRef<string>(editorContent);
+	const lastEmittedRef = useRef<string>(editorContent);
+	const serializeContentRef = useRef<(nextContent: string) => string>((nextContent) => nextContent);
 	onChangeRef.current = onChange;
+	serializeContentRef.current = (nextContent) =>
+		contentParts ? joinYamlFrontmatter(contentParts.frontmatter, nextContent) : nextContent;
 
 	const setRootRef = useCallback(
 		(node: HTMLDivElement | null) => {
@@ -173,7 +185,7 @@ export const LexicalMarkdownEditor = forwardRef<
 		namespace: 'mdviewer-editor',
 		theme: lexicalTheme,
 		nodes: EDITOR_NODES,
-		editorState: () => $importMarkdown(content),
+		editorState: () => $importMarkdown(editorContent),
 		onError(error: Error) {
 			// Surface in dev tools; never let a transform error tear down the app.
 			console.error('[LexicalMarkdownEditor]', error);
@@ -198,7 +210,7 @@ export const LexicalMarkdownEditor = forwardRef<
 			// hand back to App isn't re-imported on the next render.
 			lastEmittedRef.current = markdown;
 			lastIngestedRef.current = markdown;
-			onChangeRef.current(markdown);
+			onChangeRef.current(serializeContentRef.current(markdown));
 		});
 	}, []);
 
@@ -210,10 +222,11 @@ export const LexicalMarkdownEditor = forwardRef<
 				data-find-content="true"
 				onScroll={onScroll}
 			>
+				{contentParts ? <FrontmatterBlock content={contentParts.frontmatter} /> : null}
 				<RichTextPlugin
 					contentEditable={
 						<ContentEditable
-							className="preview-inner md lexical-content"
+							className={`preview-inner md lexical-content ${contentParts ? 'has-frontmatter' : ''}`}
 							aria-label="Markdown editor"
 							aria-multiline="true"
 							role="textbox"
@@ -239,9 +252,10 @@ export const LexicalMarkdownEditor = forwardRef<
 				<OnChangePlugin onChange={handleChange} ignoreHistoryMergeTagChange ignoreSelectionChange />
 				<EditorBridge
 					ref={ref}
-					content={content}
+					content={editorContent}
 					lastIngestedRef={lastIngestedRef}
 					lastEmittedRef={lastEmittedRef}
+					serializeContentRef={serializeContentRef}
 				/>
 			</div>
 		</LexicalComposer>
