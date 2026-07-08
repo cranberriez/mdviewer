@@ -1,7 +1,8 @@
 import { createPortal } from 'react-dom';
 import { Check } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useAnchoredPosition } from './useAnchoredPosition';
+import type { RefObject } from 'react';
+import { useAnchoredPosition, type AnchoredPositionOptions } from './useAnchoredPosition';
 import { useMenuDismiss } from './useMenuDismiss';
 
 export interface MenuItem<Action extends string> {
@@ -34,6 +35,11 @@ interface ContextMenuSurfaceProps<Action extends string> {
 	onSelect: (action: Action) => void;
 	onClose: () => void;
 	keepOpenOn?: readonly Action[];
+	className?: string;
+	positionOptions?: AnchoredPositionOptions;
+	dismiss?: boolean;
+	dismissIgnoreRefs?: RefObject<Element | null>[];
+	dismissIgnoreSelector?: string;
 }
 
 export function ContextMenuSurface<Action extends string>({
@@ -43,14 +49,28 @@ export function ContextMenuSurface<Action extends string>({
 	onSelect,
 	onClose,
 	keepOpenOn = [],
+	className = '',
+	positionOptions,
+	dismiss = true,
+	dismissIgnoreRefs,
+	dismissIgnoreSelector,
 }: ContextMenuSurfaceProps<Action>) {
-	const { menuRef, position, ready } = useAnchoredPosition<HTMLDivElement>(x, y, [entries]);
-	useMenuDismiss(menuRef, onClose);
+	const { menuRef, position, ready } = useAnchoredPosition<HTMLDivElement>(
+		x,
+		y,
+		[entries],
+		positionOptions
+	);
+	useMenuDismiss(menuRef, onClose, {
+		enabled: dismiss,
+		ignoreRefs: dismissIgnoreRefs,
+		ignoreSelector: dismissIgnoreSelector,
+	});
 
 	return createPortal(
 		<div
 			ref={menuRef}
-			className={`ctx-menu ${ready ? 'show' : ''}`}
+			className={`${className ? `${className} ` : ''}ctx-menu ${ready ? 'show' : ''}`}
 			role="menu"
 			style={{ left: position.x, top: position.y }}
 		>

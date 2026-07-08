@@ -32,8 +32,8 @@ import {
 	Wrench,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useAnchoredPosition } from './context-menu/useAnchoredPosition';
-import { useMenuDismiss } from './context-menu/useMenuDismiss';
+import { useAnchoredPosition } from '../../../shared/ui/menu/useAnchoredPosition';
+import { useMenuDismiss } from '../../../shared/ui/menu/useMenuDismiss';
 
 export interface IconOption {
 	name: string;

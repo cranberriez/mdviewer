@@ -1,5 +1,5 @@
 import { CornerUpLeft, Link2, Palette, PinOff } from 'lucide-react';
-import type { MenuEntry } from './ContextMenuSurface';
+import type { MenuEntry } from '../../../../shared/ui/menu/ContextMenuSurface';
 
 export type SavedMenuAction =
 	| 'reveal'

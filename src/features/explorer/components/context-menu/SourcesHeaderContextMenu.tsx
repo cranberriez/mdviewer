@@ -1,7 +1,7 @@
 import { Folder, FolderOpen, List, Pin, PinOff, Search } from 'lucide-react';
 import type { SourcesHeaderActionsVisibility } from '../../../../shared/state/persistence';
-import { ContextMenuSurface } from './ContextMenuSurface';
-import type { MenuEntry } from './ContextMenuSurface';
+import { ContextMenuSurface } from '../../../../shared/ui/menu/ContextMenuSurface';
+import type { MenuEntry } from '../../../../shared/ui/menu/ContextMenuSurface';
 
 export type SourcesHeaderMenuAction =
 	| 'switch-explorer'

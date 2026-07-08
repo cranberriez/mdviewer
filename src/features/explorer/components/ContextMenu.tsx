@@ -4,7 +4,7 @@ import {
 	type MenuItem,
 	type MenuSeparator,
 	isSeparator,
-} from './context-menu/ContextMenuSurface';
+} from '../../../shared/ui/menu/ContextMenuSurface';
 import {
 	entriesForTreeContext,
 	type ContextMenuAction,
