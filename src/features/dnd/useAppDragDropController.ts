@@ -155,14 +155,7 @@ export function useAppDragDropController({
 				recordRecentSingleFile(current, { path: firstPath, name: fileName(firstPath), kind })
 			);
 		},
-		[
-			explorerFilters,
-			handleMainSetRoot,
-			onError,
-			onOverlayChange,
-			onRecentsChange,
-			openFileAtPath,
-		]
+		[explorerFilters, handleMainSetRoot, onError, onOverlayChange, onRecentsChange, openFileAtPath]
 	);
 
 	const dispatchDrop = useCallback(

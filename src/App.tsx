@@ -79,7 +79,6 @@ function App() {
 		outlinePanelVisible,
 		overlay,
 		pendingFormatAction,
-		sidebarMode,
 		sidebarWidth,
 		sourcesHeaderActionsVisible,
 		theme,
@@ -92,7 +91,6 @@ function App() {
 			outlinePanelVisible: state.outlinePanelVisible,
 			overlay: state.overlay,
 			pendingFormatAction: state.pendingFormatAction,
-			sidebarMode: state.sidebarMode,
 			sidebarWidth: state.sidebarWidth,
 			sourcesHeaderActionsVisible: state.sourcesHeaderActionsVisible,
 			theme: state.theme,
@@ -105,7 +103,6 @@ function App() {
 	const setPendingFormatAction = useUiStore((state) => state.setPendingFormatAction);
 	const setSidebarMode = useUiStore((state) => state.setSidebarMode);
 	const setSidebarWidth = useUiStore((state) => state.setSidebarWidth);
-	const setTheme = useUiStore((state) => state.setTheme);
 	const { startSidebarResize } = useSidebarResize(sidebarWidth, setSidebarWidth);
 
 	const { contextMenu, contextMenuVariant } = useMenuStore(useShallow(selectMenuTargets));
@@ -443,13 +440,10 @@ function App() {
 					contextPath: contextMenu?.path,
 					draft,
 					expanded,
-					explorerHeaderActionsVisible,
 					focusedPath: focusedEntry?.path ?? undefined,
 					homePath,
 					loadingPaths,
 					locations,
-					locationIcons,
-					mode: sidebarMode,
 					rootChildren,
 					rootDropActive,
 					rootPinned: activeRoot ? !isPinnable(activeRoot.path) : false,
@@ -471,8 +465,6 @@ function App() {
 					},
 					selectedFolderPath: selectedFolderPath ?? undefined,
 					sidebarWidth,
-					sourcesHeaderActionsVisible,
-					theme,
 					treeDropTargetPath,
 					unsavedFilePathKeys,
 					onCreateRootFile: () => {
@@ -504,12 +496,10 @@ function App() {
 					onSelectFile: selectFile,
 					onSelectHeading: (id) => scrollToAnchor(id),
 					onSelectLocation: selectLocation,
-					onSidebarModeChange: setSidebarMode,
 					onSourcesHeaderContextMenu: (event) =>
 						openAppContextMenu({ kind: 'sources-header' }, event),
 					onToggleFolder: toggleFolder,
 					onToggleRootPin: toggleRootPin,
-					onToggleTheme: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')),
 				}}
 				home={{
 					dropActive: dropState.target?.kind === 'home',
