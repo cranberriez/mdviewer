@@ -34,5 +34,5 @@ trash = "5"
 # focused (drags originating from another window). Windows-only; other platforms
 # fall back to the webview's keyboard listener.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_UI_Input_KeyboardAndMouse"] }
+windows-sys = { version = "0.61", features = ["Win32_UI_Input_KeyboardAndMouse"] }
 

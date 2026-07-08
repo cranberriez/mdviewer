@@ -1971,7 +1971,7 @@ dependencies = [
 
 [[package]]
 name = "mdviewer"
-version = "0.3.2"
+version = "0.3.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -1981,7 +1981,7 @@ dependencies = [
  "tauri-plugin-drag",
  "tauri-plugin-opener",
  "trash",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
