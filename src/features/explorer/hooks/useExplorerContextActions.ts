@@ -25,6 +25,7 @@ interface UseExplorerContextActionsOptions {
 	) => Promise<void>;
 	pinFolder: (entry: Entry) => void;
 	refreshFolder: (path: string) => Promise<void>;
+	selectLocation: (location: Entry) => Promise<void>;
 	startCreateDraft: (parentPath: string, kind: 'file' | 'folder') => Promise<void>;
 	startRenameDraft: (entry: Entry) => void;
 }
@@ -35,6 +36,7 @@ export function useExplorerContextActions({
 	openFileAtPath,
 	pinFolder,
 	refreshFolder,
+	selectLocation,
 	startCreateDraft,
 	startRenameDraft,
 }: UseExplorerContextActionsOptions) {
@@ -88,6 +90,16 @@ export function useExplorerContextActions({
 							is_dir: true,
 							kind: 'folder',
 						});
+						break;
+					case 'open-as-root':
+						if (target.kind === 'folder') {
+							await selectLocation({
+								name: target.name,
+								path: target.path,
+								is_dir: true,
+								kind: 'folder',
+							});
+						}
 						break;
 					case 'rename':
 						startRenameDraft({
@@ -195,6 +207,7 @@ export function useExplorerContextActions({
 			pinFolder,
 			refreshFolder,
 			removeRecentItem,
+			selectLocation,
 			setActiveRoot,
 			setChildrenCache,
 			setError,

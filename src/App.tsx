@@ -280,6 +280,7 @@ function App() {
 		openFileAtPath,
 		pinFolder,
 		refreshFolder,
+		selectLocation,
 		startCreateDraft,
 		startRenameDraft,
 	});
@@ -571,6 +572,11 @@ function App() {
 						contextMenuVariant === 'explorer' &&
 						contextMenu?.kind === 'folder' &&
 						isPinnable(contextMenu.path),
+					canOpenAsRoot:
+						contextMenuVariant === 'explorer' &&
+						contextMenu?.kind === 'folder' &&
+						!!activeRoot &&
+						comparablePath(contextMenu.path) !== comparablePath(activeRoot.path),
 					onAction: (action, target) => void handleContextAction(action, target),
 				}}
 				explorerHeader={{
