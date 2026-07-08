@@ -32,6 +32,7 @@ import { useSavedLocationsController } from './features/saved-locations/hooks/us
 import { useSavedLocationMenuActions } from './features/saved-locations/hooks/useSavedLocationMenuActions';
 import { entryToContextTarget } from './features/explorer/utils/contextTargets';
 import { useInlineDraftController } from './features/explorer/hooks/useInlineDraftController';
+import { useExplorerFilterMenuController } from './features/explorer/hooks/useExplorerFilterMenuController';
 import { useFolderTreeController } from './features/explorer/hooks/useFolderTreeController';
 import { useExplorerContextActions } from './features/explorer/hooks/useExplorerContextActions';
 import { selectUiConfiguration, useUiStore } from './features/app-shell/state/useUiStore';
@@ -272,6 +273,7 @@ function App() {
 			onOpenFilePathChange: setOpenFilePath,
 			onUnsavedFileDraftsChange: updateUnsavedFileDrafts,
 		});
+	const { explorerFilters } = useExplorerFilterMenuController({ loadFolder });
 	const handleContextAction = useExplorerContextActions({
 		locations,
 		loadFolder,
@@ -572,6 +574,7 @@ function App() {
 					onAction: (action, target) => void handleContextAction(action, target),
 				}}
 				explorerHeader={{
+					filters: explorerFilters,
 					visibleActions: explorerHeaderActionsVisible,
 					onAction: (action) => void handleExplorerHeaderMenuAction(action),
 				}}

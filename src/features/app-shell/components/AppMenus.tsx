@@ -1,6 +1,7 @@
 import { useShallow } from 'zustand/react/shallow';
 import type { Entry } from '../../../shared/types/files';
 import type {
+	ExplorerFilterOptions,
 	ExplorerHeaderActionsVisibility,
 	SourcesHeaderActionsVisibility,
 } from '../../../shared/state/persistence';
@@ -28,6 +29,7 @@ interface AppMenusProps {
 		onAction: (action: ContextMenuAction, target: ContextMenuTarget) => void;
 	};
 	explorerHeader: {
+		filters: ExplorerFilterOptions;
 		visibleActions: ExplorerHeaderActionsVisibility;
 		onAction: (action: ExplorerHeaderMenuAction) => void;
 	};
@@ -87,6 +89,7 @@ export function AppMenus({
 				<ExplorerHeaderContextMenu
 					x={explorerHeaderMenu.x}
 					y={explorerHeaderMenu.y}
+					filters={explorerHeader.filters}
 					visibleActions={explorerHeader.visibleActions}
 					onAction={explorerHeader.onAction}
 					onClose={closeExplorerHeaderMenu}

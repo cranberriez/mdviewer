@@ -12,6 +12,7 @@ import {
   Search,
   Sun,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { Entry, FileSearchMatch } from "../../../shared/types/files";
 import type {
   AppTheme,
@@ -25,8 +26,25 @@ import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
 import { getIconComponent } from "./IconPickerMenu";
 import { CrossFileSearchPanel } from "./CrossFileSearchPanel";
 import { OutlineView } from "../../outline/components/OutlineView";
+import { IconActionButton } from "../../file-actions/components/IconActionButton";
 
 export type SidebarMode = "explorer" | "search" | "outline";
+
+interface HeaderActionConfig {
+  id: string;
+  icon: LucideIcon;
+  tooltip: string;
+  visible?: boolean;
+  active?: boolean;
+  disabled?: boolean;
+  role?: "tab";
+  ariaSelected?: boolean;
+  ariaPressed?: boolean;
+  ariaHasPopup?: "menu";
+  className?: string;
+  iconClassName?: string;
+  onClick: (event: ReactMouseEvent) => void;
+}
 
 interface SidebarProps {
   width: number;
@@ -165,81 +183,125 @@ export function Sidebar({
     sidebarMode === "outline" && !showOutlineTab ? "explorer" : sidebarMode;
   const showingSearchResults = effectiveMode === "search" && Boolean(searchedQuery.trim());
   const showingOutline = effectiveMode === "outline";
+  const sourceViewActions: HeaderActionConfig[] = [
+    {
+      id: "explorer",
+      icon: Folder,
+      tooltip: "Explorer",
+      active: effectiveMode === "explorer",
+      role: "tab",
+      ariaSelected: effectiveMode === "explorer",
+      onClick: () => onSidebarModeChange("explorer"),
+    },
+    {
+      id: "search",
+      icon: Search,
+      tooltip: "Search files",
+      visible: sourcesHeaderActionsVisible.search,
+      active: effectiveMode === "search",
+      role: "tab",
+      ariaSelected: effectiveMode === "search",
+      onClick: () => onSidebarModeChange("search"),
+    },
+    {
+      id: "outline",
+      icon: List,
+      tooltip: "Outline",
+      visible: showOutlineTab && sourcesHeaderActionsVisible.outline,
+      active: effectiveMode === "outline",
+      role: "tab",
+      ariaSelected: effectiveMode === "outline",
+      onClick: () => onSidebarModeChange("outline"),
+    },
+  ];
+  const sourceHeaderActions: HeaderActionConfig[] = [
+    {
+      id: "toggle-root-pin",
+      icon: rootPinned ? PinOff : Pin,
+      tooltip: rootPinDisabled
+        ? "Home is always pinned"
+        : rootPinned
+          ? "Unpin the current root folder"
+          : "Pin the current root folder",
+      className: rootPinned ? "is-pinned" : undefined,
+      visible: sourcesHeaderActionsVisible.pin,
+      active: rootPinned,
+      disabled: rootPinDisabled,
+      ariaPressed: rootPinned,
+      onClick: onToggleRootPin,
+    },
+    {
+      id: "open-folder",
+      icon: FolderOpen,
+      tooltip: "Open a folder as the explorer root…",
+      onClick: onOpenFolder,
+    },
+  ];
+  const explorerHeaderActions: HeaderActionConfig[] = [
+    {
+      id: "new-file",
+      icon: FilePlus,
+      tooltip: "Add file",
+      visible: explorerHeaderActionsVisible.newFile,
+      onClick: onCreateRootFile,
+    },
+    {
+      id: "new-folder",
+      icon: FolderPlus,
+      tooltip: "Add folder",
+      visible: explorerHeaderActionsVisible.newFolder,
+      onClick: onCreateRootFolder,
+    },
+    {
+      id: "refresh",
+      icon: RefreshCw,
+      tooltip: "Refresh explorer",
+      visible: explorerHeaderActionsVisible.refresh,
+      disabled: rootRefreshing,
+      iconClassName: rootRefreshing ? "search-spinner" : undefined,
+      onClick: onRefreshRoot,
+    },
+  ];
+
+  const renderHeaderActions = (
+    actions: HeaderActionConfig[],
+    baseClassName: string,
+    iconSize: number,
+  ) =>
+    actions
+      .filter((action) => action.visible ?? true)
+      .map((action) => {
+        const Icon = action.icon;
+        return (
+          <IconActionButton
+            key={action.id}
+            className={`${baseClassName} ${action.className ?? ""} ${
+              action.active ? "active" : ""
+            }`}
+            tooltip={action.tooltip}
+            title={action.tooltip}
+            active={action.active}
+            disabled={action.disabled}
+            role={action.role}
+            aria-selected={action.ariaSelected}
+            aria-pressed={action.ariaPressed}
+            aria-haspopup={action.ariaHasPopup}
+            onClick={(event) => action.onClick(event)}
+          >
+            <Icon className={action.iconClassName} size={iconSize} />
+          </IconActionButton>
+        );
+      });
 
   return (
     <aside className="sidebar" style={{ width, flexBasis: width }} aria-label="File explorer">
       <section className="sidebar-section">
         <div className="saved-heading" onContextMenu={onSourcesHeaderContextMenu}>
           <div className="sidebar-view-switch" role="tablist" aria-label="Sidebar view">
-            <button
-              type="button"
-              className={`sidebar-view-button ${effectiveMode === "explorer" ? "active" : ""}`}
-              role="tab"
-              aria-selected={effectiveMode === "explorer"}
-              title="Explorer"
-              aria-label="Explorer"
-              onClick={() => onSidebarModeChange("explorer")}
-            >
-              <Folder size={14} />
-            </button>
-            {sourcesHeaderActionsVisible.search ? (
-              <button
-                type="button"
-                className={`sidebar-view-button ${effectiveMode === "search" ? "active" : ""}`}
-                role="tab"
-                aria-selected={effectiveMode === "search"}
-                title="Search files"
-                aria-label="Search files"
-                onClick={() => onSidebarModeChange("search")}
-              >
-                <Search size={14} />
-              </button>
-            ) : null}
-            {showOutlineTab && sourcesHeaderActionsVisible.outline ? (
-              <button
-                type="button"
-                className={`sidebar-view-button ${effectiveMode === "outline" ? "active" : ""}`}
-                role="tab"
-                aria-selected={effectiveMode === "outline"}
-                title="Outline"
-                aria-label="Outline"
-                onClick={() => onSidebarModeChange("outline")}
-              >
-                <List size={14} />
-              </button>
-            ) : null}
+            {renderHeaderActions(sourceViewActions, "sidebar-view-button", 14)}
           </div>
           <div className="saved-actions">
-            {sourcesHeaderActionsVisible.pin ? (
-              <button
-                type="button"
-                className={`saved-add ${rootPinned ? "is-pinned" : ""}`}
-                disabled={rootPinDisabled}
-                title={
-                  rootPinDisabled
-                    ? "Home is always pinned"
-                    : rootPinned
-                      ? "Unpin the current root folder"
-                      : "Pin the current root folder"
-                }
-                aria-label={
-                  rootPinned ? "Unpin current root folder" : "Pin current root folder"
-                }
-                aria-pressed={rootPinned}
-                onClick={onToggleRootPin}
-              >
-                {rootPinned ? <PinOff size={15} /> : <Pin size={15} />}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="saved-add"
-              title="Open a folder as the explorer root…"
-              aria-label="Open folder"
-              onClick={onOpenFolder}
-            >
-              <FolderOpen size={15} />
-            </button>
+            {renderHeaderActions(sourceHeaderActions, "saved-add", 15)}
           </div>
         </div>
         {effectiveMode === "outline" ? null : effectiveMode === "search" ? (
@@ -297,40 +359,7 @@ export function Sidebar({
           </div>
           {!showingSearchResults && !showingOutline && activeRoot ? (
             <div className="explorer-actions">
-              {explorerHeaderActionsVisible.newFile ? (
-                <button
-                  type="button"
-                  className="explorer-header-action"
-                  title="Add file"
-                  aria-label="Add file"
-                  onClick={onCreateRootFile}
-                >
-                  <FilePlus size={14} />
-                </button>
-              ) : null}
-              {explorerHeaderActionsVisible.newFolder ? (
-                <button
-                  type="button"
-                  className="explorer-header-action"
-                  title="Add folder"
-                  aria-label="Add folder"
-                  onClick={onCreateRootFolder}
-                >
-                  <FolderPlus size={14} />
-                </button>
-              ) : null}
-              {explorerHeaderActionsVisible.refresh ? (
-                <button
-                  type="button"
-                  className="explorer-header-action"
-                  title="Refresh explorer"
-                  aria-label="Refresh explorer"
-                  disabled={rootRefreshing}
-                  onClick={onRefreshRoot}
-                >
-                  <RefreshCw className={rootRefreshing ? "search-spinner" : undefined} size={14} />
-                </button>
-              ) : null}
+              {renderHeaderActions(explorerHeaderActions, "explorer-header-action", 14)}
             </div>
           ) : null}
         </div>
