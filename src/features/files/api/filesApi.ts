@@ -1,46 +1,46 @@
-import { Channel, invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
-import type { Entry, FileSearchResponse } from "../../../shared/types/files";
-import type { ExplorerFilterOptions } from "../../../shared/state/persistence";
+import { Channel, invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
+import type { Entry, FileSearchResponse } from '../../../shared/types/files';
+import type { ExplorerFilterOptions } from '../../../shared/state/persistence';
 
 export function defaultLocations() {
-  return invoke<Entry[]>("default_locations");
+	return invoke<Entry[]>('default_locations');
 }
 
 export function readFolder(path: string, options?: ExplorerFilterOptions) {
-  return invoke<Entry[]>("read_dir", {
-    path,
-    showHidden: options?.showHiddenItems ?? false,
-    showNonTextFiles: options?.showNonTextFiles ?? false,
-  });
+	return invoke<Entry[]>('read_dir', {
+		path,
+		showHidden: options?.showHiddenItems ?? false,
+		showNonTextFiles: options?.showNonTextFiles ?? false,
+	});
 }
 
 export function readFile(path: string) {
-  return invoke<string>("read_file", { path });
+	return invoke<string>('read_file', { path });
 }
 
 export function searchFiles(root: string, query: string) {
-  return invoke<FileSearchResponse>("search_files", { root, query });
+	return invoke<FileSearchResponse>('search_files', { root, query });
 }
 
 export function writeFile(path: string, content: string) {
-  return invoke<void>("write_file", { path, content });
+	return invoke<void>('write_file', { path, content });
 }
 
 export function createFile(path: string) {
-  return invoke<void>("create_file", { path });
+	return invoke<void>('create_file', { path });
 }
 
 export function createFolder(path: string) {
-  return invoke<void>("create_folder", { path });
+	return invoke<void>('create_folder', { path });
 }
 
 export function renamePath(from: string, to: string) {
-  return invoke<void>("rename_path", { from, to });
+	return invoke<void>('rename_path', { from, to });
 }
 
 export function deletePath(path: string) {
-  return invoke<void>("delete_path", { path });
+	return invoke<void>('delete_path', { path });
 }
 
 /**
@@ -48,7 +48,7 @@ export function deletePath(path: string) {
  * destination path (de-duplicated with a " (copy)" suffix on name collision).
  */
 export function copyPath(source: string, destDir: string) {
-  return invoke<string>("copy_path", { source, destDir });
+	return invoke<string>('copy_path', { source, destDir });
 }
 
 /**
@@ -56,7 +56,7 @@ export function copyPath(source: string, destDir: string) {
  * destination path. No-ops if the item already lives in that directory.
  */
 export function movePath(source: string, destDir: string) {
-  return invoke<string>("move_path", { source, destDir });
+	return invoke<string>('move_path', { source, destDir });
 }
 
 /**
@@ -65,11 +65,11 @@ export function movePath(source: string, destDir: string) {
  * events). Returns false on non-Windows platforms.
  */
 export function shiftPressed() {
-  return invoke<boolean>("shift_pressed");
+	return invoke<boolean>('shift_pressed');
 }
 
 export function revealInExplorer(path: string) {
-  return invoke<void>("reveal_in_explorer", { path });
+	return invoke<void>('reveal_in_explorer', { path });
 }
 
 /**
@@ -79,9 +79,9 @@ export function revealInExplorer(path: string) {
  * The native plugin accepts a `data:image/png;base64,` string.
  */
 const DRAG_FILE_ICON =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAiUlEQVR42u3ZsQ2AQAxD0ZuTigGYh4oBWIaGkiEQEgPAClfYDkLfkgd4SpQrrjVCSFeGcXpULQOc1y1pCUIJ2PYjj1AD4ggHIIpwAWIIJyCCcAPsiATAikgBbAgloOSx+yVgXlZJmQAAAAC4QqwQAABcISYAAAAArhArBAAAAAAAvgxIl995EsgLjxnAQC/KdDoAAAAASUVORK5CYII=";
+	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAiUlEQVR42u3ZsQ2AQAxD0ZuTigGYh4oBWIaGkiEQEgPAClfYDkLfkgd4SpQrrjVCSFeGcXpULQOc1y1pCUIJ2PYjj1AD4ggHIIpwAWIIJyCCcAPsiATAikgBbAgloOSx+yVgXlZJmQAAAAC4QqwQAABcISYAAAAArhArBAAAAAAAvgxIl995EsgLjxnAQC/KdDoAAAAASUVORK5CYII=';
 const DRAG_FOLDER_ICON =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAV0lEQVR42u3YMRGAMBBE0QhD2ImgjiIUoCE1Fi4WyNBchvdnVsBrtzVJklS45z7zywAAdgX0OLLalgHjijIDAAAAAAAAAAAAAAAAAAAAAAD4xzMnSXrTBAcsmcYLGjuXAAAAAElFTkSuQmCC";
+	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAV0lEQVR42u3YMRGAMBBE0QhD2ImgjiIUoCE1Fi4WyNBchvdnVsBrtzVJklS45z7zywAAdgX0OLLalgHjijIDAAAAAAAAAAAAAAAAAAAAAAD4xzMnSXrTBAcsmcYLGjuXAAAAAElFTkSuQmCC';
 
 /**
  * Start a native OS drag-and-drop operation carrying real files OUT of the
@@ -100,28 +100,28 @@ const DRAG_FOLDER_ICON =
  * Tauri runtime so it's safe to call from UI handlers.
  */
 export async function startFileDrag(
-  paths: string[],
-  options?: { mode?: "move" | "copy"; isFolder?: boolean },
+	paths: string[],
+	options?: { mode?: 'move' | 'copy'; isFolder?: boolean }
 ): Promise<void> {
-  if (paths.length === 0) {
-    return;
-  }
-  // The plugin requires a Channel for drag-event callbacks even when unused.
-  const onEvent = new Channel<unknown>();
-  try {
-    await invoke("plugin:drag|start_drag", {
-      item: paths,
-      image: options?.isFolder ? DRAG_FOLDER_ICON : DRAG_FILE_ICON,
-      options: { mode: options?.mode ?? "move" },
-      onEvent,
-    });
-  } catch {
-    // Drag-out is best effort and unavailable outside the Tauri runtime.
-  }
+	if (paths.length === 0) {
+		return;
+	}
+	// The plugin requires a Channel for drag-event callbacks even when unused.
+	const onEvent = new Channel<unknown>();
+	try {
+		await invoke('plugin:drag|start_drag', {
+			item: paths,
+			image: options?.isFolder ? DRAG_FOLDER_ICON : DRAG_FILE_ICON,
+			options: { mode: options?.mode ?? 'move' },
+			onEvent,
+		});
+	} catch {
+		// Drag-out is best effort and unavailable outside the Tauri runtime.
+	}
 }
 
 export function folderEntry(path: string) {
-  return invoke<Entry>("folder_entry", { path });
+	return invoke<Entry>('folder_entry', { path });
 }
 
 /**
@@ -130,7 +130,7 @@ export function folderEntry(path: string) {
  * target does not exist.
  */
 export function resolveLinkPath(baseFile: string, target: string) {
-  return invoke<string>("resolve_link_path", { baseFile, target });
+	return invoke<string>('resolve_link_path', { baseFile, target });
 }
 
 /**
@@ -138,10 +138,10 @@ export function resolveLinkPath(baseFile: string, target: string) {
  * or null if the user cancelled.
  */
 export async function pickFolder(): Promise<Entry | null> {
-  const selected = await open({ directory: true, multiple: false });
-  if (typeof selected !== "string") {
-    return null;
-  }
+	const selected = await open({ directory: true, multiple: false });
+	if (typeof selected !== 'string') {
+		return null;
+	}
 
-  return folderEntry(selected);
+	return folderEntry(selected);
 }
