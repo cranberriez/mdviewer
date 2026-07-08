@@ -7,7 +7,12 @@ import { useFileStore } from '../../files/state/useFileStore';
 import { useMenuStore } from '../../app-shell/state/useMenuStore';
 import { useSavedLocationsStore } from '../../saved-locations/state/useSavedLocationsStore';
 import { useExplorerStore } from '../state/useExplorerStore';
-import { fileKindFromPath, parentPath, relativePath } from '../../../shared/utils/path';
+import {
+	fileKindFromPath,
+	isVisibleFileName,
+	parentPath,
+	relativePath,
+} from '../../../shared/utils/path';
 import { confirmDeleteTarget, pathIsDeletedTarget } from '../utils/contextTargets';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
 
@@ -63,6 +68,10 @@ export function useExplorerContextActions({
 						break;
 					case 'open':
 						if (target.kind === 'file') {
+							if (!isVisibleFileName(target.path)) {
+								setError(`Unsupported file type: ${target.name}`);
+								break;
+							}
 							await openFileAtPath(target.path);
 						}
 						break;

@@ -2,11 +2,7 @@ import { create } from 'zustand';
 import type { Entry } from '../../../shared/types/files';
 import type { RecentItem } from '../../../shared/state/persistence';
 import type { ContextMenuTarget, ContextMenuVariant } from '../../explorer/components/ContextMenu';
-
-interface PositionedMenu {
-	x: number;
-	y: number;
-}
+import type { PositionedMenu } from '../../explorer/components/context-menu/menuPosition';
 
 interface PositionedLocation extends PositionedMenu {
 	location: Entry;

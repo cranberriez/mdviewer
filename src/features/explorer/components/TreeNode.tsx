@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, FileQuestion, FileText, Folder, FolderOpen } from "lucide-react";
 import type { Entry } from "../../../shared/types/files";
 import type { InternalDragStart } from "../../dnd/dropTypes";
 import { TreeInlineInput, type InlineDraft } from "./TreeInlineInput";
@@ -61,6 +61,7 @@ export function TreeNode({
   const children = childrenCache[entry.path];
   const isLoading = loadingPaths.has(entry.path);
   const isActiveFile = activeFilePath === entry.path;
+  const isUnsupportedFile = entry.kind === "unsupported";
   const isUnsavedFile = !entry.is_dir && unsavedFilePathKeys.has(comparablePath(entry.path));
   const isActive = isActiveFile;
   const isContextTarget = contextPath === entry.path;
@@ -133,7 +134,7 @@ export function TreeNode({
       <button
         ref={rowRef}
         type="button"
-        className={`tree-row ${isActive ? "active" : ""} ${isContextTarget ? "context-target" : ""} ${isUnsavedFile ? "unsaved-file" : ""} ${isDropTarget ? "drop-target" : ""}`}
+        className={`tree-row ${isActive ? "active" : ""} ${isContextTarget ? "context-target" : ""} ${isUnsavedFile ? "unsaved-file" : ""} ${isUnsupportedFile ? "unsupported-file" : ""} ${isDropTarget ? "drop-target" : ""}`}
         style={{ paddingLeft: TREE_BASE_INDENT + depth * TREE_DEPTH_INDENT }}
         tabIndex={isFocused ? 0 : -1}
         data-drop-zone="tree"
@@ -163,7 +164,7 @@ export function TreeNode({
           )
         ) : (
           <span className="tree-file-icon" aria-hidden="true">
-            <FileText size={15} />
+            {isUnsupportedFile ? <FileQuestion size={15} /> : <FileText size={15} />}
           </span>
         )}
         <span className="tree-name">{entry.name}</span>

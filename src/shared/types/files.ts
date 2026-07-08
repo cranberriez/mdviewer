@@ -1,4 +1,4 @@
-export type EntryKind = "folder" | "md" | "text";
+export type EntryKind = "folder" | "md" | "text" | "unsupported";
 
 export interface Entry {
   name: string;
@@ -11,7 +11,7 @@ export interface OpenFile {
   path: string;
   name: string;
   content: string;
-  kind: Exclude<EntryKind, "folder">;
+  kind: Extract<EntryKind, "md" | "text">;
 }
 
 export interface FileSearchMatch {
