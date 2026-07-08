@@ -551,11 +551,6 @@
 	color: var(--color-text-primary);
 }
 
-.explorer-header-action.active {
-	background: var(--color-bg-active);
-	color: var(--color-text-primary);
-}
-
 .explorer-header-action:disabled {
 	opacity: 0.55;
 	cursor: default;
@@ -794,14 +789,6 @@
 .tree-row.unsaved-file:hover .tree-file-icon,
 .tree-row.unsaved-file.active .tree-file-icon {
 	color: var(--color-accent-primary-strong);
-}
-
-.tree-row.unsupported-file {
-	color: var(--color-text-muted);
-}
-
-.tree-row.unsupported-file .tree-file-icon {
-	opacity: 0.7;
 }
 
 .tree-loading,

@@ -26,7 +26,7 @@ struct SearchResponse {
 
 const MAX_SEARCH_MATCHES: usize = 500;
 
-fn supported_entry_kind(path: &Path, is_dir: bool) -> Option<&'static str> {
+fn entry_kind(path: &Path, is_dir: bool) -> Option<&'static str> {
     if is_dir {
         return Some("folder");
     }
@@ -42,42 +42,10 @@ fn supported_entry_kind(path: &Path, is_dir: bool) -> Option<&'static str> {
     }
 }
 
-fn entry_kind(path: &Path, is_dir: bool, show_non_text_files: bool) -> Option<&'static str> {
-    supported_entry_kind(path, is_dir).or_else(|| {
-        if show_non_text_files && !is_dir {
-            Some("unsupported")
-        } else {
-            None
-        }
-    })
-}
-
-#[cfg(windows)]
-fn is_hidden(path: &Path, metadata: &std::fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-
-    const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
-    metadata.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
-        || path
-            .file_name()
-            .and_then(|file_name| file_name.to_str())
-            .is_some_and(|name| name.starts_with('.'))
-}
-
-#[cfg(not(windows))]
-fn is_hidden(path: &Path, _metadata: &std::fs::Metadata) -> bool {
-    path.file_name()
-        .and_then(|file_name| file_name.to_str())
-        .is_some_and(|name| name.starts_with('.'))
-}
-
-fn path_to_entry(path: PathBuf, show_hidden: bool, show_non_text_files: bool) -> Option<Entry> {
+fn path_to_entry(path: PathBuf) -> Option<Entry> {
     let metadata = std::fs::metadata(&path).ok()?;
-    if !show_hidden && is_hidden(&path, &metadata) {
-        return None;
-    }
     let is_dir = metadata.is_dir();
-    let kind = entry_kind(&path, is_dir, show_non_text_files)?;
+    let kind = entry_kind(&path, is_dir)?;
     let name = path
         .file_name()
         .and_then(|file_name| file_name.to_str())
@@ -127,18 +95,12 @@ fn default_locations() -> Vec<Entry> {
 }
 
 #[tauri::command]
-fn read_dir(
-    path: String,
-    show_hidden: Option<bool>,
-    show_non_text_files: Option<bool>,
-) -> Result<Vec<Entry>, String> {
+fn read_dir(path: String) -> Result<Vec<Entry>, String> {
     let mut entries = Vec::new();
-    let show_hidden = show_hidden.unwrap_or(false);
-    let show_non_text_files = show_non_text_files.unwrap_or(false);
 
     for item in std::fs::read_dir(path).map_err(|error| error.to_string())? {
         let item = item.map_err(|error| error.to_string())?;
-        if let Some(entry) = path_to_entry(item.path(), show_hidden, show_non_text_files) {
+        if let Some(entry) = path_to_entry(item.path()) {
             entries.push(entry);
         }
     }
@@ -201,7 +163,7 @@ fn search_folder(
             continue;
         };
         let is_dir = metadata.is_dir();
-        if supported_entry_kind(&path, is_dir).is_some() {
+        if entry_kind(&path, is_dir).is_some() {
             entries.push((path, is_dir));
         }
     }

@@ -3,19 +3,23 @@ import type { Entry, FileSearchMatch } from '../../../shared/types/files';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
 import { searchFiles } from '../../files/api/filesApi';
 
+interface MutableRef<T> {
+	current: T;
+}
+
 interface UseCrossFileSearchOptions {
 	activeRoot: Entry | null;
-	onFindQueryPending: (query: string) => void;
 	openFileAtPath: (
 		path: string,
 		options?: { mode?: FileViewMode; skipRecent?: boolean }
 	) => Promise<void>;
+	pendingFindQueryRef: MutableRef<string | null>;
 }
 
 export function useCrossFileSearch({
 	activeRoot,
-	onFindQueryPending,
 	openFileAtPath,
+	pendingFindQueryRef,
 }: UseCrossFileSearchOptions) {
 	const [searchQuery, setSearchQuery] = useState('');
 	const [searchedQuery, setSearchedQuery] = useState('');
@@ -66,10 +70,10 @@ export function useCrossFileSearch({
 
 	const openSearchResult = useCallback(
 		async (result: FileSearchMatch) => {
+			pendingFindQueryRef.current = searchedQuery || searchQuery.trim();
 			await openFileAtPath(result.path, { mode: 'preview' });
-			onFindQueryPending(searchedQuery || searchQuery.trim());
 		},
-		[onFindQueryPending, openFileAtPath, searchQuery, searchedQuery]
+		[openFileAtPath, pendingFindQueryRef, searchQuery, searchedQuery]
 	);
 
 	const clearCrossFileSearch = useCallback(() => {

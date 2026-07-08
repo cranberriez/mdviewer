@@ -25,7 +25,6 @@ export function useHeaderMenuActions({
 	const closeSourcesHeaderMenu = useMenuStore((state) => state.closeSourcesHeaderMenu);
 	const setError = useExplorerStore((state) => state.setError);
 	const setSidebarMode = useUiStore((state) => state.setSidebarMode);
-	const toggleExplorerFilter = useUiStore((state) => state.toggleExplorerFilter);
 	const toggleExplorerHeaderAction = useUiStore((state) => state.toggleExplorerHeaderAction);
 	const toggleSourcesHeaderAction = useUiStore((state) => state.toggleSourcesHeaderAction);
 
@@ -60,12 +59,6 @@ export function useHeaderMenuActions({
 					case 'toggle-refresh':
 						toggleExplorerHeaderAction('refresh');
 						break;
-					case 'toggle-hidden-items':
-						toggleExplorerFilter('showHiddenItems');
-						break;
-					case 'toggle-non-text-files':
-						toggleExplorerFilter('showNonTextFiles');
-						break;
 					default:
 						break;
 				}
@@ -80,7 +73,6 @@ export function useHeaderMenuActions({
 			refreshFolder,
 			setError,
 			startCreateDraft,
-			toggleExplorerFilter,
 			toggleExplorerHeaderAction,
 		]
 	);

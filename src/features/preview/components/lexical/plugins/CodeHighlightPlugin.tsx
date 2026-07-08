@@ -6,17 +6,17 @@
  * produced by `hljsTokenizer`. We pass our highlight.js tokenizer (instead of the
  * default Prism one) so the editor matches the markdown-it preview exactly.
  */
-import { registerCodeHighlighting } from '@lexical/code';
-import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { useEffect } from 'react';
-import { hljsTokenizer } from '../hljsTokenizer';
+import { registerCodeHighlighting } from "@lexical/code";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { useEffect } from "react";
+import { hljsTokenizer } from "../hljsTokenizer";
 
 export default function CodeHighlightPlugin(): null {
-	const [editor] = useLexicalComposerContext();
+  const [editor] = useLexicalComposerContext();
 
-	useEffect(() => {
-		return registerCodeHighlighting(editor, hljsTokenizer);
-	}, [editor]);
+  useEffect(() => {
+    return registerCodeHighlighting(editor, hljsTokenizer);
+  }, [editor]);
 
-	return null;
+  return null;
 }

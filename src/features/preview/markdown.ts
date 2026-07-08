@@ -1,42 +1,42 @@
-import MarkdownIt from 'markdown-it';
-import hljs from 'highlight.js/lib/common';
-import taskLists from 'markdown-it-task-lists';
-import { createSlugTracker } from './slug';
+import MarkdownIt from "markdown-it";
+import hljs from "highlight.js/lib/common";
+import taskLists from "markdown-it-task-lists";
+import { createSlugTracker } from "./slug";
 
-const PLAIN_TEXT_LANGUAGES = new Set(['text', 'txt', 'plain', 'plaintext', 'nohighlight']);
+const PLAIN_TEXT_LANGUAGES = new Set(["text", "txt", "plain", "plaintext", "nohighlight"]);
 
 function highlightCode(source: string, language: string) {
-	const normalizedLanguage = language.trim().toLowerCase();
+  const normalizedLanguage = language.trim().toLowerCase();
 
-	if (!normalizedLanguage || PLAIN_TEXT_LANGUAGES.has(normalizedLanguage)) {
-		return markdown.utils.escapeHtml(source);
-	}
+  if (!normalizedLanguage || PLAIN_TEXT_LANGUAGES.has(normalizedLanguage)) {
+    return markdown.utils.escapeHtml(source);
+  }
 
-	if (normalizedLanguage && hljs.getLanguage(normalizedLanguage)) {
-		try {
-			return hljs.highlight(source, {
-				language: normalizedLanguage,
-				ignoreIllegals: true,
-			}).value;
-		} catch {
-			return markdown.utils.escapeHtml(source);
-		}
-	}
+  if (normalizedLanguage && hljs.getLanguage(normalizedLanguage)) {
+    try {
+      return hljs.highlight(source, {
+        language: normalizedLanguage,
+        ignoreIllegals: true,
+      }).value;
+    } catch {
+      return markdown.utils.escapeHtml(source);
+    }
+  }
 
-	try {
-		return hljs.highlightAuto(source).value;
-	} catch {
-		return markdown.utils.escapeHtml(source);
-	}
+  try {
+    return hljs.highlightAuto(source).value;
+  } catch {
+    return markdown.utils.escapeHtml(source);
+  }
 }
 
 export const markdown = new MarkdownIt({
-	html: false,
-	linkify: true,
-	typographer: true,
-	highlight: highlightCode,
+  html: false,
+  linkify: true,
+  typographer: true,
+  highlight: highlightCode,
 }).use(taskLists, {
-	enabled: false,
+  enabled: false,
 });
 
 /**
@@ -45,20 +45,20 @@ export const markdown = new MarkdownIt({
  * the heading's rendered text via the shared slugger, so the ids match what the
  * link handler computes from `#heading` targets.
  */
-markdown.core.ruler.push('heading_anchor_ids', (state) => {
-	const uniqueSlug = createSlugTracker();
-	const tokens = state.tokens;
+markdown.core.ruler.push("heading_anchor_ids", (state) => {
+  const uniqueSlug = createSlugTracker();
+  const tokens = state.tokens;
 
-	for (let index = 0; index < tokens.length; index += 1) {
-		if (tokens[index].type !== 'heading_open') {
-			continue;
-		}
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index].type !== "heading_open") {
+      continue;
+    }
 
-		const inline = tokens[index + 1];
-		if (!inline || inline.type !== 'inline') {
-			continue;
-		}
+    const inline = tokens[index + 1];
+    if (!inline || inline.type !== "inline") {
+      continue;
+    }
 
-		tokens[index].attrSet('id', uniqueSlug(inline.content));
-	}
+    tokens[index].attrSet("id", uniqueSlug(inline.content));
+  }
 });

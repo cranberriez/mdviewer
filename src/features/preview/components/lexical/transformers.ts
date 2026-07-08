@@ -1,51 +1,51 @@
 import {
-	$convertFromMarkdownString,
-	$convertToMarkdownString,
-	CHECK_LIST,
-	ELEMENT_TRANSFORMERS,
-	MULTILINE_ELEMENT_TRANSFORMERS,
-	TEXT_FORMAT_TRANSFORMERS,
-	TEXT_MATCH_TRANSFORMERS,
-	type ElementTransformer,
-	type Transformer,
-} from '@lexical/markdown';
+  $convertFromMarkdownString,
+  $convertToMarkdownString,
+  CHECK_LIST,
+  ELEMENT_TRANSFORMERS,
+  MULTILINE_ELEMENT_TRANSFORMERS,
+  TEXT_FORMAT_TRANSFORMERS,
+  TEXT_MATCH_TRANSFORMERS,
+  type ElementTransformer,
+  type Transformer,
+} from "@lexical/markdown";
 import {
-	$createTableCellNode,
-	$createTableNode,
-	$createTableRowNode,
-	$isTableCellNode,
-	$isTableNode,
-	$isTableRowNode,
-	TableCellHeaderStates,
-	TableCellNode,
-	TableNode,
-	TableRowNode,
-} from '@lexical/table';
+  $createTableCellNode,
+  $createTableNode,
+  $createTableRowNode,
+  $isTableCellNode,
+  $isTableNode,
+  $isTableRowNode,
+  TableCellHeaderStates,
+  TableCellNode,
+  TableNode,
+  TableRowNode,
+} from "@lexical/table";
 import {
-	$createHorizontalRuleNode,
-	$isHorizontalRuleNode,
-	HorizontalRuleNode,
-} from '@lexical/react/LexicalHorizontalRuleNode';
-import { $isParagraphNode, $isTextNode, type LexicalNode } from 'lexical';
+  $createHorizontalRuleNode,
+  $isHorizontalRuleNode,
+  HorizontalRuleNode,
+} from "@lexical/react/LexicalHorizontalRuleNode";
+import { $isParagraphNode, $isTextNode, type LexicalNode } from "lexical";
 
 /**
  * Horizontal rule transformer (`---` / `***` / `___`). Vendored from Lexical's
  * playground since `@lexical/markdown` doesn't ship it. Renders an <hr>.
  */
 const HR: ElementTransformer = {
-	dependencies: [HorizontalRuleNode],
-	export: (node: LexicalNode) => ($isHorizontalRuleNode(node) ? '---' : null),
-	regExp: /^(---|\*\*\*|___)\s?$/,
-	replace: (parentNode, _children, _match, isImport) => {
-		const line = $createHorizontalRuleNode();
-		if (isImport || parentNode.getNextSibling() != null) {
-			parentNode.replace(line);
-		} else {
-			parentNode.insertBefore(line);
-		}
-		line.selectNext();
-	},
-	type: 'element',
+  dependencies: [HorizontalRuleNode],
+  export: (node: LexicalNode) => ($isHorizontalRuleNode(node) ? "---" : null),
+  regExp: /^(---|\*\*\*|___)\s?$/,
+  replace: (parentNode, _children, _match, isImport) => {
+    const line = $createHorizontalRuleNode();
+    if (isImport || parentNode.getNextSibling() != null) {
+      parentNode.replace(line);
+    } else {
+      parentNode.insertBefore(line);
+    }
+    line.selectNext();
+  },
+  type: "element",
 };
 
 /**
@@ -65,143 +65,151 @@ const TABLE_ROW_REG_EXP = /^(?:\|)(.+)(?:\|)\s?$/;
 const TABLE_ROW_DIVIDER_REG_EXP = /^(\| ?:?-{1,}:? ?)+\|\s?$/;
 
 function isTableRowDivider(row: string): boolean {
-	return TABLE_ROW_DIVIDER_REG_EXP.test(row);
+  return TABLE_ROW_DIVIDER_REG_EXP.test(row);
 }
 
 function getTableColumnsSize(table: TableNode) {
-	const row = table.getFirstChild();
-	return $isTableRowNode(row) ? row.getChildrenSize() : 0;
+  const row = table.getFirstChild();
+  return $isTableRowNode(row) ? row.getChildrenSize() : 0;
 }
 
 const $createTableCell = (textContent: string): TableCellNode => {
-	const normalized = textContent.replace(/\\n/g, '\n');
-	const cell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
-	$convertFromMarkdownString(normalized, MARKDOWN_TRANSFORMERS, cell);
-	return cell;
+  const normalized = textContent.replace(/\\n/g, "\n");
+  const cell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+  $convertFromMarkdownString(normalized, MARKDOWN_TRANSFORMERS, cell);
+  return cell;
 };
 
 const mapToTableCells = (textContent: string): TableCellNode[] | null => {
-	const match = textContent.match(TABLE_ROW_REG_EXP);
-	if (!match || !match[1]) {
-		return null;
-	}
-	return match[1].split('|').map((text) => $createTableCell(text));
+  const match = textContent.match(TABLE_ROW_REG_EXP);
+  if (!match || !match[1]) {
+    return null;
+  }
+  return match[1].split("|").map((text) => $createTableCell(text));
 };
 
 const TABLE: ElementTransformer = {
-	dependencies: [TableNode, TableRowNode, TableCellNode],
-	export: (node: LexicalNode) => {
-		if (!$isTableNode(node)) {
-			return null;
-		}
+  dependencies: [TableNode, TableRowNode, TableCellNode],
+  export: (node: LexicalNode) => {
+    if (!$isTableNode(node)) {
+      return null;
+    }
 
-		const output: string[] = [];
+    const output: string[] = [];
 
-		for (const row of node.getChildren()) {
-			const rowOutput: string[] = [];
-			if (!$isTableRowNode(row)) {
-				continue;
-			}
+    for (const row of node.getChildren()) {
+      const rowOutput: string[] = [];
+      if (!$isTableRowNode(row)) {
+        continue;
+      }
 
-			let isHeaderRow = false;
-			for (const cell of row.getChildren()) {
-				if ($isTableCellNode(cell)) {
-					rowOutput.push(
-						$convertToMarkdownString(MARKDOWN_TRANSFORMERS, cell).replace(/\n/g, '\\n').trim()
-					);
-					if (cell.__headerState === TableCellHeaderStates.ROW) {
-						isHeaderRow = true;
-					}
-				}
-			}
+      let isHeaderRow = false;
+      for (const cell of row.getChildren()) {
+        if ($isTableCellNode(cell)) {
+          rowOutput.push(
+            $convertToMarkdownString(MARKDOWN_TRANSFORMERS, cell)
+              .replace(/\n/g, "\\n")
+              .trim(),
+          );
+          if (cell.__headerState === TableCellHeaderStates.ROW) {
+            isHeaderRow = true;
+          }
+        }
+      }
 
-			output.push(`| ${rowOutput.join(' | ')} |`);
-			if (isHeaderRow) {
-				output.push(`| ${rowOutput.map(() => '---').join(' | ')} |`);
-			}
-		}
+      output.push(`| ${rowOutput.join(" | ")} |`);
+      if (isHeaderRow) {
+        output.push(`| ${rowOutput.map(() => "---").join(" | ")} |`);
+      }
+    }
 
-		return output.join('\n');
-	},
-	regExp: TABLE_ROW_REG_EXP,
-	replace: (parentNode, _1, match) => {
-		// Header divider row (| --- | --- |): mark the previous row's cells.
-		if (isTableRowDivider(match[0])) {
-			const table = parentNode.getPreviousSibling();
-			if (!table || !$isTableNode(table)) {
-				return;
-			}
+    return output.join("\n");
+  },
+  regExp: TABLE_ROW_REG_EXP,
+  replace: (parentNode, _1, match) => {
+    // Header divider row (| --- | --- |): mark the previous row's cells.
+    if (isTableRowDivider(match[0])) {
+      const table = parentNode.getPreviousSibling();
+      if (!table || !$isTableNode(table)) {
+        return;
+      }
 
-			const rows = table.getChildren();
-			const lastRow = rows[rows.length - 1];
-			if (!lastRow || !$isTableRowNode(lastRow)) {
-				return;
-			}
+      const rows = table.getChildren();
+      const lastRow = rows[rows.length - 1];
+      if (!lastRow || !$isTableRowNode(lastRow)) {
+        return;
+      }
 
-			lastRow.getChildren().forEach((cell) => {
-				if (!$isTableCellNode(cell)) {
-					return;
-				}
-				cell.setHeaderStyles(TableCellHeaderStates.ROW, TableCellHeaderStates.ROW);
-			});
+      lastRow.getChildren().forEach((cell) => {
+        if (!$isTableCellNode(cell)) {
+          return;
+        }
+        cell.setHeaderStyles(
+          TableCellHeaderStates.ROW,
+          TableCellHeaderStates.ROW,
+        );
+      });
 
-			parentNode.remove();
-			return;
-		}
+      parentNode.remove();
+      return;
+    }
 
-		const matchCells = mapToTableCells(match[0]);
-		if (matchCells == null) {
-			return;
-		}
+    const matchCells = mapToTableCells(match[0]);
+    if (matchCells == null) {
+      return;
+    }
 
-		const rows = [matchCells];
-		let sibling = parentNode.getPreviousSibling();
-		let maxCells = matchCells.length;
+    const rows = [matchCells];
+    let sibling = parentNode.getPreviousSibling();
+    let maxCells = matchCells.length;
 
-		while (sibling) {
-			if (!$isParagraphNode(sibling) || sibling.getChildrenSize() !== 1) {
-				break;
-			}
+    while (sibling) {
+      if (!$isParagraphNode(sibling) || sibling.getChildrenSize() !== 1) {
+        break;
+      }
 
-			const firstChild = sibling.getFirstChild();
-			if (!$isTextNode(firstChild)) {
-				break;
-			}
+      const firstChild = sibling.getFirstChild();
+      if (!$isTextNode(firstChild)) {
+        break;
+      }
 
-			const cells = mapToTableCells(firstChild.getTextContent());
-			if (cells == null) {
-				break;
-			}
+      const cells = mapToTableCells(firstChild.getTextContent());
+      if (cells == null) {
+        break;
+      }
 
-			maxCells = Math.max(maxCells, cells.length);
-			rows.unshift(cells);
-			const previousSibling = sibling.getPreviousSibling();
-			sibling.remove();
-			sibling = previousSibling;
-		}
+      maxCells = Math.max(maxCells, cells.length);
+      rows.unshift(cells);
+      const previousSibling = sibling.getPreviousSibling();
+      sibling.remove();
+      sibling = previousSibling;
+    }
 
-		const table = $createTableNode();
+    const table = $createTableNode();
 
-		for (const cells of rows) {
-			const tableRow = $createTableRowNode();
-			table.append(tableRow);
+    for (const cells of rows) {
+      const tableRow = $createTableRowNode();
+      table.append(tableRow);
 
-			for (let i = 0; i < maxCells; i++) {
-				tableRow.append(i < cells.length ? cells[i] : $createTableCell(''));
-			}
-		}
+      for (let i = 0; i < maxCells; i++) {
+        tableRow.append(i < cells.length ? cells[i] : $createTableCell(""));
+      }
+    }
 
-		const previousSibling = parentNode.getPreviousSibling();
-		if ($isTableNode(previousSibling) && getTableColumnsSize(previousSibling) === maxCells) {
-			previousSibling.append(...table.getChildren());
-			parentNode.remove();
-		} else {
-			parentNode.replace(table);
-		}
+    const previousSibling = parentNode.getPreviousSibling();
+    if (
+      $isTableNode(previousSibling) &&
+      getTableColumnsSize(previousSibling) === maxCells
+    ) {
+      previousSibling.append(...table.getChildren());
+      parentNode.remove();
+    } else {
+      parentNode.replace(table);
+    }
 
-		table.selectEnd();
-	},
-	type: 'element',
+    table.selectEnd();
+  },
+  type: "element",
 };
 
 /**
@@ -219,11 +227,11 @@ const TABLE: ElementTransformer = {
  * transformers so `- [ ]` isn't swallowed as a plain bullet.
  */
 export const MARKDOWN_TRANSFORMERS: Array<Transformer> = [
-	TABLE,
-	HR,
-	CHECK_LIST,
-	...ELEMENT_TRANSFORMERS,
-	...MULTILINE_ELEMENT_TRANSFORMERS,
-	...TEXT_FORMAT_TRANSFORMERS,
-	...TEXT_MATCH_TRANSFORMERS,
+  TABLE,
+  HR,
+  CHECK_LIST,
+  ...ELEMENT_TRANSFORMERS,
+  ...MULTILINE_ELEMENT_TRANSFORMERS,
+  ...TEXT_FORMAT_TRANSFORMERS,
+  ...TEXT_MATCH_TRANSFORMERS,
 ];
