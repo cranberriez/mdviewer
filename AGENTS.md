@@ -210,6 +210,24 @@ keep the count a multiple of 6).
 
 ---
 
+## Changelog workflow
+
+- Keep a running `changelog.md` at the `mdviewer/` root during feature work. Update it
+  whenever user-facing behavior changes, especially when a roadmap item is completed.
+- Changelog entries should describe features at a high level for release notes, not list
+  internal implementation details. Moving completed roadmap items into simpler changelog
+  bullets is enough.
+- The roadmap/planning docs remain the authoritative planning inventory. The changelog is
+  the user-facing summary of what shipped in the current release branch.
+- When a version bucket is merged or released, move `changelog.md` into
+  `changelogs/<version>.md` without the leading `v` (for example, `changelogs/0.4.md`),
+  use that archived file as the GitHub Release notes source, then recreate a fresh
+  `changelog.md` for the next release.
+- Do not add pure refactors, dependency churn, or invisible cleanup unless it changes the
+  user experience or matters for release risk.
+
+---
+
 ## Verification
 
 - `pnpm check` (tsc) + `pnpm build` is the verification limit for routine changes.
