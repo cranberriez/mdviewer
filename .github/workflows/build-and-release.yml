@@ -44,6 +44,54 @@ jobs:
       - name: Type-check and build frontend
         run: pnpm build
 
+  tauri-build:
+    name: Build Tauri app
+    # Only for PRs into main (version branch -> main, or a dependency PR that
+    # targets main). Feature PRs into vX.Y branches skip this heavier build.
+    if: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
+    needs:
+      - validate
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.8.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: windows-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}-${{ hashFiles('src-tauri/src/**', 'src-tauri/Cargo.toml', 'src-tauri/build.rs', 'src-tauri/tauri.conf.json') }}
+          restore-keys: |
+            windows-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}-
+            windows-cargo-
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Compiles the full app (runs pnpm build, then the Rust/native build)
+      # but skips installer packaging, so PRs get real native-build coverage
+      # without the slower bundling step.
+      - name: Build Tauri app (no bundle)
+        run: pnpm tauri build --no-bundle
+
   windows-artifact:
     name: Build Windows artifact
     if: ${{ github.event_name == 'workflow_dispatch' }}
