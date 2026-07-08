@@ -54,8 +54,10 @@ src/
                               useHeaderMenuActions, useInitialLocations
       state/                  useUiStore, useMenuStore   (Zustand)
     explorer/                 Sidebar tree, saved locations, context menus
-      components/             Sidebar, TreeNode, TreeInlineInput, EmptySidebar,
-                              SavedContextMenu, IconPickerMenu
+      components/             Sidebar, SidebarSourceList, SidebarExplorerHeader,
+                              SidebarFooter, SidebarHeaderActions, TreeNode,
+                              TreeInlineInput, EmptySidebar, SavedContextMenu,
+                              IconPickerMenu
       components/context-menu/ ContextMenuSurface (generic), *ContextMenu, *FilterMenu,
                               treeContextMenuEntries, menuPosition
       hooks/                  useExplorerContextActions, useFolderTreeController,
@@ -117,10 +119,10 @@ directly. Adding native behavior = new Rust command → new wrapper here.
   items, icons, shortcuts, danger styling.
 - Each menu is a thin component that builds an `entries` array and renders the surface —
   see `ExplorerFilterMenu`, `SourcesHeaderContextMenu`, `ExplorerHeaderContextMenu`,
-  and `treeContextMenuEntries.ts` (which composes shared fragments).
+  `SavedContextMenu`, and `treeContextMenuEntries.ts` (which composes shared fragments).
 - Menu open/close state lives in `useMenuStore`; `AppMenus` renders whichever menu is open.
-> Note: `SavedContextMenu` and `IconPickerMenu` predate this system and hand-roll it —
-> see `../fixer-tasks.md` P1. New menus must use `ContextMenuSurface`.
+> Note: `IconPickerMenu` keeps a custom grid body, but still uses the shared positioning
+> and dismissal hooks. New list-style menus should use `ContextMenuSurface`.
 
 ### 5. Single action-dispatcher hooks
 Menu actions are strings routed through one `switch`. `useExplorerContextActions` is the
@@ -130,6 +132,12 @@ model: `(action, target) => { switch(action) … }`. Add an action = extend the 
 ### 6. Controller hooks own workflows
 `use*Controller` / `use*Actions` hooks encapsulate multi-step flows (open file, saved
 locations, drag/drop, inline draft rename/create). `App.tsx` wires their inputs/outputs.
+
+### 7. Sidebar panels own their display state
+`Sidebar.tsx` is a coordinator for the sources panel, explorer panel, and footer. Keep
+panel-specific display state in `SidebarSourceList`, `SidebarExplorerHeader`, and
+`SidebarFooter`, reading Zustand stores directly where appropriate. Pass workflow
+callbacks down from `AppWorkspace` only when they come from controller hooks.
 
 ---
 
@@ -157,9 +165,9 @@ locations, drag/drop, inline draft rename/create). `App.tsx` wires their inputs/
 **Add a persisted setting** → schema in `shared/state/persistence.ts` → field in the owning
 Zustand store → include in the config selector. See `docs/state-and-persistence.md`.
 
-**Add a sidebar header toolbar button** → prefer the (planned) data-driven config over
-`file-actions/components/IconActionButton`; today they're hand-written in `Sidebar.tsx`
-(see `../fixer-tasks.md` P2.2).
+**Add a sidebar header toolbar button** → add an item to the data-driven action config in
+`SidebarSourceList` or `SidebarExplorerHeader`. Shared rendering lives in
+`SidebarHeaderActions`, which wraps `file-actions/components/IconActionButton`.
 
 **Add a picker icon** → append to `ICON_OPTIONS` in `IconPickerMenu.tsx` (grid is 6 cols;
 keep the count a multiple of 6).
@@ -178,9 +186,6 @@ keep the count a multiple of 6).
 
 ## Known rough edges — see `../fixer-tasks.md`
 
-- `SavedContextMenu` / `IconPickerMenu` duplicate positioning + dismissal (should reuse the
-  surface / a shared hook).
-- `Sidebar.tsx` is a 70-prop mega-component that should split into panels.
 - `App.tsx` uses cross-hook refs to paper over a hook dependency cycle; some logic
   (`openAppContextMenu`, `selectLocation`) still lives inline.
 
