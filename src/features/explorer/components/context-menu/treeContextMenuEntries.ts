@@ -2,6 +2,7 @@ import {
 	Copy,
 	CornerUpLeft,
 	FilePlus,
+	FolderOpen,
 	FolderPlus,
 	Link2,
 	Pencil,
@@ -19,6 +20,7 @@ export type ContextMenuTargetKind = 'folder' | 'file';
 export type ContextMenuAction =
 	| 'new-file'
 	| 'new-folder'
+	| 'open-as-root'
 	| 'pin'
 	| 'open'
 	| 'reveal'
@@ -88,12 +90,14 @@ const COMMON_TAIL: MenuEntry<ContextMenuAction>[] = [
 interface TreeContextMenuRequest {
 	kind: ContextMenuTargetKind;
 	canPin: boolean;
+	canOpenAsRoot: boolean;
 	variant: ContextMenuVariant;
 }
 
 export function entriesForTreeContext({
 	kind,
 	canPin,
+	canOpenAsRoot,
 	variant,
 }: TreeContextMenuRequest): MenuEntry<ContextMenuAction>[] {
 	if (variant === 'recent-file') {
@@ -126,8 +130,17 @@ export function entriesForTreeContext({
 		return [
 			...ROOT_CREATE_ENTRIES,
 			{ separator: true },
+			...(canOpenAsRoot
+				? ([
+						{ id: 'open-as-root', label: 'Open As Root', icon: FolderOpen },
+						{ separator: true },
+					] as MenuEntry<ContextMenuAction>[])
+				: []),
 			...(canPin
-				? ([{ id: 'pin', label: 'Pin Folder', icon: Pin }, { separator: true }] as MenuEntry<ContextMenuAction>[])
+				? ([
+						{ id: 'pin', label: 'Pin Folder', icon: Pin },
+						{ separator: true },
+					] as MenuEntry<ContextMenuAction>[])
 				: []),
 			{
 				id: 'reveal',

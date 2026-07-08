@@ -36,6 +36,8 @@ interface ContextMenuProps {
 	target: ContextMenuTarget;
 	/** Whether the "Pin Folder" item should appear (folders not already pinned). */
 	canPin?: boolean;
+	/** Whether the "Open As Root" item should appear for a folder target. */
+	canOpenAsRoot?: boolean;
 	/** Origin of the menu, which trims the action set. Defaults to "explorer". */
 	variant?: ContextMenuVariant;
 	onAction: (action: ContextMenuAction, target: ContextMenuTarget) => void;
@@ -45,6 +47,7 @@ interface ContextMenuProps {
 export function ContextMenu({
 	target,
 	canPin = false,
+	canOpenAsRoot = false,
 	variant = 'explorer',
 	onAction,
 	onClose,
@@ -52,6 +55,7 @@ export function ContextMenu({
 	const entries = entriesForTreeContext({
 		kind: target.kind,
 		canPin,
+		canOpenAsRoot,
 		variant,
 	});
 

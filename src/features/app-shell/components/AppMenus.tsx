@@ -26,6 +26,7 @@ import { useSavedLocationsStore } from '../../saved-locations/state/useSavedLoca
 interface AppMenusProps {
 	context: {
 		canPin: boolean;
+		canOpenAsRoot: boolean;
 		onAction: (action: ContextMenuAction, target: ContextMenuTarget) => void;
 	};
 	explorerHeader: {
@@ -80,6 +81,7 @@ export function AppMenus({
 					target={contextMenu}
 					variant={contextMenuVariant}
 					canPin={context.canPin}
+					canOpenAsRoot={context.canOpenAsRoot}
 					onAction={context.onAction}
 					onClose={closeContextMenu}
 				/>
