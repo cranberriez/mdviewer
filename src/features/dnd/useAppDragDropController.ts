@@ -5,6 +5,7 @@ import { fileKindFromPath, fileName, isVisibleFileName, parentPath } from '../..
 import { comparablePath } from '../../shared/utils/path';
 import { recordRecentSingleFile, type RecentItem } from '../../shared/state/persistence';
 import { copyPath, movePath, readFolder } from '../files/api/filesApi';
+import { useUiStore } from '../app-shell/state/useUiStore';
 import type { FileViewMode } from '../file-actions/components/FileActionControls';
 import { useFileDrop } from './useFileDrop';
 import { useInternalDrag } from './useInternalDrag';
@@ -44,6 +45,8 @@ export function useAppDragDropController({
 	onOverlayChange,
 	onRecentsChange,
 }: UseAppDragDropControllerOptions) {
+	const explorerFilters = useUiStore((state) => state.explorerFilters);
+
 	const handleTreeDrop = useCallback(
 		async (paths: string[], target: DropZone, dropMode: DropMode) => {
 			onError(null);
@@ -117,19 +120,19 @@ export function useAppDragDropController({
 	const handleMainDrop = useCallback(
 		async (firstPath: string) => {
 			try {
-				await readFolder(firstPath);
+				await readFolder(firstPath, explorerFilters);
 				await handleMainSetRoot(firstPath);
 			} catch {
 				await handleMainOpenFile(firstPath);
 			}
 		},
-		[handleMainOpenFile, handleMainSetRoot]
+		[explorerFilters, handleMainOpenFile, handleMainSetRoot]
 	);
 
 	const handleHomeDrop = useCallback(
 		async (firstPath: string) => {
 			try {
-				await readFolder(firstPath);
+				await readFolder(firstPath, explorerFilters);
 				await handleMainSetRoot(firstPath);
 				return;
 			} catch {
@@ -152,7 +155,7 @@ export function useAppDragDropController({
 				recordRecentSingleFile(current, { path: firstPath, name: fileName(firstPath), kind })
 			);
 		},
-		[handleMainSetRoot, onError, onOverlayChange, onRecentsChange, openFileAtPath]
+		[explorerFilters, handleMainSetRoot, onError, onOverlayChange, onRecentsChange, openFileAtPath]
 	);
 
 	const dispatchDrop = useCallback(

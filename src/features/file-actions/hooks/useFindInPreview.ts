@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 // Find-in-file built on the CSS Custom Highlight API where possible.
 //
@@ -14,366 +14,359 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 // Textareas do not expose their value as DOM text nodes, so code-mode find uses
 // textarea selection and scroll position for the active match instead.
 
-const ALL_HIGHLIGHT = "find-matches";
-const CURRENT_HIGHLIGHT = "find-current";
+const ALL_HIGHLIGHT = 'find-matches';
+const CURRENT_HIGHLIGHT = 'find-current';
 
 // Feature-detect once. WebView2 / modern Chromium (this app's runtime) supports
 // it; older engines simply get no highlights rather than a crash.
 function highlightsSupported() {
-  return (
-    typeof CSS !== "undefined" &&
-    typeof Highlight !== "undefined" &&
-    Boolean((CSS as unknown as { highlights?: unknown }).highlights)
-  );
+	return (
+		typeof CSS !== 'undefined' &&
+		typeof Highlight !== 'undefined' &&
+		Boolean((CSS as unknown as { highlights?: unknown }).highlights)
+	);
 }
 
 function clearHighlights() {
-  if (!highlightsSupported()) {
-    return;
-  }
-  CSS.highlights.delete(ALL_HIGHLIGHT);
-  CSS.highlights.delete(CURRENT_HIGHLIGHT);
+	if (!highlightsSupported()) {
+		return;
+	}
+	CSS.highlights.delete(ALL_HIGHLIGHT);
+	CSS.highlights.delete(CURRENT_HIGHLIGHT);
 }
 
 // Collect every text node under `root`, skipping empty ones. Order matches
 // document order, which is the order matches will be numbered in.
 function collectTextNodes(root: HTMLElement) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      return node.nodeValue && node.nodeValue.length > 0
-        ? NodeFilter.FILTER_ACCEPT
-        : NodeFilter.FILTER_REJECT;
-    },
-  });
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+		acceptNode(node) {
+			return node.nodeValue && node.nodeValue.length > 0
+				? NodeFilter.FILTER_ACCEPT
+				: NodeFilter.FILTER_REJECT;
+		},
+	});
 
-  const nodes: Text[] = [];
-  while (walker.nextNode()) {
-    nodes.push(walker.currentNode as Text);
-  }
-  return nodes;
+	const nodes: Text[] = [];
+	while (walker.nextNode()) {
+		nodes.push(walker.currentNode as Text);
+	}
+	return nodes;
 }
 
 // Build a Range for every (case-insensitive) occurrence of `query`. Matching is
 // done per text node; a query that spans element boundaries won't match, which
 // is the same behaviour as the browser's native find for inline-styled words.
 function buildRanges(root: HTMLElement, query: string): Range[] {
-  const needle = query.toLowerCase();
-  if (!needle) {
-    return [];
-  }
+	const needle = query.toLowerCase();
+	if (!needle) {
+		return [];
+	}
 
-  const ranges: Range[] = [];
+	const ranges: Range[] = [];
 
-  for (const node of collectTextNodes(root)) {
-    const haystack = (node.nodeValue ?? "").toLowerCase();
-    let from = 0;
+	for (const node of collectTextNodes(root)) {
+		const haystack = (node.nodeValue ?? '').toLowerCase();
+		let from = 0;
 
-    for (;;) {
-      const index = haystack.indexOf(needle, from);
-      if (index === -1) {
-        break;
-      }
+		for (;;) {
+			const index = haystack.indexOf(needle, from);
+			if (index === -1) {
+				break;
+			}
 
-      const range = document.createRange();
-      range.setStart(node, index);
-      range.setEnd(node, index + needle.length);
-      ranges.push(range);
+			const range = document.createRange();
+			range.setStart(node, index);
+			range.setEnd(node, index + needle.length);
+			ranges.push(range);
 
-      from = index + needle.length;
-    }
-  }
+			from = index + needle.length;
+		}
+	}
 
-  return ranges;
+	return ranges;
 }
 
 interface TextareaMatch {
-  end: number;
-  start: number;
+	end: number;
+	start: number;
 }
 
 function buildTextareaMatches(value: string, query: string): TextareaMatch[] {
-  const needle = query.toLowerCase();
-  if (!needle) {
-    return [];
-  }
+	const needle = query.toLowerCase();
+	if (!needle) {
+		return [];
+	}
 
-  const haystack = value.toLowerCase();
-  const matches: TextareaMatch[] = [];
-  let from = 0;
+	const haystack = value.toLowerCase();
+	const matches: TextareaMatch[] = [];
+	let from = 0;
 
-  for (;;) {
-    const index = haystack.indexOf(needle, from);
-    if (index === -1) {
-      break;
-    }
+	for (;;) {
+		const index = haystack.indexOf(needle, from);
+		if (index === -1) {
+			break;
+		}
 
-    matches.push({ start: index, end: index + needle.length });
-    from = index + needle.length;
-  }
+		matches.push({ start: index, end: index + needle.length });
+		from = index + needle.length;
+	}
 
-  return matches;
+	return matches;
 }
 
 function isTextarea(element: HTMLElement): element is HTMLTextAreaElement {
-  return element instanceof HTMLTextAreaElement;
+	return element instanceof HTMLTextAreaElement;
 }
 
 function paint(ranges: Range[], currentIndex: number) {
-  if (!highlightsSupported()) {
-    return;
-  }
+	if (!highlightsSupported()) {
+		return;
+	}
 
-  if (!ranges.length) {
-    clearHighlights();
-    return;
-  }
+	if (!ranges.length) {
+		clearHighlights();
+		return;
+	}
 
-  CSS.highlights.set(ALL_HIGHLIGHT, new Highlight(...ranges));
+	CSS.highlights.set(ALL_HIGHLIGHT, new Highlight(...ranges));
 
-  const current = ranges[currentIndex];
-  if (current) {
-    CSS.highlights.set(CURRENT_HIGHLIGHT, new Highlight(current));
-  } else {
-    CSS.highlights.delete(CURRENT_HIGHLIGHT);
-  }
+	const current = ranges[currentIndex];
+	if (current) {
+		CSS.highlights.set(CURRENT_HIGHLIGHT, new Highlight(current));
+	} else {
+		CSS.highlights.delete(CURRENT_HIGHLIGHT);
+	}
 }
 
 // Scroll the active match into view. Ranges have no scrollIntoView, so we use
 // the bounding rect relative to the scroll container and nudge it to centre.
 function scrollRangeIntoView(range: Range, container: HTMLElement) {
-  const rect = range.getBoundingClientRect();
-  const box = container.getBoundingClientRect();
+	const rect = range.getBoundingClientRect();
+	const box = container.getBoundingClientRect();
 
-  if (rect.height === 0 && rect.width === 0) {
-    return;
-  }
+	if (rect.height === 0 && rect.width === 0) {
+		return;
+	}
 
-  const offset = rect.top - box.top - box.height / 2 + rect.height / 2;
-  if (Math.abs(offset) < 1) {
-    return;
-  }
+	const offset = rect.top - box.top - box.height / 2 + rect.height / 2;
+	if (Math.abs(offset) < 1) {
+		return;
+	}
 
-  container.scrollBy({ top: offset, behavior: "smooth" });
+	container.scrollBy({ top: offset, behavior: 'smooth' });
 }
 
 function lineHeightFor(textarea: HTMLTextAreaElement) {
-  const style = window.getComputedStyle(textarea);
-  const parsed = Number.parseFloat(style.lineHeight);
-  if (Number.isFinite(parsed)) {
-    return parsed;
-  }
+	const style = window.getComputedStyle(textarea);
+	const parsed = Number.parseFloat(style.lineHeight);
+	if (Number.isFinite(parsed)) {
+		return parsed;
+	}
 
-  const fontSize = Number.parseFloat(style.fontSize);
-  return Number.isFinite(fontSize) ? fontSize * 1.4 : 20;
+	const fontSize = Number.parseFloat(style.fontSize);
+	return Number.isFinite(fontSize) ? fontSize * 1.4 : 20;
 }
 
-function scrollTextareaMatchIntoView(
-  textarea: HTMLTextAreaElement,
-  match: TextareaMatch,
-) {
-  const lineIndex = textarea.value.slice(0, match.start).split(/\r?\n/).length - 1;
-  const lineHeight = lineHeightFor(textarea);
-  const top = lineIndex * lineHeight;
-  const nextScrollTop = top - textarea.clientHeight / 2 + lineHeight / 2;
+function scrollTextareaMatchIntoView(textarea: HTMLTextAreaElement, match: TextareaMatch) {
+	const lineIndex = textarea.value.slice(0, match.start).split(/\r?\n/).length - 1;
+	const lineHeight = lineHeightFor(textarea);
+	const top = lineIndex * lineHeight;
+	const nextScrollTop = top - textarea.clientHeight / 2 + lineHeight / 2;
 
-  textarea.scrollTop = Math.max(
-    0,
-    Math.min(textarea.scrollHeight - textarea.clientHeight, nextScrollTop),
-  );
+	textarea.scrollTop = Math.max(
+		0,
+		Math.min(textarea.scrollHeight - textarea.clientHeight, nextScrollTop)
+	);
 }
 
 export function useFindInPreview(
-  targetRef: React.RefObject<HTMLElement | null>,
-  contentKey: string,
+	targetRef: React.RefObject<HTMLElement | null>,
+	contentKey: string
 ) {
-  const rangesRef = useRef<Range[]>([]);
-  const textareaMatchesRef = useRef<TextareaMatch[]>([]);
-  const currentRef = useRef(-1);
-  const queryRef = useRef("");
-  const [current, setCurrent] = useState(-1);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [total, setTotal] = useState(0);
+	const rangesRef = useRef<Range[]>([]);
+	const textareaMatchesRef = useRef<TextareaMatch[]>([]);
+	const currentRef = useRef(-1);
+	const queryRef = useRef('');
+	const [current, setCurrent] = useState(-1);
+	const [open, setOpen] = useState(false);
+	const [query, setQuery] = useState('');
+	const [total, setTotal] = useState(0);
 
-  // Re-paint and (optionally) scroll to the active match. Pure DOM/CSS work
-  // driven entirely from refs, so it is independent of React render timing.
-  const apply = useCallback(
-    (index: number, options?: { scroll?: boolean }) => {
-      currentRef.current = index;
-      setCurrent(index);
-      const target = targetRef.current;
+	// Re-paint and (optionally) scroll to the active match. Pure DOM/CSS work
+	// driven entirely from refs, so it is independent of React render timing.
+	const apply = useCallback(
+		(index: number, options?: { scroll?: boolean }) => {
+			currentRef.current = index;
+			setCurrent(index);
+			const target = targetRef.current;
 
-      if (target && isTextarea(target)) {
-        clearHighlights();
-        const match = textareaMatchesRef.current[index];
-        if (match) {
-          target.setSelectionRange(match.start, match.end);
-          if (options?.scroll) {
-            scrollTextareaMatchIntoView(target, match);
-          }
-        }
-      } else {
-        paint(rangesRef.current, index);
-      }
+			if (target && isTextarea(target)) {
+				clearHighlights();
+				const match = textareaMatchesRef.current[index];
+				if (match) {
+					target.setSelectionRange(match.start, match.end);
+					if (options?.scroll) {
+						scrollTextareaMatchIntoView(target, match);
+					}
+				}
+			} else {
+				paint(rangesRef.current, index);
+			}
 
-      if (options?.scroll) {
-        const range = rangesRef.current[index];
-        if (target && !isTextarea(target) && range) {
-          scrollRangeIntoView(range, target);
-        }
-      }
-    },
-    [targetRef],
-  );
+			if (options?.scroll) {
+				const range = rangesRef.current[index];
+				if (target && !isTextarea(target) && range) {
+					scrollRangeIntoView(range, target);
+				}
+			}
+		},
+		[targetRef]
+	);
 
-  // Recompute matches for the current query against the live DOM.
-  const recompute = useCallback(
-    (options?: { resetIndex?: boolean }) => {
-      const target = targetRef.current;
-      if (!target || !open) {
-        rangesRef.current = [];
-        textareaMatchesRef.current = [];
-        clearHighlights();
-        setTotal(0);
-        currentRef.current = -1;
-        setCurrent(-1);
-        return;
-      }
+	// Recompute matches for the current query against the live DOM.
+	const recompute = useCallback(
+		(options?: { resetIndex?: boolean }) => {
+			const target = targetRef.current;
+			if (!target || !open) {
+				rangesRef.current = [];
+				textareaMatchesRef.current = [];
+				clearHighlights();
+				setTotal(0);
+				currentRef.current = -1;
+				setCurrent(-1);
+				return;
+			}
 
-      if (isTextarea(target)) {
-        const matches = buildTextareaMatches(target.value, queryRef.current.trim());
-        textareaMatchesRef.current = matches;
-        rangesRef.current = [];
-        clearHighlights();
-        setTotal(matches.length);
+			if (isTextarea(target)) {
+				const matches = buildTextareaMatches(target.value, queryRef.current.trim());
+				textareaMatchesRef.current = matches;
+				rangesRef.current = [];
+				clearHighlights();
+				setTotal(matches.length);
 
-        if (!matches.length) {
-          currentRef.current = -1;
-          setCurrent(-1);
-          return;
-        }
+				if (!matches.length) {
+					currentRef.current = -1;
+					setCurrent(-1);
+					return;
+				}
 
-        const keepIndex =
-          !options?.resetIndex &&
-          currentRef.current >= 0 &&
-          currentRef.current < matches.length;
-        const nextIndex = keepIndex ? currentRef.current : 0;
-        apply(nextIndex, { scroll: options?.resetIndex });
-        return;
-      }
+				const keepIndex =
+					!options?.resetIndex && currentRef.current >= 0 && currentRef.current < matches.length;
+				const nextIndex = keepIndex ? currentRef.current : 0;
+				apply(nextIndex, { scroll: options?.resetIndex });
+				return;
+			}
 
-      const ranges = buildRanges(target, queryRef.current.trim());
-      rangesRef.current = ranges;
-      textareaMatchesRef.current = [];
-      setTotal(ranges.length);
+			const ranges = buildRanges(target, queryRef.current.trim());
+			rangesRef.current = ranges;
+			textareaMatchesRef.current = [];
+			setTotal(ranges.length);
 
-      if (!ranges.length) {
-        currentRef.current = -1;
-        setCurrent(-1);
-        clearHighlights();
-        return;
-      }
+			if (!ranges.length) {
+				currentRef.current = -1;
+				setCurrent(-1);
+				clearHighlights();
+				return;
+			}
 
-      const keepIndex =
-        !options?.resetIndex &&
-        currentRef.current >= 0 &&
-        currentRef.current < ranges.length;
-      const nextIndex = keepIndex ? currentRef.current : 0;
-      apply(nextIndex, { scroll: options?.resetIndex });
-    },
-    [apply, open, targetRef],
-  );
+			const keepIndex =
+				!options?.resetIndex && currentRef.current >= 0 && currentRef.current < ranges.length;
+			const nextIndex = keepIndex ? currentRef.current : 0;
+			apply(nextIndex, { scroll: options?.resetIndex });
+		},
+		[apply, open, targetRef]
+	);
 
-  const close = useCallback(() => {
-    clearHighlights();
-    rangesRef.current = [];
-    textareaMatchesRef.current = [];
-    currentRef.current = -1;
-    queryRef.current = "";
-    setCurrent(-1);
-    setOpen(false);
-    setQuery("");
-    setTotal(0);
-  }, []);
+	const close = useCallback(() => {
+		clearHighlights();
+		rangesRef.current = [];
+		textareaMatchesRef.current = [];
+		currentRef.current = -1;
+		queryRef.current = '';
+		setCurrent(-1);
+		setOpen(false);
+		setQuery('');
+		setTotal(0);
+	}, []);
 
-  const toggle = useCallback(() => {
-    if (open) {
-      close();
-      return;
-    }
-    setOpen(true);
-  }, [close, open]);
+	const toggle = useCallback(() => {
+		if (open) {
+			close();
+			return;
+		}
+		setOpen(true);
+	}, [close, open]);
 
-  const openWithQuery = useCallback((value: string) => {
-    queryRef.current = value;
-    setQuery(value);
-    setOpen(true);
-  }, []);
+	const openWithQuery = useCallback((value: string) => {
+		queryRef.current = value;
+		setQuery(value);
+		setOpen(true);
+	}, []);
 
-  const updateQuery = useCallback(
-    (value: string) => {
-      queryRef.current = value;
-      setQuery(value);
-      // Typing resets to the first match so navigation starts fresh.
-      recompute({ resetIndex: true });
-    },
-    [recompute],
-  );
+	const updateQuery = useCallback(
+		(value: string) => {
+			queryRef.current = value;
+			setQuery(value);
+			// Typing resets to the first match so navigation starts fresh.
+			recompute({ resetIndex: true });
+		},
+		[recompute]
+	);
 
-  const goTo = useCallback(
-    (direction: 1 | -1) => {
-      const ranges = rangesRef.current;
-      const textareaMatches = textareaMatchesRef.current;
-      const total = ranges.length || textareaMatches.length;
-      if (!total) {
-        return;
-      }
-      const currentIndex = currentRef.current;
-      const nextIndex =
-        currentIndex < 0
-          ? direction === 1
-            ? 0
-            : total - 1
-          : (currentIndex + direction + total) % total;
+	const goTo = useCallback(
+		(direction: 1 | -1) => {
+			const ranges = rangesRef.current;
+			const textareaMatches = textareaMatchesRef.current;
+			const total = ranges.length || textareaMatches.length;
+			if (!total) {
+				return;
+			}
+			const currentIndex = currentRef.current;
+			const nextIndex =
+				currentIndex < 0
+					? direction === 1
+						? 0
+						: total - 1
+					: (currentIndex + direction + total) % total;
 
-      apply(nextIndex, { scroll: true });
-    },
-    [apply],
-  );
+			apply(nextIndex, { scroll: true });
+		},
+		[apply]
+	);
 
-  // Rebuild whenever the bar opens/closes or the rendered content changes
-  // (contentKey). Runs after commit so the DOM it reads is the painted one.
-  useLayoutEffect(() => {
-    recompute({ resetIndex: true });
-    return () => clearHighlights();
-    // recompute is stable for a given (open, target); contentKey drives rebuilds.
-  }, [contentKey, open, recompute]);
+	// Rebuild whenever the bar opens/closes or the rendered content changes
+	// (contentKey). Runs after commit so the DOM it reads is the painted one.
+	useLayoutEffect(() => {
+		recompute({ resetIndex: true });
+		return () => clearHighlights();
+		// recompute is stable for a given (open, target); contentKey drives rebuilds.
+	}, [contentKey, open, recompute]);
 
-  // If the preview subtree re-renders while find is open (React replacing nodes
-  // would invalidate our Ranges), rebuild from the fresh DOM. Cheap because it
-  // only observes while the bar is open.
-  useEffect(() => {
-    const target = targetRef.current;
-    if (!open || !target || typeof MutationObserver === "undefined") {
-      return;
-    }
+	// If the preview subtree re-renders while find is open (React replacing nodes
+	// would invalidate our Ranges), rebuild from the fresh DOM. Cheap because it
+	// only observes while the bar is open.
+	useEffect(() => {
+		const target = targetRef.current;
+		if (!open || !target || typeof MutationObserver === 'undefined') {
+			return;
+		}
 
-    const observer = new MutationObserver(() => recompute());
-    observer.observe(target, { childList: true, subtree: true, characterData: true });
-    return () => observer.disconnect();
-  }, [open, recompute, targetRef, contentKey]);
+		const observer = new MutationObserver(() => recompute());
+		observer.observe(target, { childList: true, subtree: true, characterData: true });
+		return () => observer.disconnect();
+	}, [open, recompute, targetRef, contentKey]);
 
-  return {
-    close,
-    current,
-    goToNext: useCallback(() => goTo(1), [goTo]),
-    goToPrevious: useCallback(() => goTo(-1), [goTo]),
-    open,
-    openWithQuery,
-    query,
-    setOpen,
-    setQuery: updateQuery,
-    toggle,
-    total,
-  };
+	return {
+		close,
+		current,
+		goToNext: useCallback(() => goTo(1), [goTo]),
+		goToPrevious: useCallback(() => goTo(-1), [goTo]),
+		open,
+		openWithQuery,
+		query,
+		setOpen,
+		setQuery: updateQuery,
+		toggle,
+		total,
+	};
 }

@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
    Theme — palette ported from the mockup :root.
@@ -6,33 +6,33 @@
    --color-bg-card  ->  bg-bg-card / text-bg-card / border-bg-card
 --------------------------------------------------------------------------- */
 @theme {
-  --color-bg-desktop: #050506;
-  --color-bg-window: #0e0e10;
-  --color-bg-sidebar: #141416;
-  --color-bg-card: #161618;
-  --color-bg-menu: #1a1a1d;
-  --color-bg-hover: #202024;
-  --color-bg-active: #2a2a2f;
-  --color-border-base: #26262b;
-  --color-text-primary: #e7e7ea;
-  --color-text-secondary: #9a9aa2;
-  --color-text-muted: #5f5f68;
-  --color-text-on-active: #ffffff;
-  --color-accent-primary: #8bc5ff;
-  --color-accent-primary-strong: #4aa8ff;
+	--color-bg-desktop: #050506;
+	--color-bg-window: #0e0e10;
+	--color-bg-sidebar: #141416;
+	--color-bg-card: #161618;
+	--color-bg-menu: #1a1a1d;
+	--color-bg-hover: #202024;
+	--color-bg-active: #2a2a2f;
+	--color-border-base: #26262b;
+	--color-text-primary: #e7e7ea;
+	--color-text-secondary: #9a9aa2;
+	--color-text-muted: #5f5f68;
+	--color-text-on-active: #ffffff;
+	--color-accent-primary: #8bc5ff;
+	--color-accent-primary-strong: #4aa8ff;
 
-  /* Warning (e.g. file dragged in from outside the active root). Dark theme uses
+	/* Warning (e.g. file dragged in from outside the active root). Dark theme uses
      a soft amber; light theme overrides with a much deeper amber for contrast. */
-  --color-warning: #e6c07b;
-  --color-warning-text: #e6c07b;
+	--color-warning: #e6c07b;
+	--color-warning-text: #e6c07b;
 
-  --radius-win: 12px;
-  --radius-card: 12px;
-  --radius-ctl: 6px;
-  --radius-menu: 10px;
+	--radius-win: 12px;
+	--radius-card: 12px;
+	--radius-ctl: 6px;
+	--radius-menu: 10px;
 
-  --font-ui: "Segoe UI", Inter, system-ui, sans-serif;
-  --font-mono: "Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace;
+	--font-ui: 'Segoe UI', Inter, system-ui, sans-serif;
+	--font-mono: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
 }
 
 /* ---------------------------------------------------------------------------
@@ -42,92 +42,92 @@
 html,
 body,
 #root {
-  height: 100%;
-  margin: 0;
+	height: 100%;
+	margin: 0;
 }
 
 body {
-  background: transparent;
-  color: var(--color-text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.5;
-  overflow: hidden;
-  -webkit-font-smoothing: antialiased;
+	background: transparent;
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	line-height: 1.5;
+	overflow: hidden;
+	-webkit-font-smoothing: antialiased;
 }
 
 * {
-  box-sizing: border-box;
+	box-sizing: border-box;
 }
 
 /* The window shell — apply to the top-level app container */
 .app-window {
-  position: relative;
-  height: 100%;
-  background: var(--color-bg-window);
-  border-radius: var(--radius-win);
-  box-shadow:
-    0 30px 80px -20px rgba(0, 0, 0, 0.8),
-    0 0 0 1px rgba(255, 255, 255, 0.03);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+	position: relative;
+	height: 100%;
+	background: var(--color-bg-window);
+	border-radius: var(--radius-win);
+	box-shadow:
+		0 30px 80px -20px rgba(0, 0, 0, 0.8),
+		0 0 0 1px rgba(255, 255, 255, 0.03);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
 }
 
 /* No rounded corners or shadow when fullscreen */
 .app-window.fullscreen {
-  border-radius: 0;
-  box-shadow: none;
+	border-radius: 0;
+	box-shadow: none;
 }
 
 /* ---------- Light theme ---------- */
 .app-window.theme-light,
 body.theme-light {
-  --color-bg-desktop: #e8e8ec;
-  --color-bg-window: #f0f0f4;
-  --color-bg-sidebar: #e8e8ec;
-  --color-bg-card: #ffffff;
-  --color-bg-menu: #ffffff;
-  --color-bg-hover: #e2e2e8;
-  --color-bg-active: #d0d0da;
-  --color-border-base: #d4d4da;
-  --color-text-primary: #18181c;
-  --color-text-secondary: #5a5a66;
-  --color-text-muted: #9898a6;
-  --color-text-on-active: #000000;
-  --color-accent-primary: #1677d2;
-  --color-accent-primary-strong: #0069c9;
-  /* Deep amber so the warning pill stays legible on the light surface. */
-  --color-warning: #a86412;
-  --color-warning-text: #8a4f08;
+	--color-bg-desktop: #e8e8ec;
+	--color-bg-window: #f0f0f4;
+	--color-bg-sidebar: #e8e8ec;
+	--color-bg-card: #ffffff;
+	--color-bg-menu: #ffffff;
+	--color-bg-hover: #e2e2e8;
+	--color-bg-active: #d0d0da;
+	--color-border-base: #d4d4da;
+	--color-text-primary: #18181c;
+	--color-text-secondary: #5a5a66;
+	--color-text-muted: #9898a6;
+	--color-text-on-active: #000000;
+	--color-accent-primary: #1677d2;
+	--color-accent-primary-strong: #0069c9;
+	/* Deep amber so the warning pill stays legible on the light surface. */
+	--color-warning: #a86412;
+	--color-warning-text: #8a4f08;
 }
 
 /* Custom scrollbars to match the dark, flat aesthetic */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+	width: 10px;
+	height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2a2f;
-  border-radius: 8px;
-  border: 2px solid transparent;
-  background-clip: content-box;
+	background: #2a2a2f;
+	border-radius: 8px;
+	border: 2px solid transparent;
+	background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a40;
-  background-clip: content-box;
+	background: #3a3a40;
+	background-clip: content-box;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+	background: transparent;
 }
 
 .app-window.theme-light ::-webkit-scrollbar-thumb,
 body.theme-light ::-webkit-scrollbar-thumb {
-  background: #c4c4cc;
-  background-clip: content-box;
+	background: #c4c4cc;
+	background-clip: content-box;
 }
 .app-window.theme-light ::-webkit-scrollbar-thumb:hover,
 body.theme-light ::-webkit-scrollbar-thumb:hover {
-  background: #adadb8;
-  background-clip: content-box;
+	background: #adadb8;
+	background-clip: content-box;
 }

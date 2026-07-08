@@ -1,13 +1,16 @@
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import type { SidebarMode } from '../../explorer/components/Sidebar';
 import { DEFAULT_SIDEBAR_WIDTH, clampSidebarWidth } from '../../explorer/hooks/useSidebarResize';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
 import type { MarkdownAction } from '../../preview/markdownActions';
 import {
 	DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE,
+	DEFAULT_EXPLORER_FILTERS,
 	DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE,
 	type AppConfigurationState,
 	type AppTheme,
+	type ExplorerFilterOptions,
 	type ExplorerHeaderActionsVisibility,
 	type SourcesHeaderActionsVisibility,
 	type StoredWindowFrame,
@@ -28,6 +31,7 @@ interface PendingFormatAction {
 
 interface UiState {
 	barMerged: boolean;
+	explorerFilters: ExplorerFilterOptions;
 	explorerHeaderActionsVisible: ExplorerHeaderActionsVisibility;
 	explorerHidden: boolean;
 	mode: FileViewMode;
@@ -44,6 +48,7 @@ interface UiState {
 interface UiActions {
 	hydrate: (configuration: Partial<AppConfigurationState>) => void;
 	setBarMerged: (updater: Updater<boolean>) => void;
+	setExplorerFilters: (updater: Updater<ExplorerFilterOptions>) => void;
 	setExplorerHeaderActionsVisible: (updater: Updater<ExplorerHeaderActionsVisibility>) => void;
 	setExplorerHidden: (updater: Updater<boolean>) => void;
 	setMode: (mode: FileViewMode) => void;
@@ -55,6 +60,7 @@ interface UiActions {
 	setSourcesHeaderActionsVisible: (updater: Updater<SourcesHeaderActionsVisibility>) => void;
 	setTheme: (updater: Updater<AppTheme>) => void;
 	setWindowFrame: (frame: StoredWindowFrame | undefined) => void;
+	toggleExplorerFilter: (filter: keyof ExplorerFilterOptions) => void;
 	toggleExplorerHeaderAction: (action: keyof ExplorerHeaderActionsVisibility) => void;
 	toggleSourcesHeaderAction: (action: keyof SourcesHeaderActionsVisibility) => void;
 }
@@ -63,6 +69,7 @@ export type UiStore = UiState & UiActions;
 
 export const useUiStore = create<UiStore>()((set) => ({
 	barMerged: false,
+	explorerFilters: DEFAULT_EXPLORER_FILTERS,
 	explorerHeaderActionsVisible: DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE,
 	explorerHidden: false,
 	mode: 'preview',
@@ -78,6 +85,7 @@ export const useUiStore = create<UiStore>()((set) => ({
 	hydrate: (configuration) =>
 		set({
 			barMerged: configuration.barMerged ?? false,
+			explorerFilters: configuration.explorerFilters ?? DEFAULT_EXPLORER_FILTERS,
 			explorerHeaderActionsVisible:
 				configuration.explorerHeaderActionsVisible ?? DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE,
 			explorerHidden: configuration.explorerHidden ?? false,
@@ -92,6 +100,10 @@ export const useUiStore = create<UiStore>()((set) => ({
 		}),
 	setBarMerged: (updater) =>
 		set((state) => ({ barMerged: resolveUpdater(state.barMerged, updater) })),
+	setExplorerFilters: (updater) =>
+		set((state) => ({
+			explorerFilters: resolveUpdater(state.explorerFilters, updater),
+		})),
 	setExplorerHeaderActionsVisible: (updater) =>
 		set((state) => ({
 			explorerHeaderActionsVisible: resolveUpdater(state.explorerHeaderActionsVisible, updater),
@@ -116,6 +128,13 @@ export const useUiStore = create<UiStore>()((set) => ({
 		})),
 	setTheme: (updater) => set((state) => ({ theme: resolveUpdater(state.theme, updater) })),
 	setWindowFrame: (windowFrame) => set({ windowFrame }),
+	toggleExplorerFilter: (filter) =>
+		set((state) => ({
+			explorerFilters: {
+				...state.explorerFilters,
+				[filter]: !state.explorerFilters[filter],
+			},
+		})),
 	toggleExplorerHeaderAction: (action) =>
 		set((state) => ({
 			explorerHeaderActionsVisible: {
@@ -139,7 +158,22 @@ export const selectUiConfiguration = (state: UiStore) => ({
 	barMerged: state.barMerged,
 	viewMode: state.mode,
 	theme: state.theme,
+	explorerFilters: state.explorerFilters,
 	explorerHeaderActionsVisible: state.explorerHeaderActionsVisible,
 	sourcesHeaderActionsVisible: state.sourcesHeaderActionsVisible,
 	windowFrame: state.windowFrame,
 });
+
+export const selectUiActions = (state: UiStore) => ({
+	setBarMerged: state.setBarMerged,
+	setExplorerHidden: state.setExplorerHidden,
+	setMode: state.setMode,
+	setOverlay: state.setOverlay,
+	setPendingFormatAction: state.setPendingFormatAction,
+	setSidebarMode: state.setSidebarMode,
+	setSidebarWidth: state.setSidebarWidth,
+});
+
+export function useUiActions() {
+	return useUiStore(useShallow(selectUiActions));
+}
