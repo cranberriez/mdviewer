@@ -1,13 +1,18 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Entry, FileSearchResponse } from "../../../shared/types/files";
+import type { ExplorerFilterOptions } from "../../../shared/state/persistence";
 
 export function defaultLocations() {
   return invoke<Entry[]>("default_locations");
 }
 
-export function readFolder(path: string) {
-  return invoke<Entry[]>("read_dir", { path });
+export function readFolder(path: string, options?: ExplorerFilterOptions) {
+  return invoke<Entry[]>("read_dir", {
+    path,
+    showHidden: options?.showHiddenItems ?? false,
+    showNonTextFiles: options?.showNonTextFiles ?? false,
+  });
 }
 
 export function readFile(path: string) {

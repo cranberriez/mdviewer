@@ -1,5 +1,8 @@
 import { FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
-import type { ExplorerHeaderActionsVisibility } from '../../../../shared/state/persistence';
+import type {
+	ExplorerFilterOptions,
+	ExplorerHeaderActionsVisibility,
+} from '../../../../shared/state/persistence';
 import { ContextMenuSurface } from './ContextMenuSurface';
 import type { MenuEntry } from './ContextMenuSurface';
 
@@ -9,19 +12,26 @@ export type ExplorerHeaderMenuAction =
 	| 'refresh'
 	| 'toggle-new-file'
 	| 'toggle-new-folder'
-	| 'toggle-refresh';
+	| 'toggle-refresh'
+	| 'toggle-hidden-items'
+	| 'toggle-non-text-files';
 
 interface ExplorerHeaderContextMenuProps {
 	x: number;
 	y: number;
+	filters: ExplorerFilterOptions;
 	visibleActions: ExplorerHeaderActionsVisibility;
 	onAction: (action: ExplorerHeaderMenuAction) => void;
 	onClose: () => void;
 }
 
-function entriesForExplorerHeader(
-	visibleActions: ExplorerHeaderActionsVisibility
-): MenuEntry<ExplorerHeaderMenuAction>[] {
+function entriesForExplorerHeader({
+	filters,
+	visibleActions,
+}: Pick<
+	ExplorerHeaderContextMenuProps,
+	'filters' | 'visibleActions'
+>): MenuEntry<ExplorerHeaderMenuAction>[] {
 	return [
 		{ id: 'new-file', label: 'Add File', icon: FilePlus },
 		{ id: 'new-folder', label: 'Add Folder', icon: FolderPlus },
@@ -42,12 +52,24 @@ function entriesForExplorerHeader(
 			label: 'Show Refresh Button',
 			checked: visibleActions.refresh,
 		},
+		{ separator: true },
+		{
+			id: 'toggle-hidden-items',
+			label: 'Show Hidden Items',
+			checked: filters.showHiddenItems,
+		},
+		{
+			id: 'toggle-non-text-files',
+			label: 'Show Non-Text Files',
+			checked: filters.showNonTextFiles,
+		},
 	];
 }
 
 export function ExplorerHeaderContextMenu({
 	x,
 	y,
+	filters,
 	visibleActions,
 	onAction,
 	onClose,
@@ -56,7 +78,7 @@ export function ExplorerHeaderContextMenu({
 		<ContextMenuSurface
 			x={x}
 			y={y}
-			entries={entriesForExplorerHeader(visibleActions)}
+			entries={entriesForExplorerHeader({ filters, visibleActions })}
 			onSelect={onAction}
 			onClose={onClose}
 		/>

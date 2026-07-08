@@ -25,6 +25,7 @@ export function useFolderTreeController({ openFileAtPath }: UseFolderTreeControl
 	const setExpanded = useExplorerStore((state) => state.setExpanded);
 	const setFocusedEntry = useExplorerStore((state) => state.setFocusedEntry);
 	const setLoadingPaths = useExplorerStore((state) => state.setLoadingPaths);
+	const explorerFilters = useUiStore((state) => state.explorerFilters);
 	const setOverlay = useUiStore((state) => state.setOverlay);
 	const setSelectedFolderPath = useExplorerStore((state) => state.setSelectedFolderPath);
 
@@ -49,7 +50,7 @@ export function useFolderTreeController({ openFileAtPath }: UseFolderTreeControl
 			setLoadingPaths((current) => new Set(current).add(path));
 
 			try {
-				const children = await readFolder(path);
+				const children = await readFolder(path, explorerFilters);
 				setChildrenCache((current) => ({ ...current, [path]: children }));
 			} catch (cause) {
 				if (!options?.quiet) {
@@ -63,7 +64,7 @@ export function useFolderTreeController({ openFileAtPath }: UseFolderTreeControl
 				});
 			}
 		},
-		[childrenCache, setChildrenCache, setError, setLoadingPaths]
+		[childrenCache, explorerFilters, setChildrenCache, setError, setLoadingPaths]
 	);
 
 	const refreshFolder = useCallback(
@@ -99,10 +100,14 @@ export function useFolderTreeController({ openFileAtPath }: UseFolderTreeControl
 	const selectFile = useCallback(
 		async (entry: Entry) => {
 			setFocusedEntry(entry);
+			if (entry.kind === 'unsupported') {
+				setError(`Unsupported file type: ${entry.name}`);
+				return;
+			}
 			setOverlay(null);
 			await openFileAtPath(entry.path);
 		},
-		[openFileAtPath, setFocusedEntry, setOverlay]
+		[openFileAtPath, setError, setFocusedEntry, setOverlay]
 	);
 
 	return {

@@ -24,6 +24,11 @@ export interface SourcesHeaderActionsVisibility {
   pin: boolean;
 }
 
+export interface ExplorerFilterOptions {
+  showHiddenItems: boolean;
+  showNonTextFiles: boolean;
+}
+
 export const DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE: ExplorerHeaderActionsVisibility = {
   newFile: true,
   newFolder: true,
@@ -36,11 +41,16 @@ export const DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE: SourcesHeaderActionsVisibil
   pin: true,
 };
 
+export const DEFAULT_EXPLORER_FILTERS: ExplorerFilterOptions = {
+  showHiddenItems: false,
+  showNonTextFiles: false,
+};
+
 /** The last file opened within a recent root, if any. */
 export interface RecentFile {
   path: string;
   name: string;
-  kind: Exclude<EntryKind, "folder">;
+  kind: Extract<EntryKind, "md" | "text">;
 }
 
 /**
@@ -65,7 +75,7 @@ export interface RecentItem {
   /** Display name of the folder, or of the file for `kind: "file"`. */
   name: string;
   /** For `kind: "file"`, the file's kind (drives its icon). */
-  fileKind?: Exclude<EntryKind, "folder">;
+  fileKind?: Extract<EntryKind, "md" | "text">;
   /** The most-recently-opened file within this root, or undefined if the root
    *  was selected but no file was ever opened. Unused for `kind: "file"`. */
   lastFile?: RecentFile;
@@ -106,6 +116,8 @@ export interface AppConfigurationState {
   explorerHeaderActionsVisible?: ExplorerHeaderActionsVisibility;
   /** Visibility of optional buttons in the Sources header. */
   sourcesHeaderActionsVisible?: SourcesHeaderActionsVisibility;
+  /** Explorer tree filtering options. */
+  explorerFilters?: ExplorerFilterOptions;
 }
 
 export interface AppSessionState {
@@ -197,7 +209,7 @@ function readEntry(value: unknown): Entry | null {
     name === undefined ||
     path === undefined ||
     typeof value.is_dir !== "boolean" ||
-    (kind !== "folder" && kind !== "md" && kind !== "text")
+    (kind !== "folder" && kind !== "md" && kind !== "text" && kind !== "unsupported")
   ) {
     return null;
   }
@@ -247,7 +259,19 @@ function readSourcesHeaderActionsVisibility(
   };
 }
 
-function readRecentKind(value: unknown): Exclude<EntryKind, "folder"> | undefined {
+function readExplorerFilters(value: unknown): ExplorerFilterOptions | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    showHiddenItems: readBoolean(value.showHiddenItems) ?? DEFAULT_EXPLORER_FILTERS.showHiddenItems,
+    showNonTextFiles:
+      readBoolean(value.showNonTextFiles) ?? DEFAULT_EXPLORER_FILTERS.showNonTextFiles,
+  };
+}
+
+function readRecentKind(value: unknown): Extract<EntryKind, "md" | "text"> | undefined {
   return value === "md" || value === "text" ? value : undefined;
 }
 
@@ -344,7 +368,7 @@ export function touchRecentRoot(
  */
 export function recordRecentSingleFile(
   current: RecentItem[],
-  file: { path: string; name: string; kind: Exclude<EntryKind, "folder"> },
+  file: { path: string; name: string; kind: Extract<EntryKind, "md" | "text"> },
 ): RecentItem[] {
   const key = recentKey(file.path);
   const next: RecentItem = {
@@ -457,6 +481,7 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
     sourcesHeaderActionsVisible: readSourcesHeaderActionsVisibility(
       record.sourcesHeaderActionsVisible,
     ),
+    explorerFilters: readExplorerFilters(record.explorerFilters),
   };
 }
 
