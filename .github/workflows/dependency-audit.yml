@@ -4,9 +4,9 @@ on:
   pull_request:
     branches:
       - main
-      - "v*"
+      - 'v*'
   schedule:
-    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+    - cron: '0 6 * * 1' # weekly, Monday 06:00 UTC
   workflow_dispatch:
 
 permissions:
@@ -54,6 +54,11 @@ jobs:
         with:
           tool: cargo-audit
 
+      # quick-xml is pinned transitively by Tauri
+      # revisit and remove these ignores once Tauri bumps it
       - name: Run cargo audit
         working-directory: src-tauri
-        run: cargo audit
+        run: >-
+          cargo audit
+          --ignore RUSTSEC-2026-0194
+          --ignore RUSTSEC-2026-0195
