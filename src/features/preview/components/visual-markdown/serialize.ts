@@ -1,5 +1,5 @@
 function escapeTableCell(value: string) {
-	return value.replace(/\|/g, '\\|').trim();
+	return value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').trim();
 }
 
 function serializeInline(node: Node): string {
