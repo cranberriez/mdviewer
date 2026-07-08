@@ -1,0 +1,172 @@
+name: Release
+
+# Reusable + manually-triggerable release builder.
+#   - workflow_call:     invoked by the "Version and Release" workflow when a
+#                        vX.Y integration branch is merged into main.
+#   - workflow_dispatch: run a release by hand for a given tag.
+#   - push tags v*:      a manually pushed tag still cuts a release.
+#
+# The build produces a Windows installer, SHA-256 checksums, a CycloneDX SBOM,
+# and a cryptographic build-provenance attestation, then publishes them all to
+# the GitHub release.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (vX.Y.Z)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark the release as a prerelease"
+        required: false
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (vX.Y.Z)"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build, attest, and publish
+    runs-on: windows-latest
+    permissions:
+      contents: write # create the release and upload assets
+      id-token: write # required for build provenance (OIDC)
+      attestations: write # required to write the attestation
+
+    steps:
+      - name: Resolve tag and prerelease flag
+        id: meta
+        shell: bash
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+            echo "::error::Tag '$TAG' is not a valid vX.Y.Z release tag."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [[ "$TAG" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=${{ inputs.prerelease || false }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.8.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: windows-cargo-release-${{ hashFiles('src-tauri/Cargo.lock') }}-${{ hashFiles('src-tauri/src/**', 'src-tauri/Cargo.toml', 'src-tauri/build.rs', 'src-tauri/tauri.conf.json') }}
+          restore-keys: |
+            windows-cargo-release-${{ hashFiles('src-tauri/Cargo.lock') }}-
+            windows-cargo-
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check release version
+        run: pnpm check:release-version ${{ steps.meta.outputs.tag }}
+
+      - name: Build and publish Tauri release
+        id: tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: pnpm tauri
+          tagName: ${{ steps.meta.outputs.tag }}
+          releaseName: MDViewer ${{ steps.meta.outputs.tag }}
+          releaseBody: |
+            Windows installer for MDViewer.
+
+            Every asset below is built by GitHub Actions from this tagged commit.
+            You can verify it yourself:
+              - SHA-256 checksums: `checksums.txt`
+              - Build provenance:  `gh attestation verify <installer> --repo ${{ github.repository }}`
+              - SBOM (CycloneDX):  `*-sbom.cdx.json`
+          generateReleaseNotes: true
+          releaseDraft: false
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          releaseAssetNamePattern: MDViewer-[version]-[platform]-[arch][setup][ext]
+
+      - name: Collect installers and generate checksums
+        id: sums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-release
+          # tauri-action returns a JSON array of the built artifact paths.
+          echo '${{ steps.tauri.outputs.artifactPaths }}' \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for(const p of JSON.parse(s)){process.stdout.write(p+"\n")}})' \
+            > artifacts.txt
+          while IFS= read -r f; do
+            [[ -z "$f" ]] && continue
+            if [[ -f "$f" ]]; then
+              case "$f" in
+                *.exe|*.msi) cp "$f" dist-release/ ;;
+              esac
+            fi
+          done < artifacts.txt
+          cd dist-release
+          if ! ls ./*.exe ./*.msi >/dev/null 2>&1; then
+            echo "::error::No installer artifacts were produced."
+            exit 1
+          fi
+          sha256sum ./*.exe ./*.msi 2>/dev/null | sed 's# \./# #' > checksums.txt
+          echo "----- checksums.txt -----"
+          cat checksums.txt
+
+      - name: Generate SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: dist-release/mdviewer-${{ steps.meta.outputs.tag }}-sbom.cdx.json
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist-release/*.exe
+            dist-release/*.msi
+
+      - name: Upload checksums and SBOM to the release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "${{ steps.meta.outputs.tag }}" \
+            dist-release/checksums.txt \
+            "dist-release/mdviewer-${{ steps.meta.outputs.tag }}-sbom.cdx.json" \
+            --clobber

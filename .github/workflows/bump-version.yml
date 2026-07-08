@@ -1,4 +1,13 @@
-name: Bump Version on PR Merge
+name: Version and Release
+
+# Two paths, both driven by a merged pull request:
+#
+#   1. Feature branch -> integration branch (vX.Y):
+#        bump the patch version and commit it back to the integration branch.
+#
+#   2. Integration branch (vX.Y[.Z]) -> main:
+#        read the accumulated version, tag it vX.Y.Z, and hand off to the
+#        reusable Release workflow which builds, attests, and publishes.
 
 on:
   pull_request:
@@ -9,16 +18,22 @@ permissions:
   contents: write
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Path 1: bump patch when a feature branch merges into a vX.Y branch
+  # ---------------------------------------------------------------------------
   bump-version:
     name: Bump patch version
-    if: github.event.pull_request.merged == true
+    if: >
+      github.event.pull_request.merged == true &&
+      github.base_ref != 'main' &&
+      github.event.pull_request.head.ref != 'main' &&
+      startsWith(github.base_ref, 'v')
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          # Need full history + ability to push back
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -38,15 +53,14 @@ jobs:
               MINOR="$BRANCH_MINOR"
               PATCH=$((BRANCH_PATCH + 1))
             elif [[ "$BRANCH_MAJOR" != "$MAJOR" || "$BRANCH_MINOR" != "$MINOR" ]]; then
-              # Moved to a new major.minor branch; reset patch to 1
+              # Moved to a new major.minor branch; start its patch series at 0
               MAJOR="$BRANCH_MAJOR"
               MINOR="$BRANCH_MINOR"
-              PATCH=1
+              PATCH=0
             else
               PATCH=$((PATCH + 1))
             fi
           else
-            # Non-versioned branch (e.g. main); just bump patch
             PATCH=$((PATCH + 1))
           fi
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
@@ -81,7 +95,7 @@ jobs:
             echo "  tauri.conf.json: $TAURI"
             exit 1
           fi
-          echo "All files verified at $NEW ✓"
+          echo "All files verified at $NEW"
 
       - name: Commit and push
         run: |
@@ -91,41 +105,70 @@ jobs:
           git commit -m "chore: bump version to ${{ steps.version.outputs.new }}"
           git push origin HEAD:${{ github.base_ref }}
 
-  tag-release:
-    name: Tag release from versioned PR
-    # Fires when a PR named v#.#.# is merged into main
-    if: |
+  # ---------------------------------------------------------------------------
+  # Path 2a: when a vX.Y[.Z] branch merges into main, compute the release tag
+  # ---------------------------------------------------------------------------
+  compute-release:
+    name: Compute release tag
+    if: >
       github.event.pull_request.merged == true &&
       github.base_ref == 'main' &&
       startsWith(github.event.pull_request.head.ref, 'v') &&
       contains(github.event.pull_request.head.ref, '.')
     runs-on: ubuntu-latest
-    steps:
-      - name: Validate PR branch name is v#.#.#
-        id: tag
-        run: |
-          BRANCH="${{ github.event.pull_request.head.ref }}"
-          if [[ "$BRANCH" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
-            echo "Tag to create: $BRANCH"
-          else
-            echo "Branch '$BRANCH' does not match v#.#.# — skipping tag."
-            echo "name=" >> "$GITHUB_OUTPUT"
-          fi
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      valid: ${{ steps.tag.outputs.valid }}
 
-      - name: Checkout
-        if: steps.tag.outputs.name != ''
+    steps:
+      - name: Checkout main at the merge commit
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and push tag
-        if: steps.tag.outputs.name != ''
+      - name: Resolve tag from current version
+        id: tag
         run: |
-          TAG="${{ steps.tag.outputs.name }}"
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "$TAG" "${{ github.event.pull_request.merge_commit_sha }}"
-          git push origin "$TAG"
-          echo "Tagged ${{ github.event.pull_request.merge_commit_sha }} as $TAG"
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          # Accept vX.Y or vX.Y.Z integration branches
+          if [[ ! "$HEAD_REF" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Head branch '$HEAD_REF' is not a vX.Y integration branch — skipping release."
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          VERSION=$(grep -m1 '"version"' package.json | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::package.json version '$VERSION' is not X.Y.Z."
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          TAG="v$VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists. Bump the version on $HEAD_REF before merging to main."
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "Releasing $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "valid=true" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # Path 2b: hand off to the reusable Release workflow (build + attest + publish)
+  # ---------------------------------------------------------------------------
+  release:
+    name: Build and publish release
+    needs: compute-release
+    if: needs.compute-release.outputs.valid == 'true'
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.compute-release.outputs.tag }}
+      prerelease: ${{ contains(needs.compute-release.outputs.tag, '-') }}
+    secrets: inherit
