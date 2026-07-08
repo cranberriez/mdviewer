@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { readFile, writeFile } from '../api/filesApi';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
@@ -10,6 +10,7 @@ export type { UnsavedFileDrafts } from '../state/useFileStore';
 
 interface UseOpenFileControllerOptions {
 	activeRoot: { path: string; name: string } | null;
+	afterOpenRef?: RefObject<(() => void) | null>;
 	initialOpenFilePath?: string | null;
 	onError: (message: string | null) => void;
 	onRecordFileRecent: (
@@ -22,6 +23,7 @@ interface UseOpenFileControllerOptions {
 
 export function useOpenFileController({
 	activeRoot,
+	afterOpenRef,
 	initialOpenFilePath,
 	onError,
 	onRecordFileRecent,
@@ -101,13 +103,21 @@ export function useOpenFileController({
 						{ path, name: fileName(path), kind }
 					);
 				}
+				afterOpenRef?.current?.();
 			} catch (cause) {
 				setOpenFile(null);
 				setOpenFilePath(null);
 				onError(`Unable to read file: ${String(cause)}`);
 			}
 		},
-		[activeRoot, onError, onRecordFileRecent, onSelectedFolderPathChange, onViewModeChange]
+		[
+			activeRoot,
+			afterOpenRef,
+			onError,
+			onRecordFileRecent,
+			onSelectedFolderPathChange,
+			onViewModeChange,
+		]
 	);
 
 	const updateOpenFileContent = useCallback(

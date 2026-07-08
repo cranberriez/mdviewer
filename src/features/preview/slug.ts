@@ -5,11 +5,11 @@
  * resolves `#fragment` clicks) agree on the same value.
  */
 export function slugify(text: string) {
-	return text
-		.trim()
-		.toLowerCase()
-		.replace(/[^\p{L}\p{N}\s-]/gu, '')
-		.replace(/\s+/g, '-');
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s+/g, "-");
 }
 
 /**
@@ -18,12 +18,12 @@ export function slugify(text: string) {
  * one per render pass.
  */
 export function createSlugTracker() {
-	const seen = new Map<string, number>();
+  const seen = new Map<string, number>();
 
-	return function uniqueSlug(text: string) {
-		const base = slugify(text) || 'section';
-		const count = seen.get(base) ?? 0;
-		seen.set(base, count + 1);
-		return count === 0 ? base : `${base}-${count}`;
-	};
+  return function uniqueSlug(text: string) {
+    const base = slugify(text) || "section";
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    return count === 0 ? base : `${base}-${count}`;
+  };
 }

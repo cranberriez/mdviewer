@@ -1,9 +1,14 @@
 import type { ComponentProps, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from 'react';
 import type { Entry, FileSearchMatch, OpenFile } from '../../../shared/types/files';
-import type { RecentItem } from '../../../shared/state/persistence';
+import type {
+	AppTheme,
+	ExplorerHeaderActionsVisibility,
+	RecentItem,
+	SourcesHeaderActionsVisibility,
+} from '../../../shared/state/persistence';
 import type { DragSessionState, InternalDragStart } from '../../dnd/dropTypes';
 import { SidebarResizeHandle } from '../../explorer/components/SidebarResizeHandle';
-import { Sidebar } from '../../explorer/components/Sidebar';
+import { Sidebar, type SidebarMode } from '../../explorer/components/Sidebar';
 import type { InlineDraft } from '../../explorer/components/TreeInlineInput';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
 import { HomeView } from '../../home/components/HomeView';
@@ -44,10 +49,13 @@ interface AppWorkspaceProps {
 		contextPath?: string;
 		draft: InlineDraft | null;
 		expanded: Set<string>;
+		explorerHeaderActionsVisible: ExplorerHeaderActionsVisibility;
 		focusedPath?: string;
 		homePath?: string;
 		loadingPaths: Set<string>;
 		locations: Entry[];
+		locationIcons: Record<string, string>;
+		mode: SidebarMode;
 		rootChildren?: Entry[];
 		rootDropActive: boolean;
 		rootPinned: boolean;
@@ -66,6 +74,8 @@ interface AppWorkspaceProps {
 		};
 		selectedFolderPath?: string;
 		sidebarWidth: number;
+		sourcesHeaderActionsVisible: SourcesHeaderActionsVisibility;
+		theme: AppTheme;
 		treeDropTargetPath?: string | null;
 		unsavedFilePathKeys: Set<string>;
 		onCreateRootFile: () => void;
@@ -81,9 +91,11 @@ interface AppWorkspaceProps {
 		onSelectFile: (entry: Entry) => Promise<void>;
 		onSelectHeading: (id: string) => void;
 		onSelectLocation: (location: Entry) => Promise<void>;
+		onSidebarModeChange: (mode: SidebarMode) => void;
 		onSourcesHeaderContextMenu: (event: ReactMouseEvent) => void;
 		onToggleFolder: (entry: Entry) => Promise<void>;
 		onToggleRootPin: () => void;
+		onToggleTheme: () => void;
 	};
 	home: {
 		dropActive: boolean;
@@ -153,11 +165,27 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 						contextPath={sidebar.contextPath}
 						focusedPath={sidebar.focusedPath}
 						draft={sidebar.draft}
-						search={sidebar.search}
+						sidebarMode={sidebar.mode}
+						searchQuery={sidebar.search.query}
+						searchedQuery={sidebar.search.searchedQuery}
+						searchResults={sidebar.search.results}
+						searchLoading={sidebar.search.loading}
+						searchError={sidebar.search.error}
+						searchTruncated={sidebar.search.truncated}
+						rootRefreshing={
+							sidebar.activeRoot ? sidebar.loadingPaths.has(sidebar.activeRoot.path) : false
+						}
+						explorerHeaderActionsVisible={sidebar.explorerHeaderActionsVisible}
+						sourcesHeaderActionsVisible={sidebar.sourcesHeaderActionsVisible}
 						outlineHtml={preview.openFile?.kind === 'md' ? preview.renderedMarkdown : null}
 						hasOpenFile={Boolean(preview.openFile)}
 						showOutlineTab={!preview.outlinePanelVisible}
 						onSelectHeading={sidebar.onSelectHeading}
+						onSidebarModeChange={sidebar.onSidebarModeChange}
+						onSearchQueryChange={sidebar.search.onQueryChange}
+						onSearchClear={sidebar.search.onClear}
+						onSearchSubmit={sidebar.search.onSubmit}
+						onOpenSearchResult={sidebar.search.onOpenResult}
 						onRefreshRoot={sidebar.onRefreshRoot}
 						onCreateRootFile={sidebar.onCreateRootFile}
 						onCreateRootFolder={sidebar.onCreateRootFolder}
@@ -178,7 +206,10 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 						dropTargetPath={sidebar.treeDropTargetPath}
 						rootDropActive={sidebar.rootDropActive}
 						onEntryPointerDown={sidebar.beginInternalDrag}
+						locationIcons={sidebar.locationIcons}
 						homePath={sidebar.homePath}
+						theme={sidebar.theme}
+						onToggleTheme={sidebar.onToggleTheme}
 					/>
 				) : null}
 
