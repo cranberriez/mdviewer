@@ -100,8 +100,10 @@ export function recentItemKind(item: RecentItem): 'root' | 'file' {
 	return item.kind === 'file' ? 'file' : 'root';
 }
 
-/** Maximum number of recent roots kept. */
-export const MAX_RECENTS = 5;
+/** Maximum number of recent roots kept for project history and Open Recent. */
+export const MAX_RECENT_ROOTS = 10;
+/** Maximum number of files kept per root (and as standalone file recents). */
+export const MAX_RECENT_FILES = 5;
 
 export interface AppConfigurationState {
 	explorerHidden: boolean;
@@ -128,7 +130,7 @@ export interface AppConfigurationState {
 	onboardingCompleted?: boolean;
 	/** Optional display name from onboarding, used to greet on the Home screen. */
 	userName?: string;
-	/** Recently opened files and roots, newest first, capped at MAX_RECENTS. */
+	/** Recently opened files and roots, newest first and capped by kind. */
 	recents?: RecentItem[];
 	/** Visibility of compact action buttons in the Explorer section header. */
 	explorerHeaderActionsVisible?: ExplorerHeaderActionsVisibility;
@@ -324,7 +326,7 @@ function readRecentFiles(value: unknown): RecentFile[] {
 	return value
 		.map(readRecentFile)
 		.filter((file): file is RecentFile => file !== undefined)
-		.slice(0, MAX_RECENTS);
+		.slice(0, MAX_RECENT_FILES);
 }
 
 function readRecent(value: unknown): RecentItem | null {
@@ -355,16 +357,32 @@ function readRecent(value: unknown): RecentItem | null {
 	};
 }
 
+function trimRecents(items: RecentItem[]) {
+	let roots = 0;
+	let files = 0;
+
+	return items.filter((item) => {
+		if (recentItemKind(item) === 'root') {
+			roots += 1;
+			return roots <= MAX_RECENT_ROOTS;
+		}
+
+		files += 1;
+		return files <= MAX_RECENT_FILES;
+	});
+}
+
 function readRecents(value: unknown): RecentItem[] {
 	if (!Array.isArray(value)) {
 		return [];
 	}
 
-	return value
-		.map(readRecent)
-		.filter((item): item is RecentItem => item !== null)
-		.sort((left, right) => right.openedAt - left.openedAt)
-		.slice(0, MAX_RECENTS);
+	return trimRecents(
+		value
+			.map(readRecent)
+			.filter((item): item is RecentItem => item !== null)
+			.sort((left, right) => right.openedAt - left.openedAt)
+	);
 }
 
 /** Normalize a root path for stable, case-insensitive comparison. */
@@ -395,7 +413,7 @@ export function touchRecentRoot(
 	const rest = current.filter(
 		(item) => !(recentItemKind(item) === 'root' && recentKey(item.path) === key)
 	);
-	return [next, ...rest].slice(0, MAX_RECENTS);
+	return trimRecents([next, ...rest]);
 }
 
 /**
@@ -419,7 +437,7 @@ export function recordRecentSingleFile(
 	const rest = current.filter(
 		(item) => !(recentItemKind(item) === 'file' && recentKey(item.path) === key)
 	);
-	return [next, ...rest].slice(0, MAX_RECENTS);
+	return trimRecents([next, ...rest]);
 }
 
 /**
@@ -449,13 +467,13 @@ export function recordRecentFile(
 		recentFiles: [
 			file,
 			...previousFiles.filter((previous) => recentKey(previous.path) !== fileKey),
-		].slice(0, MAX_RECENTS),
+		].slice(0, MAX_RECENT_FILES),
 		openedAt: Date.now(),
 	};
 	const rest = current.filter(
 		(item) => !(recentItemKind(item) === 'root' && recentKey(item.path) === key)
 	);
-	return [next, ...rest].slice(0, MAX_RECENTS);
+	return trimRecents([next, ...rest]);
 }
 
 /**

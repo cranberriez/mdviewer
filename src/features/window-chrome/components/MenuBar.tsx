@@ -87,21 +87,18 @@ function buildMenus(state: MenuBarState): TopMenuDef[] {
 				{ id: 'new-folder', label: 'New Folder…', icon: FolderPlus },
 				{ separator: true },
 				{ id: 'open-folder', label: 'Open Folder…', icon: FolderOpen, shortcut: 'Ctrl+K Ctrl+O' },
-				...(state.recentRoots.length > 0
-					? state.recentRoots.map((item, index) => ({
-							id: `open-recent-${index}`,
-							label: `Open Recent: ${item.name}`,
-							icon: Clock3,
-							title: item.path,
-						}))
-					: [
-							{
-								id: 'open-recent-empty',
-								label: 'Open Recent',
-								icon: Clock3,
-								disabled: true,
-							},
-						]),
+				{
+					id: 'open-recent-menu',
+					label: 'Open Recent',
+					icon: Clock3,
+					disabled: state.recentRoots.length === 0,
+					submenu: state.recentRoots.slice(0, 10).map((item, index) => ({
+						id: `open-recent-${index}`,
+						label: item.name,
+						icon: FolderOpen,
+						title: item.path,
+					})),
+				},
 				{ separator: true },
 				{
 					id: 'save',

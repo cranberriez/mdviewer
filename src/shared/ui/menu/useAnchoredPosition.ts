@@ -4,6 +4,7 @@ import type { DependencyList } from 'react';
 const VIEWPORT_PADDING = 8;
 
 export interface AnchoredPositionOptions {
+	fallbackX?: (width: number) => number;
 	fallbackY?: (height: number) => number;
 }
 
@@ -28,7 +29,11 @@ export function useAnchoredPosition<T extends HTMLElement>(
 		let nextY = y;
 
 		if (nextX + width + VIEWPORT_PADDING > window.innerWidth) {
-			nextX = Math.max(VIEWPORT_PADDING, window.innerWidth - width - VIEWPORT_PADDING);
+			const fallbackX = options.fallbackX?.(width);
+			nextX =
+				fallbackX === undefined
+					? Math.max(VIEWPORT_PADDING, window.innerWidth - width - VIEWPORT_PADDING)
+					: Math.max(VIEWPORT_PADDING, fallbackX);
 		}
 		if (nextY + height + VIEWPORT_PADDING > window.innerHeight) {
 			const fallbackY = options.fallbackY?.(height);
@@ -41,7 +46,7 @@ export function useAnchoredPosition<T extends HTMLElement>(
 		setPosition({ x: nextX, y: nextY });
 		setReady(true);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [x, y, options.fallbackY, ...deps]);
+	}, [x, y, options.fallbackX, options.fallbackY, ...deps]);
 
 	return { menuRef, position, ready };
 }

@@ -163,6 +163,10 @@
 	background: var(--color-bg-hover);
 }
 
+.ctx-item.submenu-open:not(:disabled) {
+	background: var(--color-bg-hover);
+}
+
 .ctx-item:disabled {
 	color: var(--color-text-muted);
 	cursor: default;
@@ -199,6 +203,12 @@
 	padding-left: 18px;
 	color: var(--color-text-muted);
 	font-size: 11px;
+}
+
+.ctx-submenu-caret {
+	display: grid;
+	place-items: center;
+	padding-left: 10px;
 }
 
 .ctx-sep {
