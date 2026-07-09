@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom';
 import {
 	ChevronRight,
+	Clock3,
 	Clipboard,
 	ClipboardPaste,
 	Code2,
@@ -35,12 +36,10 @@ import {
 	Sun,
 	Undo2,
 } from 'lucide-react';
-import {
-	ContextMenuSurface,
-	type MenuEntry,
-} from '../../../shared/ui/menu/ContextMenuSurface';
+import { ContextMenuSurface, type MenuEntry } from '../../../shared/ui/menu/ContextMenuSurface';
 import { useAnchoredPosition } from '../../../shared/ui/menu/useAnchoredPosition';
 import { useMenuDismiss } from '../../../shared/ui/menu/useMenuDismiss';
+import type { RecentItem } from '../../../shared/state/persistence';
 
 type MenuBarAction = string;
 
@@ -64,6 +63,7 @@ export interface MenuBarState {
 	barMerged: boolean;
 	theme: 'dark' | 'light';
 	mode: 'edit' | 'preview' | 'code';
+	recentRoots: RecentItem[];
 }
 
 interface MenuBarProps {
@@ -87,6 +87,21 @@ function buildMenus(state: MenuBarState): TopMenuDef[] {
 				{ id: 'new-folder', label: 'New Folder…', icon: FolderPlus },
 				{ separator: true },
 				{ id: 'open-folder', label: 'Open Folder…', icon: FolderOpen, shortcut: 'Ctrl+K Ctrl+O' },
+				...(state.recentRoots.length > 0
+					? state.recentRoots.map((item, index) => ({
+							id: `open-recent-${index}`,
+							label: `Open Recent: ${item.name}`,
+							icon: Clock3,
+							title: item.path,
+						}))
+					: [
+							{
+								id: 'open-recent-empty',
+								label: 'Open Recent',
+								icon: Clock3,
+								disabled: true,
+							},
+						]),
 				{ separator: true },
 				{
 					id: 'save',
@@ -107,7 +122,6 @@ function buildMenus(state: MenuBarState): TopMenuDef[] {
 					id: 'preferences',
 					label: 'Preferences',
 					icon: Settings,
-					disabled: true,
 				},
 			],
 		},

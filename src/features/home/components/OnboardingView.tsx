@@ -1,10 +1,23 @@
 import { useState } from 'react';
-import { ArrowRight, FolderOpen, FolderPlus, Home as HomeIcon, Minus, Text } from 'lucide-react';
+import {
+	ArrowRight,
+	FileText,
+	FolderOpen,
+	FolderPlus,
+	Home as HomeIcon,
+	Minus,
+	Text,
+} from 'lucide-react';
 import type { Entry } from '../../../shared/types/files';
-import type { StoredFileViewMode } from '../../../shared/state/persistence';
+import type {
+	ShellIntegrationPreferences,
+	StoredFileViewMode,
+} from '../../../shared/state/persistence';
 
 export interface OnboardingResult {
 	name: string;
+	homeLocation?: Entry;
+	shellIntegration: ShellIntegrationPreferences;
 	/** Folders to pin (beyond Home, which is always implied). */
 	starterFolders: Entry[];
 	/** Default mode files open in. */
@@ -18,11 +31,12 @@ interface OnboardingViewProps {
 	initialStarterFolders: Entry[];
 	initialName?: string;
 	initialViewMode: StoredFileViewMode;
+	initialShellIntegration: ShellIntegrationPreferences;
 	/** Whether this is the first run (changes copy + whether Skip is offered). */
 	firstRun: boolean;
 	/** Open the native folder picker, returning the chosen folder or null. */
 	onPickFolder: () => Promise<Entry | null>;
-	onComplete: (result: OnboardingResult) => void;
+	onComplete: (result: OnboardingResult) => Promise<void>;
 	onSkip: () => void;
 }
 
@@ -41,6 +55,7 @@ export function OnboardingView({
 	initialStarterFolders,
 	initialName,
 	initialViewMode,
+	initialShellIntegration,
 	firstRun,
 	onPickFolder,
 	onComplete,
@@ -50,6 +65,10 @@ export function OnboardingView({
 	const [homeOverride, setHomeOverride] = useState<Entry | undefined>(home);
 	const [starterFolders, setStarterFolders] = useState<Entry[]>(initialStarterFolders);
 	const [viewMode, setViewMode] = useState<StoredFileViewMode>(initialViewMode);
+	const [shellIntegration, setShellIntegration] =
+		useState<ShellIntegrationPreferences>(initialShellIntegration);
+	const [submitError, setSubmitError] = useState<string | null>(null);
+	const [submitting, setSubmitting] = useState(false);
 
 	async function repointHome() {
 		const folder = await onPickFolder();
@@ -79,12 +98,22 @@ export function OnboardingView({
 		);
 	}
 
-	function complete() {
-		onComplete({
-			name: name.trim(),
-			starterFolders: homeOverride ? [homeOverride, ...starterFolders] : starterFolders,
-			viewMode,
-		});
+	async function complete() {
+		setSubmitError(null);
+		setSubmitting(true);
+		try {
+			await onComplete({
+				name: name.trim(),
+				homeLocation: homeOverride,
+				shellIntegration,
+				starterFolders,
+				viewMode,
+			});
+		} catch (cause) {
+			setSubmitError(`Unable to update preferences: ${String(cause)}`);
+		} finally {
+			setSubmitting(false);
+		}
 	}
 
 	return (
@@ -170,6 +199,48 @@ export function OnboardingView({
 					</div>
 				</div>
 
+				<div className="ob-field">
+					<span className="home-label">Windows Explorer</span>
+					<div className="ob-toggle-list">
+						<label className="ob-toggle-row">
+							<FileText size={16} />
+							<span>
+								<strong>Open Markdown files with MDViewer</strong>
+								<small>Adds an opt-in menu for .md and .markdown files.</small>
+							</span>
+							<input
+								type="checkbox"
+								checked={shellIntegration.markdownFiles}
+								onChange={(event) =>
+									setShellIntegration((current) => ({
+										...current,
+										markdownFiles: event.target.checked,
+									}))
+								}
+							/>
+						</label>
+						<label className="ob-toggle-row">
+							<FolderOpen size={16} />
+							<span>
+								<strong>Open folders with MDViewer</strong>
+								<small>Adds “Open folder in MDViewer” to folder menus.</small>
+							</span>
+							<input
+								type="checkbox"
+								checked={shellIntegration.folders}
+								onChange={(event) =>
+									setShellIntegration((current) => ({
+										...current,
+										folders: event.target.checked,
+									}))
+								}
+							/>
+						</label>
+					</div>
+				</div>
+
+				{submitError ? <p className="ob-error">{submitError}</p> : null}
+
 				<div className="ob-actions">
 					{firstRun ? (
 						<button type="button" className="ob-btn ghost" onClick={onSkip}>
@@ -181,8 +252,13 @@ export function OnboardingView({
 						</button>
 					)}
 					<span className="ob-spacer" />
-					<button type="button" className="ob-btn primary" onClick={complete}>
-						{firstRun ? 'Continue' : 'Done'}
+					<button
+						type="button"
+						className="ob-btn primary"
+						disabled={submitting}
+						onClick={() => void complete()}
+					>
+						{submitting ? 'Applying…' : firstRun ? 'Continue' : 'Done'}
 						<ArrowRight size={15} />
 					</button>
 				</div>

@@ -3,6 +3,7 @@ import { useUiStore } from '../../app-shell/state/useUiStore';
 import type { InternalDragStart } from '../../dnd/dropTypes';
 import { OutlineView } from '../../outline/components/OutlineView';
 import type { Entry, FileSearchMatch } from '../../../shared/types/files';
+import type { RecentFile, RecentItem } from '../../../shared/state/persistence';
 import { CrossFileSearchPanel } from './CrossFileSearchPanel';
 import { EmptySidebar } from './EmptySidebar';
 import { SidebarExplorerHeader } from './SidebarExplorerHeader';
@@ -11,7 +12,7 @@ import { SidebarSourceList } from './SidebarSourceList';
 import { TreeInlineInput, type InlineDraft } from './TreeInlineInput';
 import { TreeNode } from './TreeNode';
 
-export type SidebarMode = 'explorer' | 'search' | 'outline';
+export type SidebarMode = 'explorer' | 'recent' | 'search' | 'outline';
 
 interface SidebarSearchProps {
 	query: string;
@@ -56,6 +57,9 @@ interface SidebarProps {
 	onEntryContextMenu: (entry: Entry, event: ReactMouseEvent) => void;
 	onRootContextMenu: (event: ReactMouseEvent) => void;
 	onSavedContextMenu: (location: Entry, event: ReactMouseEvent) => void;
+	onOpenRecent: (item: RecentItem) => void;
+	onOpenRecentFile: (file: RecentFile) => void;
+	onRecentContextMenu: (item: RecentItem, event: ReactMouseEvent) => void;
 	onOpenFolder: () => void;
 	rootPinned: boolean;
 	rootPinDisabled: boolean;
@@ -98,6 +102,9 @@ export function Sidebar({
 	onEntryContextMenu,
 	onRootContextMenu,
 	onSavedContextMenu,
+	onOpenRecent,
+	onOpenRecentFile,
+	onRecentContextMenu,
 	onOpenFolder,
 	rootPinned,
 	rootPinDisabled,
@@ -128,6 +135,9 @@ export function Sidebar({
 				showOutlineTab={showOutlineTab}
 				onOpenFolder={onOpenFolder}
 				onSavedContextMenu={onSavedContextMenu}
+				onOpenRecent={onOpenRecent}
+				onOpenRecentFile={onOpenRecentFile}
+				onRecentContextMenu={onRecentContextMenu}
 				onSelectLocation={onSelectLocation}
 				onSourcesHeaderContextMenu={onSourcesHeaderContextMenu}
 				onToggleRootPin={onToggleRootPin}

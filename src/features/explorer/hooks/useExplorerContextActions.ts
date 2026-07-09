@@ -169,11 +169,16 @@ export function useExplorerContextActions({
 						setRecents((current) =>
 							current
 								.filter((item) => !pathIsDeletedTarget(target, item.path))
-								.map((item) =>
-									item.lastFile && pathIsDeletedTarget(target, item.lastFile.path)
-										? { ...item, lastFile: undefined }
-										: item
-								)
+								.map((item) => ({
+									...item,
+									lastFile:
+										item.lastFile && pathIsDeletedTarget(target, item.lastFile.path)
+											? undefined
+											: item.lastFile,
+									recentFiles: item.recentFiles?.filter(
+										(file) => !pathIsDeletedTarget(target, file.path)
+									),
+								}))
 						);
 
 						if (pathIsDeletedTarget(target, activeRoot?.path)) {

@@ -1,6 +1,7 @@
 import type { Entry } from '../../../shared/types/files';
 import { comparablePath } from '../../../shared/utils/path';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
+import type { ShellIntegrationPreferences } from '../../../shared/state/persistence';
 import { OnboardingView, type OnboardingResult } from '../../home/components/OnboardingView';
 
 interface AppOnboardingOverlayProps {
@@ -10,9 +11,10 @@ interface AppOnboardingOverlayProps {
 	locations: Entry[];
 	userName: string;
 	viewMode: FileViewMode;
+	shellIntegration: ShellIntegrationPreferences;
 	onboardingCompleted: boolean;
 	onPickFolder: () => Promise<Entry | null>;
-	onComplete: (result: OnboardingResult) => void;
+	onComplete: (result: OnboardingResult) => Promise<void>;
 	onSkip: () => void;
 }
 
@@ -23,6 +25,7 @@ export function AppOnboardingOverlay({
 	locations,
 	userName,
 	viewMode,
+	shellIntegration,
 	onboardingCompleted,
 	onPickFolder,
 	onComplete,
@@ -49,6 +52,7 @@ export function AppOnboardingOverlay({
 			)}
 			initialName={userName}
 			initialViewMode={viewMode}
+			initialShellIntegration={shellIntegration}
 			firstRun={!onboardingCompleted}
 			onPickFolder={onPickFolder}
 			onComplete={onComplete}

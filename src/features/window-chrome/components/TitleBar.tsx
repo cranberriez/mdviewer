@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Minus, PanelLeft, Square, X } from 'lucide-react';
+import { Home, Minus, PanelLeft, Square, X } from 'lucide-react';
 import { MenuBar, type MenuBarState } from './MenuBar';
 
 // Below this titlebar width the File/Edit/View row collapses to a single
@@ -15,6 +15,7 @@ interface TitleBarProps {
 	scopeName?: string | null;
 	title: string;
 	onMenuAction: (id: string) => void;
+	onGoHome: () => void;
 	/** Hide the explorer toggle (e.g. on the Home/onboarding overlay). */
 	hideExplorerToggle?: boolean;
 	onToggleExplorer: () => void;
@@ -28,6 +29,7 @@ export function TitleBar({
 	scopeName,
 	title,
 	onMenuAction,
+	onGoHome,
 	hideExplorerToggle = false,
 	onToggleExplorer,
 }: TitleBarProps) {
@@ -90,15 +92,26 @@ export function TitleBar({
 	return (
 		<header className="titlebar" data-tauri-drag-region ref={headerRef}>
 			{hideExplorerToggle ? null : (
-				<button
-					type="button"
-					className={`titlebar-button titlebar-explorer ${explorerHidden ? 'bright' : ''}`}
-					aria-label="Toggle explorer"
-					title="Toggle explorer"
-					onClick={onToggleExplorer}
-				>
-					<PanelLeft size={15} />
-				</button>
+				<>
+					<button
+						type="button"
+						className={`titlebar-button titlebar-explorer ${explorerHidden ? 'bright' : ''}`}
+						aria-label="Toggle explorer"
+						title="Toggle explorer"
+						onClick={onToggleExplorer}
+					>
+						<PanelLeft size={15} />
+					</button>
+					<button
+						type="button"
+						className="titlebar-button titlebar-home"
+						aria-label="Open dashboard"
+						title="Open dashboard"
+						onClick={onGoHome}
+					>
+						<Home size={15} />
+					</button>
+				</>
 			)}
 
 			<MenuBar state={menuState} compact={menuCompact} onAction={onMenuAction} />

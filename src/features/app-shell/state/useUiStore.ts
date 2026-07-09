@@ -8,11 +8,13 @@ import {
 	DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE,
 	DEFAULT_EXPLORER_FILTERS,
 	DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE,
+	DEFAULT_SHELL_INTEGRATION,
 	type AppConfigurationState,
 	type AppTheme,
 	type ExplorerFilterOptions,
 	type ExplorerHeaderActionsVisibility,
 	type SourcesHeaderActionsVisibility,
+	type ShellIntegrationPreferences,
 	type StoredWindowFrame,
 } from '../../../shared/state/persistence';
 
@@ -35,6 +37,8 @@ interface UiState {
 	explorerHeaderActionsVisible: ExplorerHeaderActionsVisibility;
 	explorerHidden: boolean;
 	mode: FileViewMode;
+	openHomeOnStartup: boolean;
+	shellIntegration: ShellIntegrationPreferences;
 	outlinePanelVisible: boolean;
 	overlay: AppOverlay;
 	pendingFormatAction: PendingFormatAction | null;
@@ -52,6 +56,8 @@ interface UiActions {
 	setExplorerHeaderActionsVisible: (updater: Updater<ExplorerHeaderActionsVisibility>) => void;
 	setExplorerHidden: (updater: Updater<boolean>) => void;
 	setMode: (mode: FileViewMode) => void;
+	setOpenHomeOnStartup: (openHomeOnStartup: boolean) => void;
+	setShellIntegration: (shellIntegration: ShellIntegrationPreferences) => void;
 	setOutlinePanelVisible: (updater: Updater<boolean>) => void;
 	setOverlay: (overlay: AppOverlay) => void;
 	setPendingFormatAction: (updater: Updater<PendingFormatAction | null>) => void;
@@ -73,6 +79,8 @@ export const useUiStore = create<UiStore>()((set) => ({
 	explorerHeaderActionsVisible: DEFAULT_EXPLORER_HEADER_ACTIONS_VISIBLE,
 	explorerHidden: false,
 	mode: 'preview',
+	openHomeOnStartup: true,
+	shellIntegration: DEFAULT_SHELL_INTEGRATION,
 	outlinePanelVisible: false,
 	overlay: 'onboarding',
 	pendingFormatAction: null,
@@ -91,7 +99,13 @@ export const useUiStore = create<UiStore>()((set) => ({
 			explorerHidden: configuration.explorerHidden ?? false,
 			mode: configuration.viewMode ?? 'preview',
 			outlinePanelVisible: configuration.outlinePanelVisible ?? false,
-			overlay: configuration.onboardingCompleted ? 'home' : 'onboarding',
+			openHomeOnStartup: configuration.openHomeOnStartup ?? true,
+			shellIntegration: configuration.shellIntegration ?? DEFAULT_SHELL_INTEGRATION,
+			overlay: configuration.onboardingCompleted
+				? configuration.openHomeOnStartup === false
+					? null
+					: 'home'
+				: 'onboarding',
 			sidebarWidth: clampSidebarWidth(configuration.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH),
 			sourcesHeaderActionsVisible:
 				configuration.sourcesHeaderActionsVisible ?? DEFAULT_SOURCES_HEADER_ACTIONS_VISIBLE,
@@ -111,6 +125,8 @@ export const useUiStore = create<UiStore>()((set) => ({
 	setExplorerHidden: (updater) =>
 		set((state) => ({ explorerHidden: resolveUpdater(state.explorerHidden, updater) })),
 	setMode: (mode) => set({ mode }),
+	setOpenHomeOnStartup: (openHomeOnStartup) => set({ openHomeOnStartup }),
+	setShellIntegration: (shellIntegration) => set({ shellIntegration }),
 	setOutlinePanelVisible: (updater) =>
 		set((state) => ({
 			outlinePanelVisible: resolveUpdater(state.outlinePanelVisible, updater),
@@ -153,6 +169,8 @@ export const useUiStore = create<UiStore>()((set) => ({
 
 export const selectUiConfiguration = (state: UiStore) => ({
 	explorerHidden: state.explorerHidden,
+	openHomeOnStartup: state.openHomeOnStartup,
+	shellIntegration: state.shellIntegration,
 	outlinePanelVisible: state.outlinePanelVisible,
 	sidebarWidth: state.sidebarWidth,
 	barMerged: state.barMerged,
@@ -168,6 +186,8 @@ export const selectUiActions = (state: UiStore) => ({
 	setBarMerged: state.setBarMerged,
 	setExplorerHidden: state.setExplorerHidden,
 	setMode: state.setMode,
+	setOpenHomeOnStartup: state.setOpenHomeOnStartup,
+	setShellIntegration: state.setShellIntegration,
 	setOverlay: state.setOverlay,
 	setPendingFormatAction: state.setPendingFormatAction,
 	setSidebarMode: state.setSidebarMode,

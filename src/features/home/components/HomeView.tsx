@@ -24,6 +24,8 @@ interface HomeViewProps {
 	onEditSetup: () => void;
 	/** True while an OS file/folder drag is hovering the Home screen. */
 	dropActive?: boolean;
+	openHomeOnStartup: boolean;
+	onOpenHomeOnStartupChange: (enabled: boolean) => void;
 }
 
 function comparable(path: string) {
@@ -51,6 +53,8 @@ export function HomeView({
 	onRecentContextMenu,
 	onEditSetup,
 	dropActive,
+	openHomeOnStartup,
+	onOpenHomeOnStartupChange,
 }: HomeViewProps) {
 	const greeting = userName?.trim() ? `Welcome back, ${userName.trim()}` : 'Welcome back';
 
@@ -141,6 +145,14 @@ export function HomeView({
 						<Settings size={13} />
 						Setup preferences
 					</button>
+					<label className="home-startup-toggle">
+						<input
+							type="checkbox"
+							checked={openHomeOnStartup}
+							onChange={(event) => onOpenHomeOnStartupChange(event.target.checked)}
+						/>
+						Open to this screen on startup
+					</label>
 				</div>
 			</div>
 		</div>

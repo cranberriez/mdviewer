@@ -46,6 +46,16 @@ export const DEFAULT_EXPLORER_FILTERS: ExplorerFilterOptions = {
 	showNonTextFiles: false,
 };
 
+export interface ShellIntegrationPreferences {
+	markdownFiles: boolean;
+	folders: boolean;
+}
+
+export const DEFAULT_SHELL_INTEGRATION: ShellIntegrationPreferences = {
+	markdownFiles: false,
+	folders: false,
+};
+
 /** The last file opened within a recent root, if any. */
 export interface RecentFile {
 	path: string;
@@ -79,6 +89,8 @@ export interface RecentItem {
 	/** The most-recently-opened file within this root, or undefined if the root
 	 *  was selected but no file was ever opened. Unused for `kind: "file"`. */
 	lastFile?: RecentFile;
+	/** Up to five files most recently opened within this root, newest first. */
+	recentFiles?: RecentFile[];
 	/** Epoch millis when this root was last touched; drives ordering. */
 	openedAt: number;
 }
@@ -93,6 +105,10 @@ export const MAX_RECENTS = 5;
 
 export interface AppConfigurationState {
 	explorerHidden: boolean;
+	/** Whether the dashboard is shown instead of the last workspace on launch. */
+	openHomeOnStartup?: boolean;
+	/** Opt-in Windows Explorer context-menu integrations. */
+	shellIntegration?: ShellIntegrationPreferences;
 	/** Whether the floating left-side outline panel is shown. */
 	outlinePanelVisible?: boolean;
 	sidebarWidth: number;
@@ -102,6 +118,8 @@ export interface AppConfigurationState {
 	windowFrame?: StoredWindowFrame;
 	/** Folders the user explicitly pinned to Saved (beyond the defaults). */
 	pinnedLocations?: Entry[];
+	/** User-selected replacement for the operating system's default Home folder. */
+	homeLocation?: Entry;
 	/** Paths of default locations (e.g. Documents) the user has unpinned. */
 	removedDefaultPaths?: string[];
 	/** Custom icon name per saved-location path. Home icon is never stored here. */
@@ -267,6 +285,17 @@ function readExplorerFilters(value: unknown): ExplorerFilterOptions | undefined 
 	};
 }
 
+function readShellIntegration(value: unknown): ShellIntegrationPreferences | undefined {
+	if (!isRecord(value)) {
+		return undefined;
+	}
+
+	return {
+		markdownFiles: readBoolean(value.markdownFiles) ?? false,
+		folders: readBoolean(value.folders) ?? false,
+	};
+}
+
 function readRecentKind(value: unknown): Extract<EntryKind, 'md' | 'text'> | undefined {
 	return value === 'md' || value === 'text' ? value : undefined;
 }
@@ -285,6 +314,17 @@ function readRecentFile(value: unknown): RecentFile | undefined {
 	}
 
 	return { path, name, kind };
+}
+
+function readRecentFiles(value: unknown): RecentFile[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return value
+		.map(readRecentFile)
+		.filter((file): file is RecentFile => file !== undefined)
+		.slice(0, MAX_RECENTS);
 }
 
 function readRecent(value: unknown): RecentItem | null {
@@ -310,6 +350,7 @@ function readRecent(value: unknown): RecentItem | null {
 		name,
 		fileKind: isFile ? readRecentKind(value.fileKind) : undefined,
 		lastFile: isFile ? undefined : readRecentFile(value.lastFile),
+		recentFiles: isFile ? undefined : readRecentFiles(value.recentFiles),
 		openedAt,
 	};
 }
@@ -348,6 +389,7 @@ export function touchRecentRoot(
 		path: root.path,
 		name: root.name,
 		lastFile: existing?.lastFile,
+		recentFiles: existing?.recentFiles,
 		openedAt: Date.now(),
 	};
 	const rest = current.filter(
@@ -390,11 +432,24 @@ export function recordRecentFile(
 	file: RecentFile
 ): RecentItem[] {
 	const key = recentKey(root.path);
+	const existing = current.find(
+		(item) => recentItemKind(item) === 'root' && recentKey(item.path) === key
+	);
+	const previousFiles = existing?.recentFiles?.length
+		? existing.recentFiles
+		: existing?.lastFile
+			? [existing.lastFile]
+			: [];
+	const fileKey = recentKey(file.path);
 	const next: RecentItem = {
 		kind: 'root',
 		path: root.path,
 		name: root.name,
 		lastFile: file,
+		recentFiles: [
+			file,
+			...previousFiles.filter((previous) => recentKey(previous.path) !== fileKey),
+		].slice(0, MAX_RECENTS),
 		openedAt: Date.now(),
 	};
 	const rest = current.filter(
@@ -457,6 +512,8 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
 
 	return {
 		explorerHidden: readBoolean(record.explorerHidden),
+		openHomeOnStartup: readBoolean(record.openHomeOnStartup),
+		shellIntegration: readShellIntegration(record.shellIntegration),
 		outlinePanelVisible: readBoolean(record.outlinePanelVisible),
 		sidebarWidth: readNumber(record.sidebarWidth),
 		barMerged: readBoolean(record.barMerged),
@@ -464,6 +521,7 @@ export function loadAppConfiguration(): Partial<AppConfigurationState> {
 		theme: readTheme(record.theme),
 		windowFrame: readWindowFrame(record.windowFrame),
 		pinnedLocations: readEntryArray(record.pinnedLocations),
+		homeLocation: readEntry(record.homeLocation) ?? undefined,
 		removedDefaultPaths: readStringArray(record.removedDefaultPaths),
 		locationIcons: readStringRecord(record.locationIcons),
 		onboardingCompleted: readBoolean(record.onboardingCompleted),

@@ -1,6 +1,6 @@
 import type { ComponentProps, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from 'react';
 import type { Entry, FileSearchMatch, OpenFile } from '../../../shared/types/files';
-import type { RecentItem } from '../../../shared/state/persistence';
+import type { RecentFile, RecentItem } from '../../../shared/state/persistence';
 import type { DragSessionState, InternalDragStart } from '../../dnd/dropTypes';
 import { SidebarResizeHandle } from '../../explorer/components/SidebarResizeHandle';
 import { Sidebar } from '../../explorer/components/Sidebar';
@@ -34,6 +34,7 @@ interface AppWorkspaceProps {
 		overlay: 'onboarding' | 'home' | null;
 		title: string;
 		onMenuAction: (id: string) => void;
+		onGoHome: () => void;
 		onToggleExplorer: () => void;
 	};
 	sidebar: {
@@ -78,6 +79,9 @@ interface AppWorkspaceProps {
 		onRefreshRoot: () => void;
 		onRootContextMenu: (event: ReactMouseEvent) => void;
 		onSavedContextMenu: (location: Entry, event: ReactMouseEvent) => void;
+		onOpenRecent: (item: RecentItem) => void;
+		onOpenRecentFile: (file: RecentFile) => void;
+		onRecentContextMenu: (item: RecentItem, event: ReactMouseEvent) => void;
 		onSelectFile: (entry: Entry) => Promise<void>;
 		onSelectHeading: (id: string) => void;
 		onSelectLocation: (location: Entry) => Promise<void>;
@@ -98,6 +102,8 @@ interface AppWorkspaceProps {
 		onOpenRecent: (item: RecentItem) => void;
 		onRecentContextMenu: (item: RecentItem, event: ReactMouseEvent) => void;
 		onSelectLocation: (location: Entry) => void;
+		openHomeOnStartup: boolean;
+		onOpenHomeOnStartupChange: (enabled: boolean) => void;
 	};
 	preview: {
 		actionBar: ReactNode;
@@ -133,6 +139,7 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 				scopeName={overlay ? null : shell.breadcrumbScope}
 				title={overlay ? 'Markdown Viewer' : shell.title}
 				onMenuAction={shell.onMenuAction}
+				onGoHome={shell.onGoHome}
 				onToggleExplorer={shell.onToggleExplorer}
 				hideExplorerToggle={overlay !== null}
 			/>
@@ -169,6 +176,9 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 						onEntryContextMenu={sidebar.onEntryContextMenu}
 						onRootContextMenu={sidebar.onRootContextMenu}
 						onSavedContextMenu={sidebar.onSavedContextMenu}
+						onOpenRecent={sidebar.onOpenRecent}
+						onOpenRecentFile={sidebar.onOpenRecentFile}
+						onRecentContextMenu={sidebar.onRecentContextMenu}
 						onOpenFolder={sidebar.onOpenFolder}
 						rootPinned={sidebar.rootPinned}
 						rootPinDisabled={sidebar.rootPinDisabled}
@@ -197,6 +207,8 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 						onLocationContextMenu={home.onLocationContextMenu}
 						onRecentContextMenu={home.onRecentContextMenu}
 						onEditSetup={home.onEditSetup}
+						openHomeOnStartup={home.openHomeOnStartup}
+						onOpenHomeOnStartupChange={home.onOpenHomeOnStartupChange}
 						dropActive={home.dropActive}
 					/>
 				) : (

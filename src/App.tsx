@@ -22,9 +22,11 @@ import { useAppPersistence } from './features/app-shell/hooks/useAppPersistence'
 import { useFileWorkspace } from './features/app-shell/hooks/useFileWorkspace';
 import { useFindAfterOpen } from './features/app-shell/hooks/useFindAfterOpen';
 import { useInitialLocations } from './features/app-shell/hooks/useInitialLocations';
+import { useOpenWith } from './features/app-shell/hooks/useOpenWith';
 import { AppMenus } from './features/app-shell/components/AppMenus';
 import { AppOnboardingOverlay } from './features/app-shell/components/AppOnboardingOverlay';
 import { AppWorkspace } from './features/app-shell/components/AppWorkspace';
+import type { OnboardingResult } from './features/home/components/OnboardingView';
 import { useSavedLocationMenuActions } from './features/saved-locations/hooks/useSavedLocationMenuActions';
 import { useInlineDraftController } from './features/explorer/hooks/useInlineDraftController';
 import { useExplorerFilterMenuController } from './features/explorer/hooks/useExplorerFilterMenuController';
@@ -49,6 +51,12 @@ import './App.css';
 function App() {
 	const { initialConfiguration, initialSession } = useAppBootstrap();
 
+	useEffect(() => {
+		const suppressBrowserContextMenu = (event: MouseEvent) => event.preventDefault();
+		window.addEventListener('contextmenu', suppressBrowserContextMenu);
+		return () => window.removeEventListener('contextmenu', suppressBrowserContextMenu);
+	}, []);
+
 	const {
 		activeRoot,
 		childrenCache,
@@ -58,6 +66,7 @@ function App() {
 		focusedEntry,
 		loadingPaths,
 		selectedFolderPath,
+		sessionHydrated,
 	} = useExplorerStore(useShallow(selectExplorerTree));
 	const { setError, setExpanded, setFocusedEntry } = useExplorerActions();
 
@@ -67,6 +76,8 @@ function App() {
 		explorerHidden,
 		mode,
 		outlinePanelVisible,
+		openHomeOnStartup,
+		shellIntegration,
 		overlay,
 		pendingFormatAction,
 		sidebarWidth,
@@ -79,6 +90,8 @@ function App() {
 			explorerHidden: state.explorerHidden,
 			mode: state.mode,
 			outlinePanelVisible: state.outlinePanelVisible,
+			openHomeOnStartup: state.openHomeOnStartup,
+			shellIntegration: state.shellIntegration,
 			overlay: state.overlay,
 			pendingFormatAction: state.pendingFormatAction,
 			sidebarWidth: state.sidebarWidth,
@@ -90,6 +103,7 @@ function App() {
 		setBarMerged,
 		setExplorerHidden,
 		setMode,
+		setOpenHomeOnStartup,
 		setOverlay,
 		setPendingFormatAction,
 		setSidebarMode,
@@ -115,6 +129,7 @@ function App() {
 		openFileAtPath,
 		openFilePath,
 		openFolderAsRoot,
+		openExternalPath,
 		openRecent,
 		pinFolder,
 		recents,
@@ -162,7 +177,13 @@ function App() {
 		renderedMarkdown,
 	});
 
-	useInitialLocations({ initialConfiguration, initialSession, loadFolder });
+	useInitialLocations({
+		initialConfiguration,
+		initialSession,
+		loadFolder,
+		openFileAtPath,
+	});
+	useOpenWith({ sessionHydrated, openExternalPath, onError: setError });
 
 	const { scrollToAnchor, handleLinkClick } = usePreviewNavigation({
 		findTargetRef,
@@ -260,9 +281,33 @@ function App() {
 		startCreateDraft,
 		startRenameDraft,
 	});
+	const preferencesReturnOverlayRef = useRef<'home' | null>('home');
+	const openPreferencesFromMenu = useCallback(() => {
+		preferencesReturnOverlayRef.current = overlay === 'home' ? 'home' : null;
+		setOverlay('onboarding');
+	}, [overlay, setOverlay]);
+	const handleCompletePreferences = useCallback(
+		async (result: OnboardingResult) => {
+			await completeOnboarding(result);
+			if (onboardingCompleted && preferencesReturnOverlayRef.current === null) {
+				setOverlay(null);
+			}
+		},
+		[completeOnboarding, onboardingCompleted, setOverlay]
+	);
+	const handleCancelPreferences = useCallback(() => {
+		if (!onboardingCompleted) {
+			skipOnboarding();
+			return;
+		}
+		setOverlay(preferencesReturnOverlayRef.current);
+	}, [onboardingCompleted, setOverlay, skipOnboarding]);
+
 	const { handleMenuAction, menuState } = useAppMenuActions({
 		find,
 		openFolderAsRoot: handleOpenFolderAsRoot,
+		openRecent: handleOpenRecent,
+		onOpenPreferences: openPreferencesFromMenu,
 		saveOpenFile,
 		startCreateDraft,
 	});
@@ -350,6 +395,7 @@ function App() {
 			overlay,
 			title,
 			onMenuAction: handleMenuAction,
+			onGoHome: () => setOverlay('home'),
 			onToggleExplorer: handleToggleExplorer,
 		}),
 		[
@@ -361,6 +407,7 @@ function App() {
 			handleMenuAction,
 			handleToggleExplorer,
 			menuState,
+			setOverlay,
 			overlay,
 			title,
 		]
@@ -428,6 +475,9 @@ function App() {
 			onRootContextMenu: (event) => openAppContextMenu({ kind: 'root' }, event),
 			onSavedContextMenu: (location, event) =>
 				openAppContextMenu({ kind: 'saved', location }, event),
+			onOpenRecent: handleOpenRecent,
+			onOpenRecentFile: (file) => void openFileAtPath(file.path),
+			onRecentContextMenu: (item, event) => openAppContextMenu({ kind: 'recent', item }, event),
 			onSelectFile: selectFile,
 			onSelectHeading: scrollToAnchor,
 			onSelectLocation: handleSelectLocation,
@@ -453,7 +503,9 @@ function App() {
 			locations,
 			openAppContextMenu,
 			openFilePath,
+			openFileAtPath,
 			handleOpenFolderAsRoot,
+			handleOpenRecent,
 			openSearchResult,
 			refreshFolder,
 			rootChildren,
@@ -489,7 +541,12 @@ function App() {
 			locations,
 			recents,
 			userName,
-			onEditSetup: () => setOverlay('onboarding'),
+			openHomeOnStartup,
+			onOpenHomeOnStartupChange: setOpenHomeOnStartup,
+			onEditSetup: () => {
+				preferencesReturnOverlayRef.current = 'home';
+				setOverlay('onboarding');
+			},
 			onLocationContextMenu: (location, event) =>
 				openAppContextMenu({ kind: 'saved', location }, event),
 			onOpenFolder: handleOpenFolderAsRoot,
@@ -506,8 +563,10 @@ function App() {
 			locationIcons,
 			locations,
 			openAppContextMenu,
+			openHomeOnStartup,
 			recents,
 			setOverlay,
+			setOpenHomeOnStartup,
 			userName,
 		]
 	);
@@ -629,9 +688,10 @@ function App() {
 				userName={userName}
 				viewMode={mode}
 				onboardingCompleted={onboardingCompleted}
+				shellIntegration={shellIntegration}
 				onPickFolder={pickFolder}
-				onComplete={completeOnboarding}
-				onSkip={skipOnboarding}
+				onComplete={handleCompletePreferences}
+				onSkip={handleCancelPreferences}
 			/>
 
 			<DragLayer state={internalDragState} />

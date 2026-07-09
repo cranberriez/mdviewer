@@ -96,6 +96,9 @@ export function useHeaderMenuActions({
 				case 'switch-search':
 					setSidebarMode('search');
 					break;
+				case 'switch-recent':
+					setSidebarMode('recent');
+					break;
 				case 'switch-outline':
 					setSidebarMode('outline');
 					break;

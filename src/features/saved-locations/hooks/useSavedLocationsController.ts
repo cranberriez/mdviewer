@@ -1,11 +1,16 @@
 import { useCallback, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Entry } from '../../../shared/types/files';
-import { recentItemKind, type RecentItem } from '../../../shared/state/persistence';
+import {
+	recentItemKind,
+	type RecentItem,
+	type ShellIntegrationPreferences,
+} from '../../../shared/state/persistence';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
 import type { OnboardingResult } from '../../home/components/OnboardingView';
 import { pickFolder } from '../../files/api/filesApi';
-import { fileKindFromPath } from '../../../shared/utils/path';
+import { comparablePath, fileKindFromPath } from '../../../shared/utils/path';
+import { useExplorerStore } from '../../explorer/state/useExplorerStore';
 import { deriveSavedLocations, isHomeLocation, isPathSavedLocation } from '../savedLocations';
 import { useSavedLocationsStore } from '../state/useSavedLocationsStore';
 
@@ -21,6 +26,7 @@ interface UseSavedLocationsControllerOptions {
 	) => Promise<void>;
 	onOverlayChange: (overlay: 'onboarding' | 'home' | null) => void;
 	onSelectLocation: (location: Entry) => Promise<void>;
+	onShellIntegrationChange: (preferences: ShellIntegrationPreferences) => Promise<void>;
 	onViewModeChange: (mode: FileViewMode) => void;
 }
 
@@ -33,6 +39,7 @@ export function useSavedLocationsController({
 	onOpenFileAtPath,
 	onOverlayChange,
 	onSelectLocation,
+	onShellIntegrationChange,
 	onViewModeChange,
 }: UseSavedLocationsControllerOptions) {
 	const {
@@ -80,10 +87,12 @@ export function useSavedLocationsController({
 	const recordSingleFileRecent = useSavedLocationsStore((state) => state.recordSingleFileRecent);
 	const removeRecentItem = useSavedLocationsStore((state) => state.removeRecentItem);
 	const setOnboardingCompleted = useSavedLocationsStore((state) => state.setOnboardingCompleted);
+	const setHomeLocation = useSavedLocationsStore((state) => state.setHomeLocation);
 	const setRecents = useSavedLocationsStore((state) => state.setRecents);
 	const setUserName = useSavedLocationsStore((state) => state.setUserName);
 	const touchRootRecent = useSavedLocationsStore((state) => state.touchRootRecent);
 	const unpinLocationStore = useSavedLocationsStore((state) => state.unpinLocation);
+	const setDefaultLocs = useExplorerStore((state) => state.setDefaultLocs);
 	const pinFolder = useCallback(
 		(entry: Entry) => pinFolderStore(entry, defaultLocations),
 		[defaultLocations, pinFolderStore]
@@ -120,7 +129,7 @@ export function useSavedLocationsController({
 				onActiveRootChange(null);
 				onExpandedChange(new Set());
 				onOverlayChange(null);
-				await onOpenFileAtPath(item.path, { mode: 'preview', skipRecent: true });
+				await onOpenFileAtPath(item.path, { skipRecent: true });
 				const kind = fileKindFromPath(item.path);
 				recordSingleFileRecent({ path: item.path, name: item.name, kind });
 				return;
@@ -128,20 +137,32 @@ export function useSavedLocationsController({
 
 			const location: Entry = { name: item.name, path: item.path, is_dir: true, kind: 'folder' };
 			await onSelectLocation(location);
-
-			if (item.lastFile) {
-				await onOpenFileAtPath(item.lastFile.path);
-			}
 		},
 		[onActiveRootChange, onExpandedChange, onOpenFileAtPath, onOverlayChange, onSelectLocation]
 	);
 
 	const completeOnboarding = useCallback(
-		(result: OnboardingResult) => {
+		async (result: OnboardingResult) => {
+			await onShellIntegrationChange(result.shellIntegration);
 			setUserName(result.name);
 			onViewModeChange(result.viewMode);
+			const nextHome = result.homeLocation ?? defaultLocations[0];
+			const nextDefaults = nextHome
+				? [
+						nextHome,
+						...defaultLocations
+							.slice(1)
+							.filter(
+								(location) => comparablePath(location.path) !== comparablePath(nextHome.path)
+							),
+					]
+				: defaultLocations;
 
-			applyOnboardingLocationChoices(defaultLocations, homePath, result.starterFolders);
+			if (nextHome) {
+				setHomeLocation(nextHome);
+				setDefaultLocs(nextDefaults);
+			}
+			applyOnboardingLocationChoices(nextDefaults, nextHome?.path, result.starterFolders);
 
 			setOnboardingCompleted(true);
 			onOverlayChange('home');
@@ -151,8 +172,11 @@ export function useSavedLocationsController({
 			homePath,
 			applyOnboardingLocationChoices,
 			onOverlayChange,
+			onShellIntegrationChange,
 			onViewModeChange,
 			setOnboardingCompleted,
+			setDefaultLocs,
+			setHomeLocation,
 			setUserName,
 		]
 	);

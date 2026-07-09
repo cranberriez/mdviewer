@@ -124,6 +124,10 @@ export function folderEntry(path: string) {
 	return invoke<Entry>('folder_entry', { path });
 }
 
+export function entryForPath(path: string) {
+	return invoke<Entry>('entry_for_path', { path });
+}
+
 /**
  * Resolve a link target (from a rendered markdown link) against the directory of
  * the file it appears in, returning an absolute canonical path. Rejects if the
@@ -131,6 +135,14 @@ export function folderEntry(path: string) {
  */
 export function resolveLinkPath(baseFile: string, target: string) {
 	return invoke<string>('resolve_link_path', { baseFile, target });
+}
+
+export function takePendingOpenPath() {
+	return invoke<string | null>('take_pending_open_path');
+}
+
+export function configureShellIntegration(options: { markdownFiles: boolean; folders: boolean }) {
+	return invoke<void>('configure_shell_integration', options);
 }
 
 /**

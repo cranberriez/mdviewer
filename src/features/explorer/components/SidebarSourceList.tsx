@@ -1,7 +1,13 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { Folder, FolderOpen, List, Pin, PinOff, Search } from 'lucide-react';
+import { Clock3, FileText, Folder, FolderOpen, List, Pin, PinOff, Search } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Entry, FileSearchMatch } from '../../../shared/types/files';
+import {
+	recentItemKind,
+	type RecentFile,
+	type RecentItem,
+} from '../../../shared/state/persistence';
+import { comparablePath } from '../../../shared/utils/path';
 import { useUiStore } from '../../app-shell/state/useUiStore';
 import { useSavedLocationsStore } from '../../saved-locations/state/useSavedLocationsStore';
 import { CrossFileSearchPanel } from './CrossFileSearchPanel';
@@ -30,6 +36,9 @@ interface SidebarSourceListProps {
 	showOutlineTab: boolean;
 	onOpenFolder: () => void;
 	onSavedContextMenu: (location: Entry, event: ReactMouseEvent) => void;
+	onOpenRecent: (item: RecentItem) => void;
+	onOpenRecentFile: (file: RecentFile) => void;
+	onRecentContextMenu: (item: RecentItem, event: ReactMouseEvent) => void;
 	onSelectLocation: (location: Entry) => Promise<void>;
 	onSourcesHeaderContextMenu: (event: ReactMouseEvent) => void;
 	onToggleRootPin: () => void;
@@ -44,6 +53,9 @@ export function SidebarSourceList({
 	showOutlineTab,
 	onOpenFolder,
 	onSavedContextMenu,
+	onOpenRecent,
+	onOpenRecentFile,
+	onRecentContextMenu,
 	onSelectLocation,
 	onSourcesHeaderContextMenu,
 	onToggleRootPin,
@@ -51,6 +63,17 @@ export function SidebarSourceList({
 	const activeRootPath = useExplorerStore((state) => state.activeRoot?.path ?? null);
 	const selectedFolderPath = useExplorerStore((state) => state.selectedFolderPath);
 	const locationIcons = useSavedLocationsStore((state) => state.locationIcons);
+	const recents = useSavedLocationsStore((state) => state.recents);
+	const activeRecent = recents.find(
+		(item) =>
+			recentItemKind(item) === 'root' &&
+			activeRootPath !== null &&
+			comparablePath(item.path) === comparablePath(activeRootPath)
+	);
+	const activeRecentFiles =
+		activeRecent?.recentFiles?.length || !activeRecent?.lastFile
+			? (activeRecent?.recentFiles ?? [])
+			: [activeRecent.lastFile];
 	const { sidebarMode, sourcesHeaderActionsVisible, setSidebarMode } = useUiStore(
 		useShallow((state) => ({
 			sidebarMode: state.sidebarMode,
@@ -69,6 +92,15 @@ export function SidebarSourceList({
 			role: 'tab',
 			ariaSelected: effectiveMode === 'explorer',
 			onClick: () => setSidebarMode('explorer'),
+		},
+		{
+			id: 'recent',
+			icon: Clock3,
+			tooltip: 'Recent',
+			active: effectiveMode === 'recent',
+			role: 'tab',
+			ariaSelected: effectiveMode === 'recent',
+			onClick: () => setSidebarMode('recent'),
 		},
 		{
 			id: 'search',
@@ -149,6 +181,43 @@ export function SidebarSourceList({
 					onSubmit={search.onSubmit}
 					onOpenResult={search.onOpenResult}
 				/>
+			) : effectiveMode === 'recent' ? (
+				<div className="saved-list recent-source-list">
+					{activeRecentFiles.length > 0 ? (
+						activeRecentFiles.map((file) => (
+							<button
+								type="button"
+								className="saved-row recent-source-row"
+								key={file.path}
+								title={file.path}
+								onClick={() => onOpenRecentFile(file)}
+							>
+								<FileText size={15} />
+								<span>{file.name}</span>
+							</button>
+						))
+					) : recents.length === 0 ? (
+						<span className="sidebar-source-empty">No recent files or folders.</span>
+					) : (
+						recents.map((item) => {
+							const isFile = recentItemKind(item) === 'file';
+							const Icon = isFile ? FileText : FolderOpen;
+							return (
+								<button
+									type="button"
+									className="saved-row recent-source-row"
+									key={`${isFile ? 'file' : 'root'}:${item.path}`}
+									title={item.path}
+									onClick={() => onOpenRecent(item)}
+									onContextMenu={(event) => onRecentContextMenu(item, event)}
+								>
+									<Icon size={15} />
+									<span>{item.lastFile?.name ?? item.name}</span>
+								</button>
+							);
+						})
+					)}
+				</div>
 			) : (
 				<div className="saved-list">
 					{locations.map((location) => {
