@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Home, Minus, PanelLeft, Square, X } from 'lucide-react';
+import { LayoutDashboard, Minus, Square, X } from 'lucide-react';
 import { MenuBar, type MenuBarState } from './MenuBar';
 
 // Below this titlebar width the File/Edit/View row collapses to a single
@@ -8,7 +8,6 @@ import { MenuBar, type MenuBarState } from './MenuBar';
 const MENU_COLLAPSE_WIDTH = 620;
 
 interface TitleBarProps {
-	explorerHidden: boolean;
 	fileActionsSlot?: ReactNode;
 	menuState: MenuBarState;
 	rootName?: string;
@@ -16,13 +15,11 @@ interface TitleBarProps {
 	title: string;
 	onMenuAction: (id: string) => void;
 	onGoHome: () => void;
-	/** Hide the explorer toggle (e.g. on the Home/onboarding overlay). */
+	/** Hide workspace navigation controls on the Home/onboarding overlay. */
 	hideExplorerToggle?: boolean;
-	onToggleExplorer: () => void;
 }
 
 export function TitleBar({
-	explorerHidden,
 	fileActionsSlot,
 	menuState,
 	rootName,
@@ -31,7 +28,6 @@ export function TitleBar({
 	onMenuAction,
 	onGoHome,
 	hideExplorerToggle = false,
-	onToggleExplorer,
 }: TitleBarProps) {
 	const [isMaximized, setIsMaximized] = useState(false);
 	const headerRef = useRef<HTMLElement | null>(null);
@@ -92,26 +88,15 @@ export function TitleBar({
 	return (
 		<header className="titlebar" data-tauri-drag-region ref={headerRef}>
 			{hideExplorerToggle ? null : (
-				<>
-					<button
-						type="button"
-						className={`titlebar-button titlebar-explorer ${explorerHidden ? 'bright' : ''}`}
-						aria-label="Toggle explorer"
-						title="Toggle explorer"
-						onClick={onToggleExplorer}
-					>
-						<PanelLeft size={15} />
-					</button>
-					<button
-						type="button"
-						className="titlebar-button titlebar-home"
-						aria-label="Open dashboard"
-						title="Open dashboard"
-						onClick={onGoHome}
-					>
-						<Home size={15} />
-					</button>
-				</>
+				<button
+					type="button"
+					className="titlebar-button titlebar-home"
+					aria-label="Open dashboard"
+					title="Open dashboard"
+					onClick={onGoHome}
+				>
+					<LayoutDashboard size={15} />
+				</button>
 			)}
 
 			<MenuBar state={menuState} compact={menuCompact} onAction={onMenuAction} />

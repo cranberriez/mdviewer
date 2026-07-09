@@ -2,6 +2,7 @@ import type { ComponentProps, MouseEvent as ReactMouseEvent, ReactNode, RefObjec
 import type { Entry, FileSearchMatch, OpenFile } from '../../../shared/types/files';
 import type { RecentFile, RecentItem } from '../../../shared/state/persistence';
 import type { DragSessionState, InternalDragStart } from '../../dnd/dropTypes';
+import { SidebarActivityRail } from '../../explorer/components/SidebarActivityRail';
 import { SidebarResizeHandle } from '../../explorer/components/SidebarResizeHandle';
 import { Sidebar } from '../../explorer/components/Sidebar';
 import type { InlineDraft } from '../../explorer/components/TreeInlineInput';
@@ -51,8 +52,6 @@ interface AppWorkspaceProps {
 		locations: Entry[];
 		rootChildren?: Entry[];
 		rootDropActive: boolean;
-		rootPinned: boolean;
-		rootPinDisabled: boolean;
 		search: {
 			query: string;
 			searchedQuery: string;
@@ -85,9 +84,9 @@ interface AppWorkspaceProps {
 		onSelectFile: (entry: Entry) => Promise<void>;
 		onSelectHeading: (id: string) => void;
 		onSelectLocation: (location: Entry) => Promise<void>;
-		onSourcesHeaderContextMenu: (event: ReactMouseEvent) => void;
 		onToggleFolder: (entry: Entry) => Promise<void>;
-		onToggleRootPin: () => void;
+		onPinLocation: (location: Entry) => void;
+		onUnpinLocation: (location: Entry) => void;
 	};
 	home: {
 		dropActive: boolean;
@@ -133,18 +132,24 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 		<>
 			<TitleBar
 				fileActionsSlot={shell.barMerged ? shell.fileActionsSlot : null}
-				explorerHidden={shell.explorerHidden || overlay !== null}
 				menuState={shell.menuState}
 				rootName={overlay ? undefined : shell.activeRoot?.name}
 				scopeName={overlay ? null : shell.breadcrumbScope}
 				title={overlay ? 'Markdown Viewer' : shell.title}
 				onMenuAction={shell.onMenuAction}
 				onGoHome={shell.onGoHome}
-				onToggleExplorer={shell.onToggleExplorer}
 				hideExplorerToggle={overlay !== null}
 			/>
 
 			<div className="workspace">
+				{overlay === null ? (
+					<SidebarActivityRail
+						explorerHidden={shell.explorerHidden}
+						showOutlineTab={!preview.outlinePanelVisible}
+						onOpenFolder={sidebar.onOpenFolder}
+						onToggleExplorer={shell.onToggleExplorer}
+					/>
+				) : null}
 				{overlay === null ? (
 					<Sidebar
 						width={shell.explorerHidden ? 0 : sidebar.sidebarWidth}
@@ -169,7 +174,6 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 						onCreateRootFile={sidebar.onCreateRootFile}
 						onCreateRootFolder={sidebar.onCreateRootFolder}
 						onExplorerHeaderContextMenu={sidebar.onExplorerHeaderContextMenu}
-						onSourcesHeaderContextMenu={sidebar.onSourcesHeaderContextMenu}
 						onSelectLocation={sidebar.onSelectLocation}
 						onToggleFolder={sidebar.onToggleFolder}
 						onSelectFile={sidebar.onSelectFile}
@@ -179,10 +183,8 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 						onOpenRecent={sidebar.onOpenRecent}
 						onOpenRecentFile={sidebar.onOpenRecentFile}
 						onRecentContextMenu={sidebar.onRecentContextMenu}
-						onOpenFolder={sidebar.onOpenFolder}
-						rootPinned={sidebar.rootPinned}
-						rootPinDisabled={sidebar.rootPinDisabled}
-						onToggleRootPin={sidebar.onToggleRootPin}
+						onPinLocation={sidebar.onPinLocation}
+						onUnpinLocation={sidebar.onUnpinLocation}
 						onDraftSubmit={sidebar.onDraftSubmit}
 						onDraftCancel={sidebar.onDraftCancel}
 						dropTargetPath={sidebar.treeDropTargetPath}

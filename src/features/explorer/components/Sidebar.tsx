@@ -7,7 +7,6 @@ import type { RecentFile, RecentItem } from '../../../shared/state/persistence';
 import { CrossFileSearchPanel } from './CrossFileSearchPanel';
 import { EmptySidebar } from './EmptySidebar';
 import { SidebarExplorerHeader } from './SidebarExplorerHeader';
-import { SidebarFooter } from './SidebarFooter';
 import { SidebarSourceList } from './SidebarSourceList';
 import { TreeInlineInput, type InlineDraft } from './TreeInlineInput';
 import { TreeNode } from './TreeNode';
@@ -50,7 +49,6 @@ interface SidebarProps {
 	onCreateRootFile: () => void;
 	onCreateRootFolder: () => void;
 	onExplorerHeaderContextMenu: (event: ReactMouseEvent) => void;
-	onSourcesHeaderContextMenu: (event: ReactMouseEvent) => void;
 	onSelectLocation: (location: Entry) => Promise<void>;
 	onToggleFolder: (entry: Entry) => Promise<void>;
 	onSelectFile: (entry: Entry) => Promise<void>;
@@ -60,10 +58,8 @@ interface SidebarProps {
 	onOpenRecent: (item: RecentItem) => void;
 	onOpenRecentFile: (file: RecentFile) => void;
 	onRecentContextMenu: (item: RecentItem, event: ReactMouseEvent) => void;
-	onOpenFolder: () => void;
-	rootPinned: boolean;
-	rootPinDisabled: boolean;
-	onToggleRootPin: () => void;
+	onPinLocation: (location: Entry) => void;
+	onUnpinLocation: (location: Entry) => void;
 	onDraftSubmit: (value: string) => void;
 	onDraftCancel: () => void;
 	dropTargetPath?: string | null;
@@ -95,7 +91,6 @@ export function Sidebar({
 	onCreateRootFile,
 	onCreateRootFolder,
 	onExplorerHeaderContextMenu,
-	onSourcesHeaderContextMenu,
 	onSelectLocation,
 	onToggleFolder,
 	onSelectFile,
@@ -105,10 +100,8 @@ export function Sidebar({
 	onOpenRecent,
 	onOpenRecentFile,
 	onRecentContextMenu,
-	onOpenFolder,
-	rootPinned,
-	rootPinDisabled,
-	onToggleRootPin,
+	onPinLocation,
+	onUnpinLocation,
 	onDraftSubmit,
 	onDraftCancel,
 	dropTargetPath,
@@ -130,17 +123,14 @@ export function Sidebar({
 				locations={locations}
 				search={search}
 				homePath={homePath}
-				rootPinned={rootPinned}
-				rootPinDisabled={rootPinDisabled}
 				showOutlineTab={showOutlineTab}
-				onOpenFolder={onOpenFolder}
+				onPinLocation={onPinLocation}
 				onSavedContextMenu={onSavedContextMenu}
 				onOpenRecent={onOpenRecent}
 				onOpenRecentFile={onOpenRecentFile}
 				onRecentContextMenu={onRecentContextMenu}
 				onSelectLocation={onSelectLocation}
-				onSourcesHeaderContextMenu={onSourcesHeaderContextMenu}
-				onToggleRootPin={onToggleRootPin}
+				onUnpinLocation={onUnpinLocation}
 			/>
 
 			<section className="sidebar-section explorer-section">
@@ -227,8 +217,6 @@ export function Sidebar({
 					</div>
 				)}
 			</section>
-
-			<SidebarFooter />
 		</aside>
 	);
 }

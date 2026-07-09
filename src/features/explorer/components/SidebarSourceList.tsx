@@ -1,6 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { Clock3, FileText, Folder, FolderOpen, List, Pin, PinOff, Search } from 'lucide-react';
-import { useShallow } from 'zustand/react/shallow';
+import { FileText, FolderOpen, Pin, PinOff } from 'lucide-react';
 import type { Entry, FileSearchMatch } from '../../../shared/types/files';
 import {
 	recentItemKind,
@@ -12,7 +11,6 @@ import { useUiStore } from '../../app-shell/state/useUiStore';
 import { useSavedLocationsStore } from '../../saved-locations/state/useSavedLocationsStore';
 import { CrossFileSearchPanel } from './CrossFileSearchPanel';
 import { getIconComponent } from './IconPickerMenu';
-import { SidebarHeaderActions, type SidebarHeaderActionConfig } from './SidebarHeaderActions';
 import { useExplorerStore } from '../state/useExplorerStore';
 import type { SidebarMode } from './Sidebar';
 
@@ -31,37 +29,31 @@ interface SidebarSourceListProps {
 		onOpenResult: (result: FileSearchMatch) => void;
 	};
 	homePath?: string;
-	rootPinned: boolean;
-	rootPinDisabled: boolean;
 	showOutlineTab: boolean;
-	onOpenFolder: () => void;
+	onPinLocation: (location: Entry) => void;
 	onSavedContextMenu: (location: Entry, event: ReactMouseEvent) => void;
 	onOpenRecent: (item: RecentItem) => void;
 	onOpenRecentFile: (file: RecentFile) => void;
 	onRecentContextMenu: (item: RecentItem, event: ReactMouseEvent) => void;
 	onSelectLocation: (location: Entry) => Promise<void>;
-	onSourcesHeaderContextMenu: (event: ReactMouseEvent) => void;
-	onToggleRootPin: () => void;
+	onUnpinLocation: (location: Entry) => void;
 }
 
 export function SidebarSourceList({
 	locations,
 	search,
 	homePath,
-	rootPinned,
-	rootPinDisabled,
 	showOutlineTab,
-	onOpenFolder,
+	onPinLocation,
 	onSavedContextMenu,
 	onOpenRecent,
 	onOpenRecentFile,
 	onRecentContextMenu,
 	onSelectLocation,
-	onSourcesHeaderContextMenu,
-	onToggleRootPin,
+	onUnpinLocation,
 }: SidebarSourceListProps) {
-	const activeRootPath = useExplorerStore((state) => state.activeRoot?.path ?? null);
-	const selectedFolderPath = useExplorerStore((state) => state.selectedFolderPath);
+	const activeRoot = useExplorerStore((state) => state.activeRoot);
+	const activeRootPath = activeRoot?.path ?? null;
 	const locationIcons = useSavedLocationsStore((state) => state.locationIcons);
 	const recents = useSavedLocationsStore((state) => state.recents);
 	const activeRecent = recents.find(
@@ -74,97 +66,17 @@ export function SidebarSourceList({
 		activeRecent?.recentFiles?.length || !activeRecent?.lastFile
 			? (activeRecent?.recentFiles ?? [])
 			: [activeRecent.lastFile];
-	const { sidebarMode, sourcesHeaderActionsVisible, setSidebarMode } = useUiStore(
-		useShallow((state) => ({
-			sidebarMode: state.sidebarMode,
-			sourcesHeaderActionsVisible: state.sourcesHeaderActionsVisible,
-			setSidebarMode: state.setSidebarMode,
-		}))
-	);
+	const sidebarMode = useUiStore((state) => state.sidebarMode);
 	const effectiveMode: SidebarMode =
 		sidebarMode === 'outline' && !showOutlineTab ? 'explorer' : sidebarMode;
-	const sourceViewActions: SidebarHeaderActionConfig[] = [
-		{
-			id: 'explorer',
-			icon: Folder,
-			tooltip: 'Explorer',
-			active: effectiveMode === 'explorer',
-			role: 'tab',
-			ariaSelected: effectiveMode === 'explorer',
-			onClick: () => setSidebarMode('explorer'),
-		},
-		{
-			id: 'recent',
-			icon: Clock3,
-			tooltip: 'Recent',
-			active: effectiveMode === 'recent',
-			role: 'tab',
-			ariaSelected: effectiveMode === 'recent',
-			onClick: () => setSidebarMode('recent'),
-		},
-		{
-			id: 'search',
-			icon: Search,
-			tooltip: 'Search files',
-			visible: sourcesHeaderActionsVisible.search,
-			active: effectiveMode === 'search',
-			role: 'tab',
-			ariaSelected: effectiveMode === 'search',
-			onClick: () => setSidebarMode('search'),
-		},
-		{
-			id: 'outline',
-			icon: List,
-			tooltip: 'Outline',
-			visible: showOutlineTab && sourcesHeaderActionsVisible.outline,
-			active: effectiveMode === 'outline',
-			role: 'tab',
-			ariaSelected: effectiveMode === 'outline',
-			onClick: () => setSidebarMode('outline'),
-		},
-	];
-	const sourceHeaderActions: SidebarHeaderActionConfig[] = [
-		{
-			id: 'toggle-root-pin',
-			icon: rootPinned ? PinOff : Pin,
-			tooltip: rootPinDisabled
-				? 'Home is always pinned'
-				: rootPinned
-					? 'Unpin the current root folder'
-					: 'Pin the current root folder',
-			className: rootPinned ? 'is-pinned' : undefined,
-			visible: sourcesHeaderActionsVisible.pin,
-			active: rootPinned,
-			disabled: rootPinDisabled,
-			ariaPressed: rootPinned,
-			onClick: onToggleRootPin,
-		},
-		{
-			id: 'open-folder',
-			icon: FolderOpen,
-			tooltip: 'Open a folder as the explorer root...',
-			onClick: onOpenFolder,
-		},
-	];
+	const pinnedPathKeys = new Set(locations.map((location) => comparablePath(location.path)));
+	const displayedLocations =
+		activeRoot && !pinnedPathKeys.has(comparablePath(activeRoot.path))
+			? [...locations, activeRoot]
+			: locations;
 
 	return (
 		<section className="sidebar-section">
-			<div className="saved-heading" onContextMenu={onSourcesHeaderContextMenu}>
-				<div className="sidebar-view-switch" role="tablist" aria-label="Sidebar view">
-					<SidebarHeaderActions
-						actions={sourceViewActions}
-						baseClassName="sidebar-view-button"
-						iconSize={14}
-					/>
-				</div>
-				<div className="saved-actions">
-					<SidebarHeaderActions
-						actions={sourceHeaderActions}
-						baseClassName="saved-add"
-						iconSize={15}
-					/>
-				</div>
-			</div>
 			{effectiveMode === 'outline' ? null : effectiveMode === 'search' ? (
 				<CrossFileSearchPanel
 					root={activeRootPath}
@@ -220,21 +132,53 @@ export function SidebarSourceList({
 				</div>
 			) : (
 				<div className="saved-list">
-					{locations.map((location) => {
-						const isHome = homePath ? location.path === homePath : false;
+					{displayedLocations.map((location) => {
+						const locationKey = comparablePath(location.path);
+						const isHome = homePath ? locationKey === comparablePath(homePath) : false;
+						const isPinned = pinnedPathKeys.has(locationKey);
+						const isActive = activeRootPath
+							? comparablePath(activeRootPath) === locationKey
+							: false;
 						const iconName = isHome ? 'Home' : (locationIcons[location.path] ?? 'Folder');
 						const LocationIcon = getIconComponent(iconName);
+						const pinLabel = isHome
+							? 'Home is always pinned'
+							: isPinned
+								? `Unpin ${location.name}`
+								: `Pin ${location.name}`;
+						const PinIcon = isPinned ? PinOff : Pin;
 						return (
-							<button
-								type="button"
-								className={`saved-row ${selectedFolderPath === location.path ? 'active' : ''}`}
+							<div
+								className={`saved-location-row ${isActive ? 'active' : ''}`}
 								key={location.path}
-								onClick={() => void onSelectLocation(location)}
-								onContextMenu={(event) => onSavedContextMenu(location, event)}
+								onContextMenu={
+									isPinned
+										? (event) => {
+												event.stopPropagation();
+												onSavedContextMenu(location, event);
+											}
+										: undefined
+								}
 							>
-								<LocationIcon size={15} />
-								<span>{location.name}</span>
-							</button>
+								<button
+									type="button"
+									className="saved-location-main"
+									onClick={() => void onSelectLocation(location)}
+								>
+									<LocationIcon size={15} />
+									<span>{location.name}</span>
+								</button>
+								<button
+									type="button"
+									className="saved-location-pin"
+									aria-label={pinLabel}
+									aria-pressed={isPinned}
+									disabled={isHome}
+									onClick={() => (isPinned ? onUnpinLocation(location) : onPinLocation(location))}
+								>
+									<PinIcon size={14} />
+								</button>
+							</div>
 						);
 					})}
 				</div>

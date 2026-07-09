@@ -283,6 +283,50 @@
 	position: relative;
 }
 
+.sidebar-activity-rail {
+	width: 38px;
+	flex: 0 0 38px;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: space-between;
+	padding: 6px 4px;
+	background: var(--color-bg-window);
+}
+
+.sidebar-activity-tabs,
+.sidebar-activity-actions {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 3px;
+}
+
+.sidebar-activity-button {
+	width: 30px;
+	height: 30px;
+	flex: 0 0 30px;
+	display: grid;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-ctl);
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+}
+
+.sidebar-activity-button:hover {
+	background: var(--color-bg-hover);
+	color: var(--color-text-primary);
+}
+
+.sidebar-activity-button.active {
+	background: var(--color-bg-active);
+	color: var(--color-text-on-active);
+}
+
 .sidebar {
 	width: 280px;
 	flex: 0 0 280px;
@@ -346,35 +390,6 @@
 	flex-direction: column;
 }
 
-.sidebar-footer {
-	flex: 0 0 auto;
-	display: flex;
-	align-items: center;
-	gap: 2px;
-	padding: 4px 6px;
-}
-
-.sidebar-footer-button {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 26px;
-	height: 26px;
-	border: none;
-	border-radius: 5px;
-	background: transparent;
-	color: var(--color-text-muted);
-	cursor: pointer;
-	transition:
-		background 0.1s ease,
-		color 0.1s ease;
-}
-
-.sidebar-footer-button:hover {
-	background: var(--color-bg-hover);
-	color: var(--color-text-primary);
-}
-
 .section-label {
 	margin: 0;
 	padding: 12px 10px 6px;
@@ -385,87 +400,76 @@
 	text-transform: uppercase;
 }
 
-.saved-heading {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 8px 6px 4px 8px;
-}
-
-.sidebar-view-switch {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-	padding: 2px;
-	border-radius: var(--radius-ctl);
-	background: var(--color-bg-window);
-}
-
-.sidebar-view-button {
-	display: grid;
-	place-items: center;
-	width: 24px;
-	height: 22px;
-	border: 0;
-	border-radius: 5px;
-	background: transparent;
-	color: var(--color-text-muted);
-	cursor: pointer;
-}
-
-.sidebar-view-button:hover {
-	color: var(--color-text-primary);
-}
-
-.sidebar-view-button.active {
-	background: var(--color-bg-active);
-	color: var(--color-text-primary);
-}
-
-.saved-actions {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-}
-
-.saved-add {
-	display: grid;
-	place-items: center;
-	width: 22px;
-	height: 22px;
-	flex: 0 0 22px;
-	border: 0;
-	border-radius: var(--radius-ctl);
-	background: transparent;
-	color: var(--color-text-muted);
-	cursor: pointer;
-}
-
-.saved-add:hover:not(:disabled) {
-	background: var(--color-bg-hover);
-	color: var(--color-text-primary);
-}
-
-/* Pinned state: accented so it reads as "active / will unpin". */
-.saved-add.is-pinned {
-	color: var(--color-text-muted);
-}
-
-.saved-add.is-pinned:hover:not(:disabled) {
-	background: var(--color-bg-active);
-}
-
-.saved-add:disabled {
-	color: var(--color-text-muted);
-	opacity: 0.4;
-	cursor: default;
-}
-
 .saved-list {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	padding-bottom: 6px;
+	padding: 8px 0 6px;
+}
+
+.saved-location-row {
+	height: 29px;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 28px;
+	align-items: center;
+	border-radius: var(--radius-ctl);
+	color: var(--color-text-secondary);
+}
+
+.saved-location-row:hover {
+	color: var(--color-text-primary);
+	background: var(--color-bg-hover);
+}
+
+.saved-location-row.active {
+	color: var(--color-text-primary);
+	background: var(--color-bg-active);
+}
+
+.saved-location-main {
+	min-width: 0;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 0 8px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+}
+
+.saved-location-pin {
+	width: 24px;
+	height: 24px;
+	display: grid;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-ctl);
+	background: transparent;
+	color: var(--color-text-muted);
+	opacity: 0;
+	pointer-events: none;
+	cursor: pointer;
+}
+
+.saved-location-row:hover .saved-location-pin,
+.saved-location-row:focus-within .saved-location-pin {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.saved-location-pin:hover:not(:disabled) {
+	background: var(--color-bg-active);
+	color: var(--color-text-primary);
+}
+
+.saved-location-row:hover .saved-location-pin:disabled,
+.saved-location-row:focus-within .saved-location-pin:disabled {
+	opacity: 0.35;
+	cursor: default;
 }
 
 .sidebar-source-empty {
@@ -513,6 +517,7 @@
 }
 
 .saved-row span,
+.saved-location-main span,
 .tree-name {
 	flex: 1 1 auto;
 	min-width: 0;

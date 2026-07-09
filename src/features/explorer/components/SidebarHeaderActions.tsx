@@ -1,6 +1,9 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { IconActionButton } from '../../file-actions/components/IconActionButton';
+import {
+	IconActionButton,
+	type IconActionButtonTooltipPlacement,
+} from '../../file-actions/components/IconActionButton';
 
 export interface SidebarHeaderActionConfig {
 	id: string;
@@ -22,12 +25,16 @@ interface SidebarHeaderActionsProps {
 	actions: SidebarHeaderActionConfig[];
 	baseClassName: string;
 	iconSize: number;
+	showNativeTitles?: boolean;
+	tooltipPlacement?: IconActionButtonTooltipPlacement;
 }
 
 export function SidebarHeaderActions({
 	actions,
 	baseClassName,
 	iconSize,
+	showNativeTitles = true,
+	tooltipPlacement = 'bottom',
 }: SidebarHeaderActionsProps) {
 	return actions
 		.filter((action) => action.visible ?? true)
@@ -38,7 +45,8 @@ export function SidebarHeaderActions({
 					key={action.id}
 					className={`${baseClassName} ${action.className ?? ''} ${action.active ? 'active' : ''}`}
 					tooltip={action.tooltip}
-					title={action.tooltip}
+					tooltipPlacement={tooltipPlacement}
+					title={showNativeTitles ? action.tooltip : undefined}
 					active={action.active}
 					disabled={action.disabled}
 					role={action.role}

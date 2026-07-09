@@ -428,8 +428,6 @@ function App() {
 			locations,
 			rootChildren,
 			rootDropActive,
-			rootPinned: activeRoot ? !isPinnable(activeRoot.path) : false,
-			rootPinDisabled: !activeRoot || !isUnpinnable(activeRoot),
 			search: {
 				query: searchQuery,
 				searchedQuery,
@@ -481,9 +479,9 @@ function App() {
 			onSelectFile: selectFile,
 			onSelectHeading: scrollToAnchor,
 			onSelectLocation: handleSelectLocation,
-			onSourcesHeaderContextMenu: (event) => openAppContextMenu({ kind: 'sources-header' }, event),
 			onToggleFolder: toggleFolder,
-			onToggleRootPin: toggleRootPin,
+			onPinLocation: pinFolder,
+			onUnpinLocation: unpinLocation,
 		}),
 		[
 			activeRoot,
@@ -497,8 +495,6 @@ function App() {
 			focusedEntry?.path,
 			getCreateTargetFolder,
 			homePath,
-			isPinnable,
-			isUnpinnable,
 			loadingPaths,
 			locations,
 			openAppContextMenu,
@@ -507,6 +503,7 @@ function App() {
 			handleOpenFolderAsRoot,
 			handleOpenRecent,
 			openSearchResult,
+			pinFolder,
 			refreshFolder,
 			rootChildren,
 			rootDropActive,
@@ -527,8 +524,8 @@ function App() {
 			startCreateDraft,
 			submitDraft,
 			toggleFolder,
-			toggleRootPin,
 			treeDropTargetPath,
+			unpinLocation,
 			unsavedFilePathKeys,
 		]
 	);
