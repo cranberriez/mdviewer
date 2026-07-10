@@ -233,6 +233,13 @@ function App() {
 		},
 		[clearCrossFileSearch, openRecent]
 	);
+	const handleNavigatePath = useCallback(
+		async (path: string) => {
+			clearCrossFileSearch();
+			await openExternalPath(path, { restoreLastFileForFolder: false });
+		},
+		[clearCrossFileSearch, openExternalPath]
+	);
 
 	const {
 		beginInternalDrag,
@@ -389,6 +396,8 @@ function App() {
 			activeRoot,
 			barMerged,
 			breadcrumbScope,
+			currentPath: openFile?.path ?? activeRoot?.path,
+			currentPathKind: openFile ? 'file' : 'folder',
 			explorerHidden,
 			fileActionsSlot: fileActionControls,
 			menuState,
@@ -396,6 +405,7 @@ function App() {
 			title,
 			onMenuAction: handleMenuAction,
 			onGoHome: () => setOverlay('home'),
+			onNavigatePath: handleNavigatePath,
 			onToggleExplorer: handleToggleExplorer,
 		}),
 		[
@@ -405,10 +415,12 @@ function App() {
 			explorerHidden,
 			fileActionControls,
 			handleMenuAction,
+			handleNavigatePath,
 			handleToggleExplorer,
 			menuState,
 			setOverlay,
 			overlay,
+			openFile?.path,
 			title,
 		]
 	);

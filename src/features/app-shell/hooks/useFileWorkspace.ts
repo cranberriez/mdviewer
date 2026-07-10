@@ -108,10 +108,12 @@ export function useFileWorkspace({
 	});
 
 	const openExternalPath = useCallback(
-		async (path: string) => {
+		async (path: string, options?: { restoreLastFileForFolder?: boolean }) => {
 			const entry = await entryForPath(path);
 			if (entry.is_dir) {
-				await selectLocation(entry);
+				await selectLocation(entry, {
+					restoreLastFile: options?.restoreLastFileForFolder ?? true,
+				});
 				return;
 			}
 

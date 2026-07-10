@@ -29,6 +29,8 @@ interface AppWorkspaceProps {
 		activeRoot: Entry | null;
 		barMerged: boolean;
 		breadcrumbScope: string | null;
+		currentPath?: string;
+		currentPathKind: 'file' | 'folder';
 		explorerHidden: boolean;
 		fileActionsSlot: ReactNode;
 		menuState: MenuBarState;
@@ -36,6 +38,7 @@ interface AppWorkspaceProps {
 		title: string;
 		onMenuAction: (id: string) => void;
 		onGoHome: () => void;
+		onNavigatePath: (path: string) => Promise<void>;
 		onToggleExplorer: () => void;
 	};
 	sidebar: {
@@ -133,11 +136,14 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 			<TitleBar
 				fileActionsSlot={shell.barMerged ? shell.fileActionsSlot : null}
 				menuState={shell.menuState}
+				currentPath={overlay ? undefined : shell.currentPath}
+				currentPathKind={shell.currentPathKind}
 				rootName={overlay ? undefined : shell.activeRoot?.name}
 				scopeName={overlay ? null : shell.breadcrumbScope}
 				title={overlay ? 'Markdown Viewer' : shell.title}
 				onMenuAction={shell.onMenuAction}
 				onGoHome={shell.onGoHome}
+				onNavigatePath={shell.onNavigatePath}
 				hideExplorerToggle={overlay !== null}
 			/>
 

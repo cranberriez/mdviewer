@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { LayoutDashboard, Minus, Square, X } from 'lucide-react';
 import { MenuBar, type MenuBarState } from './MenuBar';
+import { PathBreadcrumb } from './PathBreadcrumb';
 
 // Below this titlebar width the File/Edit/View row collapses to a single
 // hamburger button so the breadcrumb and window controls keep their space.
@@ -10,11 +11,14 @@ const MENU_COLLAPSE_WIDTH = 620;
 interface TitleBarProps {
 	fileActionsSlot?: ReactNode;
 	menuState: MenuBarState;
+	currentPath?: string;
+	currentPathKind?: 'file' | 'folder';
 	rootName?: string;
 	scopeName?: string | null;
 	title: string;
 	onMenuAction: (id: string) => void;
 	onGoHome: () => void;
+	onNavigatePath: (path: string) => Promise<void>;
 	/** Hide workspace navigation controls on the Home/onboarding overlay. */
 	hideExplorerToggle?: boolean;
 }
@@ -22,11 +26,14 @@ interface TitleBarProps {
 export function TitleBar({
 	fileActionsSlot,
 	menuState,
+	currentPath,
+	currentPathKind = 'folder',
 	rootName,
 	scopeName,
 	title,
 	onMenuAction,
 	onGoHome,
+	onNavigatePath,
 	hideExplorerToggle = false,
 }: TitleBarProps) {
 	const [isMaximized, setIsMaximized] = useState(false);
@@ -80,11 +87,6 @@ export function TitleBar({
 		};
 	}, []);
 
-	// Avoid a redundant trailing crumb when the title just repeats the root
-	// (e.g. "Home / Home" with no file open and no deeper scope).
-	const rootLabel = rootName ?? 'Home';
-	const showTitleSegment = Boolean(scopeName) || title !== rootLabel;
-
 	return (
 		<header className="titlebar" data-tauri-drag-region ref={headerRef}>
 			{hideExplorerToggle ? null : (
@@ -101,33 +103,20 @@ export function TitleBar({
 
 			<MenuBar state={menuState} compact={menuCompact} onAction={onMenuAction} />
 
-			<div className="titlebar-crumb" data-tauri-drag-region>
-				{hideExplorerToggle ? (
+			{hideExplorerToggle ? (
+				<div className="titlebar-crumb" data-tauri-drag-region>
 					<span data-tauri-drag-region>{title}</span>
-				) : (
-					<>
-						<span data-tauri-drag-region>{rootName ?? 'Home'}</span>
-						{scopeName ? (
-							<>
-								<span className="crumb-separator" data-tauri-drag-region>
-									/
-								</span>
-								<span data-tauri-drag-region>{scopeName}</span>
-							</>
-						) : null}
-						{showTitleSegment ? (
-							<>
-								<span className="crumb-separator" data-tauri-drag-region>
-									/
-								</span>
-								<span className="crumb-name" data-tauri-drag-region>
-									{title}
-								</span>
-							</>
-						) : null}
-					</>
-				)}
-			</div>
+				</div>
+			) : (
+				<PathBreadcrumb
+					currentPath={currentPath}
+					currentPathKind={currentPathKind}
+					rootName={rootName}
+					scopeName={scopeName}
+					title={title}
+					onNavigate={onNavigatePath}
+				/>
+			)}
 
 			<div className="titlebar-drag-space" data-tauri-drag-region />
 
