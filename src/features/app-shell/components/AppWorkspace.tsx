@@ -28,7 +28,7 @@ interface AppWorkspaceProps {
 	shell: {
 		activeRoot: Entry | null;
 		barMerged: boolean;
-		breadcrumbScope: string | null;
+		breadcrumbScopes: string[];
 		currentPath?: string;
 		currentPathKind: 'file' | 'folder';
 		explorerHidden: boolean;
@@ -139,7 +139,7 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 				currentPath={overlay ? undefined : shell.currentPath}
 				currentPathKind={shell.currentPathKind}
 				rootName={overlay ? undefined : shell.activeRoot?.name}
-				scopeName={overlay ? null : shell.breadcrumbScope}
+				scopeNames={overlay ? [] : shell.breadcrumbScopes}
 				title={overlay ? 'Markdown Viewer' : shell.title}
 				onMenuAction={shell.onMenuAction}
 				onGoHome={shell.onGoHome}

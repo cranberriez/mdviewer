@@ -10,7 +10,7 @@ import { usePreviewNavigation } from './features/preview/hooks/usePreviewNavigat
 import { useAppDragDropController } from './features/dnd/useAppDragDropController';
 import { DragLayer } from './features/dnd/DragLayer';
 import { TreeDropBadge } from './features/dnd/TreeDropBadge';
-import { comparablePath, parentName, parentPath } from './shared/utils/path';
+import { comparablePath, parentPath, relativePath } from './shared/utils/path';
 import type { AppConfigurationState } from './shared/state/persistence';
 import { useCrossFileSearch } from './features/search/hooks/useCrossFileSearch';
 import { useAppKeyboardShortcuts } from './features/app-shell/hooks/useAppKeyboardShortcuts';
@@ -332,14 +332,13 @@ function App() {
 	const openAppContextMenu = useAppContextMenuRouter({ cancelDraft });
 
 	const title = openFile?.name ?? activeRoot?.name ?? 'Markdown Viewer';
-	// Show the open file's parent folder as a middle crumb, but only when it
-	// isn't the root itself (otherwise the root name would appear twice).
-	const breadcrumbScope =
-		openFile &&
-		activeRoot &&
-		comparablePath(parentPath(openFile.path)) !== comparablePath(activeRoot.path)
-			? parentName(openFile.path)
-			: null;
+	const breadcrumbScopes = useMemo(() => {
+		if (!openFile || !activeRoot) {
+			return [];
+		}
+		const relativeParent = relativePath(activeRoot.path, parentPath(openFile.path));
+		return relativeParent === '.' ? [] : relativeParent.split(/[\\/]/).filter(Boolean);
+	}, [activeRoot?.path, openFile?.path]);
 	const rootChildren = activeRoot ? childrenCache[activeRoot.path] : undefined;
 	const unsavedFilePathKeys = useMemo(
 		() => new Set(Object.values(unsavedFileDrafts).map((file) => comparablePath(file.path))),
@@ -395,7 +394,7 @@ function App() {
 		() => ({
 			activeRoot,
 			barMerged,
-			breadcrumbScope,
+			breadcrumbScopes,
 			currentPath: openFile?.path ?? activeRoot?.path,
 			currentPathKind: openFile ? 'file' : 'folder',
 			explorerHidden,
@@ -411,7 +410,7 @@ function App() {
 		[
 			activeRoot,
 			barMerged,
-			breadcrumbScope,
+			breadcrumbScopes,
 			explorerHidden,
 			fileActionControls,
 			handleMenuAction,

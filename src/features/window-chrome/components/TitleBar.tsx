@@ -14,7 +14,7 @@ interface TitleBarProps {
 	currentPath?: string;
 	currentPathKind?: 'file' | 'folder';
 	rootName?: string;
-	scopeName?: string | null;
+	scopeNames?: string[];
 	title: string;
 	onMenuAction: (id: string) => void;
 	onGoHome: () => void;
@@ -29,7 +29,7 @@ export function TitleBar({
 	currentPath,
 	currentPathKind = 'folder',
 	rootName,
-	scopeName,
+	scopeNames = [],
 	title,
 	onMenuAction,
 	onGoHome,
@@ -112,7 +112,7 @@ export function TitleBar({
 					currentPath={currentPath}
 					currentPathKind={currentPathKind}
 					rootName={rootName}
-					scopeName={scopeName}
+					scopeNames={scopeNames}
 					title={title}
 					onNavigate={onNavigatePath}
 				/>

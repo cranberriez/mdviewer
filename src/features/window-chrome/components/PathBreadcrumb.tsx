@@ -10,7 +10,7 @@ interface PathBreadcrumbProps {
 	currentPath?: string;
 	currentPathKind: 'file' | 'folder';
 	rootName?: string;
-	scopeName?: string | null;
+	scopeNames?: string[];
 	title: string;
 	onNavigate: (path: string) => Promise<void>;
 }
@@ -28,7 +28,7 @@ export function PathBreadcrumb({
 	currentPath,
 	currentPathKind,
 	rootName,
-	scopeName,
+	scopeNames = [],
 	title,
 	onNavigate,
 }: PathBreadcrumbProps) {
@@ -69,7 +69,7 @@ export function PathBreadcrumb({
 	}, [suggestions]);
 
 	const rootLabel = rootName ?? 'Home';
-	const showTitleSegment = Boolean(scopeName) || title !== rootLabel;
+	const showTitleSegment = scopeNames.length > 0 || title !== rootLabel;
 
 	function beginEditing() {
 		if (!currentPath) {
@@ -272,12 +272,12 @@ export function PathBreadcrumb({
 		>
 			<PathIcon className="titlebar-path-icon" size={13} aria-hidden />
 			<span>{rootLabel}</span>
-			{scopeName ? (
-				<>
+			{scopeNames.map((scopeName, index) => (
+				<span className="crumb-group" key={`${scopeName}:${index}`}>
 					<span className="crumb-separator">/</span>
-					<span>{scopeName}</span>
-				</>
-			) : null}
+					<span className="crumb-scope">{scopeName}</span>
+				</span>
+			))}
 			{showTitleSegment ? (
 				<>
 					<span className="crumb-separator">/</span>
