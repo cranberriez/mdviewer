@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { LayoutDashboard, Minus, Square, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, LayoutDashboard, Minus, Square, X } from 'lucide-react';
 import { MenuBar, type MenuBarState } from './MenuBar';
 import { PathBreadcrumb } from './PathBreadcrumb';
 
@@ -17,10 +17,13 @@ interface TitleBarProps {
 	scopeNames?: string[];
 	title: string;
 	onMenuAction: (id: string) => void;
+	canGoBack: boolean;
+	canGoForward: boolean;
+	navigationMode?: 'workspace' | 'home' | 'hidden';
+	onGoBack: () => void;
+	onGoForward: () => void;
 	onGoHome: () => void;
 	onNavigatePath: (path: string) => Promise<void>;
-	/** Hide workspace navigation controls on the Home/onboarding overlay. */
-	hideExplorerToggle?: boolean;
 }
 
 export function TitleBar({
@@ -32,9 +35,13 @@ export function TitleBar({
 	scopeNames = [],
 	title,
 	onMenuAction,
+	canGoBack,
+	canGoForward,
+	navigationMode = 'workspace',
+	onGoBack,
+	onGoForward,
 	onGoHome,
 	onNavigatePath,
-	hideExplorerToggle = false,
 }: TitleBarProps) {
 	const [isMaximized, setIsMaximized] = useState(false);
 	const headerRef = useRef<HTMLElement | null>(null);
@@ -89,7 +96,7 @@ export function TitleBar({
 
 	return (
 		<header className="titlebar" data-tauri-drag-region ref={headerRef}>
-			{hideExplorerToggle ? null : (
+			{navigationMode === 'workspace' ? (
 				<button
 					type="button"
 					className="titlebar-button titlebar-home"
@@ -99,11 +106,38 @@ export function TitleBar({
 				>
 					<LayoutDashboard size={15} />
 				</button>
-			)}
+			) : null}
+
+			{navigationMode !== 'hidden' ? (
+				<div className="titlebar-navigation" aria-label="Navigation">
+					<button
+						type="button"
+						className="titlebar-button"
+						aria-label="Go back"
+						title="Go back (Alt+Left, Mouse 4)"
+						disabled={!canGoBack}
+						onClick={onGoBack}
+					>
+						<ArrowLeft size={15} />
+					</button>
+					{navigationMode === 'workspace' ? (
+						<button
+							type="button"
+							className="titlebar-button"
+							aria-label="Go forward"
+							title="Go forward (Alt+Right, Mouse 5)"
+							disabled={!canGoForward}
+							onClick={onGoForward}
+						>
+							<ArrowRight size={15} />
+						</button>
+					) : null}
+				</div>
+			) : null}
 
 			<MenuBar state={menuState} compact={menuCompact} onAction={onMenuAction} />
 
-			{hideExplorerToggle ? (
+			{navigationMode !== 'workspace' ? (
 				<div className="titlebar-crumb" data-tauri-drag-region>
 					<span data-tauri-drag-region>{title}</span>
 				</div>

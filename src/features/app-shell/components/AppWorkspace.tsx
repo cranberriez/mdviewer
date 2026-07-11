@@ -36,7 +36,11 @@ interface AppWorkspaceProps {
 		menuState: MenuBarState;
 		overlay: 'onboarding' | 'home' | null;
 		title: string;
+		canGoBack: boolean;
+		canGoForward: boolean;
 		onMenuAction: (id: string) => void;
+		onGoBack: () => void;
+		onGoForward: () => void;
 		onGoHome: () => void;
 		onNavigatePath: (path: string) => Promise<void>;
 		onToggleExplorer: () => void;
@@ -141,10 +145,16 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 				rootName={overlay ? undefined : shell.activeRoot?.name}
 				scopeNames={overlay ? [] : shell.breadcrumbScopes}
 				title={overlay ? 'Markdown Viewer' : shell.title}
+				canGoBack={shell.canGoBack}
+				canGoForward={shell.canGoForward}
+				navigationMode={
+					overlay === 'home' ? 'home' : overlay === 'onboarding' ? 'hidden' : 'workspace'
+				}
 				onMenuAction={shell.onMenuAction}
+				onGoBack={shell.onGoBack}
+				onGoForward={shell.onGoForward}
 				onGoHome={shell.onGoHome}
 				onNavigatePath={shell.onNavigatePath}
-				hideExplorerToggle={overlay !== null}
 			/>
 
 			<div className="workspace">

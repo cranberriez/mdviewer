@@ -18,6 +18,7 @@ import {
 	parentPath,
 } from '../../../shared/utils/path';
 import { configureShellIntegration, entryForPath, folderEntry } from '../../files/api/filesApi';
+import type { NavigationDestination } from './useNavigationHistory';
 
 interface UseFileWorkspaceOptions {
 	activeRoot: Entry | null;
@@ -51,7 +52,7 @@ export function useFileWorkspace({
 	const { openFileAtPath, setOpenFile, setOpenFilePath } = openFileController;
 
 	const selectLocation = useCallback(
-		async (location: Entry, options?: { restoreLastFile?: boolean }) => {
+		async (location: Entry, options?: { restoreLastFile?: boolean; skipRecent?: boolean }) => {
 			const recent = useSavedLocationsStore
 				.getState()
 				.recents.find(
@@ -66,7 +67,9 @@ export function useFileWorkspace({
 			setExpanded(new Set());
 			setError(null);
 			setOverlay(null);
-			touchRootRecent({ path: location.path, name: location.name });
+			if (!options?.skipRecent) {
+				touchRootRecent({ path: location.path, name: location.name });
+			}
 			await loadFolder(location.path);
 			if (options?.restoreLastFile !== false && recent?.lastFile) {
 				await openFileAtPath(recent.lastFile.path, { skipRecent: true });
@@ -137,11 +140,49 @@ export function useFileWorkspace({
 		[openFileAtPath, recordFileRecent, selectLocation, setOverlay]
 	);
 
+	const restoreNavigationDestination = useCallback(
+		async (destination: Extract<NavigationDestination, { kind: 'workspace' }>) => {
+			if (destination.root) {
+				await selectLocation(destination.root, {
+					restoreLastFile: false,
+					skipRecent: true,
+				});
+				if (destination.filePath) {
+					await openFileAtPath(destination.filePath, { skipRecent: true });
+				}
+				return;
+			}
+
+			setActiveRoot(null);
+			setExpanded(new Set());
+			setSelectedFolderPath(destination.filePath ? parentPath(destination.filePath) : null);
+			setOpenFile(null);
+			setOpenFilePath(null);
+			setError(null);
+			setOverlay(null);
+			if (destination.filePath) {
+				await openFileAtPath(destination.filePath, { skipRecent: true });
+			}
+		},
+		[
+			openFileAtPath,
+			selectLocation,
+			setActiveRoot,
+			setError,
+			setExpanded,
+			setOpenFile,
+			setOpenFilePath,
+			setOverlay,
+			setSelectedFolderPath,
+		]
+	);
+
 	return {
 		...openFileController,
 		...folderTree,
 		...savedLocations,
 		openExternalPath,
+		restoreNavigationDestination,
 		selectLocation,
 	};
 }

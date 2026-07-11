@@ -271,16 +271,22 @@ export function PathBreadcrumb({
 			onClick={beginEditing}
 		>
 			<PathIcon className="titlebar-path-icon" size={13} aria-hidden />
-			<span>{rootLabel}</span>
+			<span className="crumb-root" aria-hidden>
+				/
+			</span>
 			{scopeNames.map((scopeName, index) => (
-				<span className="crumb-group" key={`${scopeName}:${index}`}>
-					<span className="crumb-separator">/</span>
+				<span
+					className="crumb-group"
+					key={`${scopeName}:${index}`}
+					style={{ flexShrink: 16 ** Math.min(4, scopeNames.length - index) }}
+				>
+					{index > 0 ? <span className="crumb-separator">/</span> : null}
 					<span className="crumb-scope">{scopeName}</span>
 				</span>
 			))}
 			{showTitleSegment ? (
 				<>
-					<span className="crumb-separator">/</span>
+					{scopeNames.length > 0 ? <span className="crumb-separator">/</span> : null}
 					<span className="crumb-name">{title}</span>
 				</>
 			) : null}

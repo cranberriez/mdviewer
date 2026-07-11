@@ -23,6 +23,10 @@ import { useFileWorkspace } from './features/app-shell/hooks/useFileWorkspace';
 import { useFindAfterOpen } from './features/app-shell/hooks/useFindAfterOpen';
 import { useInitialLocations } from './features/app-shell/hooks/useInitialLocations';
 import { useOpenWith } from './features/app-shell/hooks/useOpenWith';
+import {
+	type NavigationDestination,
+	useNavigationHistory,
+} from './features/app-shell/hooks/useNavigationHistory';
 import { AppMenus } from './features/app-shell/components/AppMenus';
 import { AppOnboardingOverlay } from './features/app-shell/components/AppOnboardingOverlay';
 import { AppWorkspace } from './features/app-shell/components/AppWorkspace';
@@ -46,6 +50,7 @@ import {
 	useSavedLocationsStore,
 } from './features/saved-locations/state/useSavedLocationsStore';
 import { selectMenuTargets, useMenuStore } from './features/app-shell/state/useMenuStore';
+import { useFileStore } from './features/files/state/useFileStore';
 import './App.css';
 
 function App() {
@@ -134,6 +139,7 @@ function App() {
 		pinFolder,
 		recents,
 		refreshFolder,
+		restoreNavigationDestination,
 		renderedMarkdown,
 		saving,
 		saveOpenFile,
@@ -156,6 +162,71 @@ function App() {
 		defaultLocations: defaultLocs,
 		initialOpenFilePath: initialSession.openFilePath,
 	});
+	const getWorkspaceDestination = useCallback<
+		() => Extract<NavigationDestination, { kind: 'workspace' }>
+	>(() => {
+		const root = useExplorerStore.getState().activeRoot;
+		return {
+			kind: 'workspace',
+			root: root ? { ...root } : null,
+			filePath: useFileStore.getState().openFilePath,
+		};
+	}, []);
+	const getCurrentDestination = useCallback((): NavigationDestination | null => {
+		const currentOverlay = useUiStore.getState().overlay;
+		if (currentOverlay === 'onboarding') {
+			return null;
+		}
+		return currentOverlay === 'home' ? { kind: 'home' } : getWorkspaceDestination();
+	}, [getWorkspaceDestination]);
+	const clearCrossFileSearchRef = useRef<(() => void) | null>(null);
+	const restoreDestination = useCallback(
+		async (destination: NavigationDestination) => {
+			clearCrossFileSearchRef.current?.();
+			if (destination.kind === 'home') {
+				setOverlay('home');
+				return;
+			}
+			await restoreNavigationDestination(destination);
+		},
+		[restoreNavigationDestination, setOverlay]
+	);
+	const navigation = useNavigationHistory({
+		enabled: overlay !== 'onboarding',
+		getCurrentDestination,
+		onNavigate: restoreDestination,
+	});
+	useEffect(() => {
+		if (!sessionHydrated || overlay === 'onboarding') {
+			return;
+		}
+		const current = getCurrentDestination();
+		if (!current) {
+			return;
+		}
+		if (initialConfiguration.onboardingCompleted && overlay === 'home') {
+			navigation.initialize([getWorkspaceDestination(), current]);
+			return;
+		}
+		navigation.initialize([current]);
+	}, [
+		getCurrentDestination,
+		getWorkspaceDestination,
+		initialConfiguration.onboardingCompleted,
+		navigation.initialize,
+		overlay,
+		sessionHydrated,
+	]);
+	const navigateOpenFileAtPath = useCallback(
+		(path: string, options?: Parameters<typeof openFileAtPath>[1]) =>
+			navigation.performNavigation(() => openFileAtPath(path, options)),
+		[navigation.performNavigation, openFileAtPath]
+	);
+	const navigateOpenExternalPath = useCallback(
+		(path: string, options?: Parameters<typeof openExternalPath>[1]) =>
+			navigation.performNavigation(() => openExternalPath(path, options)),
+		[navigation.performNavigation, openExternalPath]
+	);
 	const configurationRef = useRef<AppConfigurationState>({
 		...selectUiConfiguration(useUiStore.getState()),
 		...selectSavedConfiguration(useSavedLocationsStore.getState()),
@@ -183,14 +254,14 @@ function App() {
 		loadFolder,
 		openFileAtPath,
 	});
-	useOpenWith({ sessionHydrated, openExternalPath, onError: setError });
+	useOpenWith({ sessionHydrated, openExternalPath: navigateOpenExternalPath, onError: setError });
 
 	const { scrollToAnchor, handleLinkClick } = usePreviewNavigation({
 		findTargetRef,
 		mode,
 		openFilePath,
 		renderedMarkdown,
-		openFileAtPath,
+		openFileAtPath: navigateOpenFileAtPath,
 		onError: setError,
 	});
 
@@ -208,8 +279,9 @@ function App() {
 	} = useCrossFileSearch({
 		activeRoot,
 		onFindQueryPending: queueFindQueryAfterOpen,
-		openFileAtPath,
+		openFileAtPath: navigateOpenFileAtPath,
 	});
+	clearCrossFileSearchRef.current = clearCrossFileSearch;
 
 	useEffect(() => {
 		clearCrossFileSearch();
@@ -217,28 +289,36 @@ function App() {
 
 	const handleSelectLocation = useCallback(
 		async (location: Parameters<typeof selectLocation>[0]) => {
-			clearCrossFileSearch();
-			await selectLocation(location);
+			await navigation.performNavigation(async () => {
+				clearCrossFileSearch();
+				await selectLocation(location);
+			});
 		},
-		[clearCrossFileSearch, selectLocation]
+		[clearCrossFileSearch, navigation.performNavigation, selectLocation]
 	);
 	const handleOpenFolderAsRoot = useCallback(async () => {
-		clearCrossFileSearch();
-		await openFolderAsRoot();
-	}, [clearCrossFileSearch, openFolderAsRoot]);
+		await navigation.performNavigation(async () => {
+			clearCrossFileSearch();
+			await openFolderAsRoot();
+		});
+	}, [clearCrossFileSearch, navigation.performNavigation, openFolderAsRoot]);
 	const handleOpenRecent = useCallback(
 		async (item: Parameters<typeof openRecent>[0]) => {
-			clearCrossFileSearch();
-			await openRecent(item);
+			await navigation.performNavigation(async () => {
+				clearCrossFileSearch();
+				await openRecent(item);
+			});
 		},
-		[clearCrossFileSearch, openRecent]
+		[clearCrossFileSearch, navigation.performNavigation, openRecent]
 	);
 	const handleNavigatePath = useCallback(
 		async (path: string) => {
-			clearCrossFileSearch();
-			await openExternalPath(path, { restoreLastFileForFolder: false });
+			await navigation.performNavigation(async () => {
+				clearCrossFileSearch();
+				await openExternalPath(path, { restoreLastFileForFolder: false });
+			});
 		},
-		[clearCrossFileSearch, openExternalPath]
+		[clearCrossFileSearch, navigation.performNavigation, openExternalPath]
 	);
 
 	const {
@@ -253,7 +333,7 @@ function App() {
 		childrenCache,
 		expanded,
 		loadingPaths,
-		openFileAtPath,
+		openFileAtPath: navigateOpenFileAtPath,
 		refreshFolder,
 		selectLocation: handleSelectLocation,
 		loadFolder,
@@ -269,7 +349,7 @@ function App() {
 			openFilePath,
 			loadFolder,
 			refreshFolder,
-			openFileAtPath,
+			openFileAtPath: navigateOpenFileAtPath,
 			onError: setError,
 			onExpandedChange: setExpanded,
 			onFocusedEntryChange: setFocusedEntry,
@@ -281,7 +361,7 @@ function App() {
 	const handleContextAction = useExplorerContextActions({
 		locations,
 		loadFolder,
-		openFileAtPath,
+		openFileAtPath: navigateOpenFileAtPath,
 		pinFolder,
 		refreshFolder,
 		selectLocation: handleSelectLocation,
@@ -357,6 +437,14 @@ function App() {
 	const handleToggleMerged = useCallback(() => {
 		setBarMerged((merged) => !merged);
 	}, [setBarMerged]);
+	const handleGoHome = useCallback(() => {
+		void navigation.performNavigation(() => setOverlay('home'));
+	}, [navigation.performNavigation, setOverlay]);
+	const handleSelectFile = useCallback(
+		(entry: Parameters<typeof selectFile>[0]) =>
+			navigation.performNavigation(() => selectFile(entry)),
+		[navigation.performNavigation, selectFile]
+	);
 	const handleFormatAction = useCallback(
 		(action: MarkdownAction) => {
 			setPendingFormatAction((current) => ({
@@ -402,8 +490,12 @@ function App() {
 			menuState,
 			overlay,
 			title,
+			canGoBack: navigation.canGoBack && !navigation.navigating,
+			canGoForward: navigation.canGoForward && !navigation.navigating,
 			onMenuAction: handleMenuAction,
-			onGoHome: () => setOverlay('home'),
+			onGoBack: () => void navigation.goBack(),
+			onGoForward: () => void navigation.goForward(),
+			onGoHome: handleGoHome,
 			onNavigatePath: handleNavigatePath,
 			onToggleExplorer: handleToggleExplorer,
 		}),
@@ -414,10 +506,15 @@ function App() {
 			explorerHidden,
 			fileActionControls,
 			handleMenuAction,
+			handleGoHome,
 			handleNavigatePath,
 			handleToggleExplorer,
 			menuState,
-			setOverlay,
+			navigation.canGoBack,
+			navigation.canGoForward,
+			navigation.goBack,
+			navigation.goForward,
+			navigation.navigating,
 			overlay,
 			openFile?.path,
 			title,
@@ -485,9 +582,9 @@ function App() {
 			onSavedContextMenu: (location, event) =>
 				openAppContextMenu({ kind: 'saved', location }, event),
 			onOpenRecent: handleOpenRecent,
-			onOpenRecentFile: (file) => void openFileAtPath(file.path),
+			onOpenRecentFile: (file) => void navigateOpenFileAtPath(file.path),
 			onRecentContextMenu: (item, event) => openAppContextMenu({ kind: 'recent', item }, event),
-			onSelectFile: selectFile,
+			onSelectFile: handleSelectFile,
 			onSelectHeading: scrollToAnchor,
 			onSelectLocation: handleSelectLocation,
 			onToggleFolder: toggleFolder,
@@ -510,7 +607,7 @@ function App() {
 			locations,
 			openAppContextMenu,
 			openFilePath,
-			openFileAtPath,
+			navigateOpenFileAtPath,
 			handleOpenFolderAsRoot,
 			handleOpenRecent,
 			openSearchResult,
@@ -526,7 +623,7 @@ function App() {
 			searchResults,
 			searchTruncated,
 			searchedQuery,
-			selectFile,
+			handleSelectFile,
 			handleSelectLocation,
 			selectedFolderPath,
 			setSearchQuery,

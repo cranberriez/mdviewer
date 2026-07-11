@@ -39,6 +39,26 @@
 	color: var(--color-text-primary);
 }
 
+.titlebar-button:disabled {
+	color: var(--color-text-muted);
+	opacity: 0.45;
+}
+
+.titlebar-button:disabled:hover {
+	background: transparent;
+	color: var(--color-text-muted);
+}
+
+.titlebar-navigation {
+	display: flex;
+	align-items: center;
+	gap: 1px;
+}
+
+.titlebar-navigation .titlebar-button {
+	padding: 0 6px;
+}
+
 .titlebar-button.bright {
 	background: var(--color-bg-active);
 	color: var(--color-text-on-active);
@@ -232,18 +252,26 @@
 	color: var(--color-text-muted);
 }
 
+.titlebar-crumb .crumb-root {
+	flex: 0 0 auto;
+	color: var(--color-text-muted);
+}
+
 .titlebar-crumb .crumb-group {
 	min-width: 0;
 	display: flex;
 	align-items: center;
 	gap: 6px;
+	overflow: hidden;
 }
 
 .titlebar-crumb .crumb-scope {
-	min-width: 0;
+	min-width: 2ch;
 }
 
 .titlebar-crumb .crumb-name {
+	min-width: 4ch;
+	flex: 0 1 auto;
 	color: var(--color-text-primary);
 }
 

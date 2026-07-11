@@ -149,8 +149,8 @@ export function useAppDragDropController({
 			}
 
 			const kind = fileKindFromPath(firstPath);
-			await openFileAtPath(firstPath, { mode: 'preview', skipRecent: true });
 			onOverlayChange(null);
+			await openFileAtPath(firstPath, { mode: 'preview', skipRecent: true });
 			onRecentsChange((current) =>
 				recordRecentSingleFile(current, { path: firstPath, name: fileName(firstPath), kind })
 			);
