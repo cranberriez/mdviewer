@@ -56,18 +56,15 @@ function typedFragment(draft: string, basePath: string) {
 	return normalizedDraft.slice(normalizedBase.length).replace(/^\/+/, '').split('/')[0] ?? '';
 }
 
+function comparablePath(value: string) {
+	return unquotePath(value).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+
 function nearbyEntries(entries: Entry[], fragment: string) {
 	const query = fragment.toLowerCase();
-	const ranked = [...entries].sort((left, right) => {
-		if (query) {
-			const leftMatches = left.name.toLowerCase().startsWith(query);
-			const rightMatches = right.name.toLowerCase().startsWith(query);
-			if (leftMatches !== rightMatches) {
-				return leftMatches ? -1 : 1;
-			}
-		}
-		return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
-	});
+	const ranked = entries
+		.filter((entry) => !query || entry.name.toLowerCase().startsWith(query))
+		.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }));
 	return [
 		...ranked.filter((entry) => entry.is_dir).slice(0, MAX_NEARBY_FOLDER_SUGGESTIONS),
 		...ranked.filter((entry) => !entry.is_dir).slice(0, MAX_NEARBY_FILE_SUGGESTIONS),
@@ -92,7 +89,7 @@ async function resolveNearbySuggestions(draft: string) {
 			}
 			const fragment = typedFragment(draft, base.path);
 			return [
-				...(parentDirectory
+				...(!fragment && parentDirectory
 					? [
 							{
 								id: `parent:${parentDirectory}`,
@@ -102,12 +99,6 @@ async function resolveNearbySuggestions(draft: string) {
 							},
 						]
 					: []),
-				{
-					id: `current:${base.path}`,
-					kind: 'current' as const,
-					label: base.path,
-					path: base.path,
-				},
 				...nearbyEntries(entries, fragment).map<PathSuggestion>((entry) => ({
 					id: `${entry.is_dir ? 'folder' : 'file'}:${entry.path}`,
 					kind: entry.is_dir ? 'folder' : 'file',
@@ -139,6 +130,10 @@ export function usePathSuggestions({
 			return [];
 		}
 		const parentDirectory = parentCandidate(currentDirectory);
+		const typedPath = unquotePath(draft);
+		if (typedPath && comparablePath(typedPath) !== comparablePath(currentDirectory)) {
+			return [];
+		}
 		return [
 			...(parentDirectory
 				? [
@@ -150,14 +145,18 @@ export function usePathSuggestions({
 						},
 					]
 				: []),
-			{
-				id: `current:${currentDirectory}`,
-				kind: 'current',
-				label: currentDirectory,
-				path: currentDirectory,
-			},
+			...(!typedPath
+				? [
+						{
+							id: `current:${currentDirectory}`,
+							kind: 'current' as const,
+							label: currentDirectory,
+							path: currentDirectory,
+						},
+					]
+				: []),
 		];
-	}, [currentPath, currentPathKind]);
+	}, [currentPath, currentPathKind, draft]);
 	const [nearbySuggestions, setNearbySuggestions] = useState<PathSuggestion[]>([]);
 	const [loading, setLoading] = useState(false);
 
