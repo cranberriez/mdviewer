@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import type { Entry } from '../../../shared/types/files';
 import type { AppSessionState } from '../../../shared/state/persistence';
 import { parentPath } from '../../../shared/utils/path';
@@ -89,3 +90,15 @@ export const selectExplorerTree = (state: ExplorerStore) => ({
 	selectedFolderPath: state.selectedFolderPath,
 	sessionHydrated: state.sessionHydrated,
 });
+
+export const selectExplorerActions = (state: ExplorerStore) => ({
+	setActiveRoot: state.setActiveRoot,
+	setError: state.setError,
+	setExpanded: state.setExpanded,
+	setFocusedEntry: state.setFocusedEntry,
+	setSelectedFolderPath: state.setSelectedFolderPath,
+});
+
+export function useExplorerActions() {
+	return useExplorerStore(useShallow(selectExplorerActions));
+}

@@ -1,10 +1,11 @@
-import { Folder, FolderOpen, List, Pin, PinOff, Search } from 'lucide-react';
+import { Clock3, Folder, FolderOpen, List, Pin, PinOff, Search } from 'lucide-react';
 import type { SourcesHeaderActionsVisibility } from '../../../../shared/state/persistence';
-import { ContextMenuSurface } from './ContextMenuSurface';
-import type { MenuEntry } from './ContextMenuSurface';
+import { ContextMenuSurface } from '../../../../shared/ui/menu/ContextMenuSurface';
+import type { MenuEntry } from '../../../../shared/ui/menu/ContextMenuSurface';
 
 export type SourcesHeaderMenuAction =
 	| 'switch-explorer'
+	| 'switch-recent'
 	| 'switch-search'
 	| 'switch-outline'
 	| 'toggle-root-pin'
@@ -35,9 +36,12 @@ function entriesForSourcesHeader({
 >): MenuEntry<SourcesHeaderMenuAction>[] {
 	return [
 		{ id: 'switch-explorer', label: 'Switch to Explorer', icon: Folder },
+		{ id: 'switch-recent', label: 'Switch to Recent', icon: Clock3 },
 		{ id: 'switch-search', label: 'Switch to Search', icon: Search },
 		...(showOutlineAction
-			? ([{ id: 'switch-outline', label: 'Switch to Outline', icon: List }] as MenuEntry<SourcesHeaderMenuAction>[])
+			? ([
+					{ id: 'switch-outline', label: 'Switch to Outline', icon: List },
+				] as MenuEntry<SourcesHeaderMenuAction>[])
 			: []),
 		{
 			id: 'toggle-root-pin',

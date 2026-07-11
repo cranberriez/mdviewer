@@ -32,6 +32,9 @@ Pushing a version tag that starts with `v` creates a GitHub Release and uploads 
 - `src-tauri/tauri.conf.json`
 - `src-tauri/Cargo.toml`
 
+Also make sure the matching version changelog exists. Patch versions use the same
+major/minor changelog, so `v0.4.7` reads `changelogs/0.4.md` for the GitHub Release body.
+
 Example release from the command line:
 
 ```powershell

@@ -1,14 +1,10 @@
 import type { ComponentProps, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from 'react';
 import type { Entry, FileSearchMatch, OpenFile } from '../../../shared/types/files';
-import type {
-	AppTheme,
-	ExplorerHeaderActionsVisibility,
-	RecentItem,
-	SourcesHeaderActionsVisibility,
-} from '../../../shared/state/persistence';
+import type { RecentFile, RecentItem } from '../../../shared/state/persistence';
 import type { DragSessionState, InternalDragStart } from '../../dnd/dropTypes';
+import { SidebarActivityRail } from '../../explorer/components/SidebarActivityRail';
 import { SidebarResizeHandle } from '../../explorer/components/SidebarResizeHandle';
-import { Sidebar, type SidebarMode } from '../../explorer/components/Sidebar';
+import { Sidebar } from '../../explorer/components/Sidebar';
 import type { InlineDraft } from '../../explorer/components/TreeInlineInput';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
 import { HomeView } from '../../home/components/HomeView';
@@ -32,13 +28,21 @@ interface AppWorkspaceProps {
 	shell: {
 		activeRoot: Entry | null;
 		barMerged: boolean;
-		breadcrumbScope: string | null;
+		breadcrumbScopes: string[];
+		currentPath?: string;
+		currentPathKind: 'file' | 'folder';
 		explorerHidden: boolean;
 		fileActionsSlot: ReactNode;
 		menuState: MenuBarState;
 		overlay: 'onboarding' | 'home' | null;
 		title: string;
+		canGoBack: boolean;
+		canGoForward: boolean;
 		onMenuAction: (id: string) => void;
+		onGoBack: () => void;
+		onGoForward: () => void;
+		onGoHome: () => void;
+		onNavigatePath: (path: string) => Promise<void>;
 		onToggleExplorer: () => void;
 	};
 	sidebar: {
@@ -49,17 +53,12 @@ interface AppWorkspaceProps {
 		contextPath?: string;
 		draft: InlineDraft | null;
 		expanded: Set<string>;
-		explorerHeaderActionsVisible: ExplorerHeaderActionsVisibility;
 		focusedPath?: string;
 		homePath?: string;
 		loadingPaths: Set<string>;
 		locations: Entry[];
-		locationIcons: Record<string, string>;
-		mode: SidebarMode;
 		rootChildren?: Entry[];
 		rootDropActive: boolean;
-		rootPinned: boolean;
-		rootPinDisabled: boolean;
 		search: {
 			query: string;
 			searchedQuery: string;
@@ -74,8 +73,6 @@ interface AppWorkspaceProps {
 		};
 		selectedFolderPath?: string;
 		sidebarWidth: number;
-		sourcesHeaderActionsVisible: SourcesHeaderActionsVisibility;
-		theme: AppTheme;
 		treeDropTargetPath?: string | null;
 		unsavedFilePathKeys: Set<string>;
 		onCreateRootFile: () => void;
@@ -88,14 +85,15 @@ interface AppWorkspaceProps {
 		onRefreshRoot: () => void;
 		onRootContextMenu: (event: ReactMouseEvent) => void;
 		onSavedContextMenu: (location: Entry, event: ReactMouseEvent) => void;
+		onOpenRecent: (item: RecentItem) => void;
+		onOpenRecentFile: (file: RecentFile) => void;
+		onRecentContextMenu: (item: RecentItem, event: ReactMouseEvent) => void;
 		onSelectFile: (entry: Entry) => Promise<void>;
 		onSelectHeading: (id: string) => void;
 		onSelectLocation: (location: Entry) => Promise<void>;
-		onSidebarModeChange: (mode: SidebarMode) => void;
-		onSourcesHeaderContextMenu: (event: ReactMouseEvent) => void;
 		onToggleFolder: (entry: Entry) => Promise<void>;
-		onToggleRootPin: () => void;
-		onToggleTheme: () => void;
+		onPinLocation: (location: Entry) => void;
+		onUnpinLocation: (location: Entry) => void;
 	};
 	home: {
 		dropActive: boolean;
@@ -110,6 +108,8 @@ interface AppWorkspaceProps {
 		onOpenRecent: (item: RecentItem) => void;
 		onRecentContextMenu: (item: RecentItem, event: ReactMouseEvent) => void;
 		onSelectLocation: (location: Entry) => void;
+		openHomeOnStartup: boolean;
+		onOpenHomeOnStartupChange: (enabled: boolean) => void;
 	};
 	preview: {
 		actionBar: ReactNode;
@@ -139,17 +139,33 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 		<>
 			<TitleBar
 				fileActionsSlot={shell.barMerged ? shell.fileActionsSlot : null}
-				explorerHidden={shell.explorerHidden || overlay !== null}
 				menuState={shell.menuState}
+				currentPath={overlay ? undefined : shell.currentPath}
+				currentPathKind={shell.currentPathKind}
 				rootName={overlay ? undefined : shell.activeRoot?.name}
-				scopeName={overlay ? null : shell.breadcrumbScope}
+				scopeNames={overlay ? [] : shell.breadcrumbScopes}
 				title={overlay ? 'Markdown Viewer' : shell.title}
+				canGoBack={shell.canGoBack}
+				canGoForward={shell.canGoForward}
+				navigationMode={
+					overlay === 'home' ? 'home' : overlay === 'onboarding' ? 'hidden' : 'workspace'
+				}
 				onMenuAction={shell.onMenuAction}
-				onToggleExplorer={shell.onToggleExplorer}
-				hideExplorerToggle={overlay !== null}
+				onGoBack={shell.onGoBack}
+				onGoForward={shell.onGoForward}
+				onGoHome={shell.onGoHome}
+				onNavigatePath={shell.onNavigatePath}
 			/>
 
 			<div className="workspace">
+				{overlay === null ? (
+					<SidebarActivityRail
+						explorerHidden={shell.explorerHidden}
+						showOutlineTab={!preview.outlinePanelVisible}
+						onOpenFolder={sidebar.onOpenFolder}
+						onToggleExplorer={shell.onToggleExplorer}
+					/>
+				) : null}
 				{overlay === null ? (
 					<Sidebar
 						width={shell.explorerHidden ? 0 : sidebar.sidebarWidth}
@@ -165,51 +181,32 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 						contextPath={sidebar.contextPath}
 						focusedPath={sidebar.focusedPath}
 						draft={sidebar.draft}
-						sidebarMode={sidebar.mode}
-						searchQuery={sidebar.search.query}
-						searchedQuery={sidebar.search.searchedQuery}
-						searchResults={sidebar.search.results}
-						searchLoading={sidebar.search.loading}
-						searchError={sidebar.search.error}
-						searchTruncated={sidebar.search.truncated}
-						rootRefreshing={
-							sidebar.activeRoot ? sidebar.loadingPaths.has(sidebar.activeRoot.path) : false
-						}
-						explorerHeaderActionsVisible={sidebar.explorerHeaderActionsVisible}
-						sourcesHeaderActionsVisible={sidebar.sourcesHeaderActionsVisible}
+						search={sidebar.search}
 						outlineHtml={preview.openFile?.kind === 'md' ? preview.renderedMarkdown : null}
 						hasOpenFile={Boolean(preview.openFile)}
 						showOutlineTab={!preview.outlinePanelVisible}
 						onSelectHeading={sidebar.onSelectHeading}
-						onSidebarModeChange={sidebar.onSidebarModeChange}
-						onSearchQueryChange={sidebar.search.onQueryChange}
-						onSearchClear={sidebar.search.onClear}
-						onSearchSubmit={sidebar.search.onSubmit}
-						onOpenSearchResult={sidebar.search.onOpenResult}
 						onRefreshRoot={sidebar.onRefreshRoot}
 						onCreateRootFile={sidebar.onCreateRootFile}
 						onCreateRootFolder={sidebar.onCreateRootFolder}
 						onExplorerHeaderContextMenu={sidebar.onExplorerHeaderContextMenu}
-						onSourcesHeaderContextMenu={sidebar.onSourcesHeaderContextMenu}
 						onSelectLocation={sidebar.onSelectLocation}
 						onToggleFolder={sidebar.onToggleFolder}
 						onSelectFile={sidebar.onSelectFile}
 						onEntryContextMenu={sidebar.onEntryContextMenu}
 						onRootContextMenu={sidebar.onRootContextMenu}
 						onSavedContextMenu={sidebar.onSavedContextMenu}
-						onOpenFolder={sidebar.onOpenFolder}
-						rootPinned={sidebar.rootPinned}
-						rootPinDisabled={sidebar.rootPinDisabled}
-						onToggleRootPin={sidebar.onToggleRootPin}
+						onOpenRecent={sidebar.onOpenRecent}
+						onOpenRecentFile={sidebar.onOpenRecentFile}
+						onRecentContextMenu={sidebar.onRecentContextMenu}
+						onPinLocation={sidebar.onPinLocation}
+						onUnpinLocation={sidebar.onUnpinLocation}
 						onDraftSubmit={sidebar.onDraftSubmit}
 						onDraftCancel={sidebar.onDraftCancel}
 						dropTargetPath={sidebar.treeDropTargetPath}
 						rootDropActive={sidebar.rootDropActive}
 						onEntryPointerDown={sidebar.beginInternalDrag}
-						locationIcons={sidebar.locationIcons}
 						homePath={sidebar.homePath}
-						theme={sidebar.theme}
-						onToggleTheme={sidebar.onToggleTheme}
 					/>
 				) : null}
 
@@ -228,6 +225,8 @@ export function AppWorkspace({ shell, sidebar, home, preview, resize }: AppWorks
 						onLocationContextMenu={home.onLocationContextMenu}
 						onRecentContextMenu={home.onRecentContextMenu}
 						onEditSetup={home.onEditSetup}
+						openHomeOnStartup={home.openHomeOnStartup}
+						onOpenHomeOnStartupChange={home.onOpenHomeOnStartupChange}
 						dropActive={home.dropActive}
 					/>
 				) : (

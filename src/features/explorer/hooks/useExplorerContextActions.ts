@@ -7,7 +7,12 @@ import { useFileStore } from '../../files/state/useFileStore';
 import { useMenuStore } from '../../app-shell/state/useMenuStore';
 import { useSavedLocationsStore } from '../../saved-locations/state/useSavedLocationsStore';
 import { useExplorerStore } from '../state/useExplorerStore';
-import { fileKindFromPath, parentPath, relativePath } from '../../../shared/utils/path';
+import {
+	fileKindFromPath,
+	isVisibleFileName,
+	parentPath,
+	relativePath,
+} from '../../../shared/utils/path';
 import { confirmDeleteTarget, pathIsDeletedTarget } from '../utils/contextTargets';
 import type { FileViewMode } from '../../file-actions/components/FileActionControls';
 
@@ -20,6 +25,7 @@ interface UseExplorerContextActionsOptions {
 	) => Promise<void>;
 	pinFolder: (entry: Entry) => void;
 	refreshFolder: (path: string) => Promise<void>;
+	selectLocation: (location: Entry) => Promise<void>;
 	startCreateDraft: (parentPath: string, kind: 'file' | 'folder') => Promise<void>;
 	startRenameDraft: (entry: Entry) => void;
 }
@@ -30,6 +36,7 @@ export function useExplorerContextActions({
 	openFileAtPath,
 	pinFolder,
 	refreshFolder,
+	selectLocation,
 	startCreateDraft,
 	startRenameDraft,
 }: UseExplorerContextActionsOptions) {
@@ -63,6 +70,10 @@ export function useExplorerContextActions({
 						break;
 					case 'open':
 						if (target.kind === 'file') {
+							if (!isVisibleFileName(target.path)) {
+								setError(`Unsupported file type: ${target.name}`);
+								break;
+							}
 							await openFileAtPath(target.path);
 						}
 						break;
@@ -79,6 +90,16 @@ export function useExplorerContextActions({
 							is_dir: true,
 							kind: 'folder',
 						});
+						break;
+					case 'open-as-root':
+						if (target.kind === 'folder') {
+							await selectLocation({
+								name: target.name,
+								path: target.path,
+								is_dir: true,
+								kind: 'folder',
+							});
+						}
 						break;
 					case 'rename':
 						startRenameDraft({
@@ -148,11 +169,16 @@ export function useExplorerContextActions({
 						setRecents((current) =>
 							current
 								.filter((item) => !pathIsDeletedTarget(target, item.path))
-								.map((item) =>
-									item.lastFile && pathIsDeletedTarget(target, item.lastFile.path)
-										? { ...item, lastFile: undefined }
-										: item
-								)
+								.map((item) => ({
+									...item,
+									lastFile:
+										item.lastFile && pathIsDeletedTarget(target, item.lastFile.path)
+											? undefined
+											: item.lastFile,
+									recentFiles: item.recentFiles?.filter(
+										(file) => !pathIsDeletedTarget(target, file.path)
+									),
+								}))
 						);
 
 						if (pathIsDeletedTarget(target, activeRoot?.path)) {
@@ -186,6 +212,7 @@ export function useExplorerContextActions({
 			pinFolder,
 			refreshFolder,
 			removeRecentItem,
+			selectLocation,
 			setActiveRoot,
 			setChildrenCache,
 			setError,

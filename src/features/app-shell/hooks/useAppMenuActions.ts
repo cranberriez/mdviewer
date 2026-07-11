@@ -3,6 +3,8 @@ import { revealInExplorer } from '../../files/api/filesApi';
 import { selectOpenFileStatus, useFileStore } from '../../files/state/useFileStore';
 import { useExplorerStore } from '../../explorer/state/useExplorerStore';
 import { useUiStore } from '../state/useUiStore';
+import { recentItemKind, type RecentItem } from '../../../shared/state/persistence';
+import { useSavedLocationsStore } from '../../saved-locations/state/useSavedLocationsStore';
 
 const execEditCommand = document.execCommand.bind(document) as (
 	commandId: string,
@@ -17,6 +19,8 @@ interface FindControls {
 interface UseAppMenuActionsOptions {
 	find: FindControls;
 	openFolderAsRoot: () => Promise<void>;
+	openRecent: (item: RecentItem) => Promise<void>;
+	onOpenPreferences: () => void;
 	saveOpenFile: () => Promise<void>;
 	startCreateDraft: (parentPath: string, kind: 'file' | 'folder') => Promise<void>;
 }
@@ -24,6 +28,8 @@ interface UseAppMenuActionsOptions {
 export function useAppMenuActions({
 	find,
 	openFolderAsRoot,
+	openRecent,
+	onOpenPreferences,
 	saveOpenFile,
 	startCreateDraft,
 }: UseAppMenuActionsOptions) {
@@ -43,10 +49,23 @@ export function useAppMenuActions({
 	const setSidebarMode = useUiStore((state) => state.setSidebarMode);
 	const setTheme = useUiStore((state) => state.setTheme);
 	const theme = useUiStore((state) => state.theme);
+	const recents = useSavedLocationsStore((state) => state.recents);
+	const recentRoots = useMemo(
+		() => recents.filter((item) => recentItemKind(item) === 'root'),
+		[recents]
+	);
 
 	const handleMenuAction = useCallback(
 		(id: string) => {
 			const targetFolder = selectedFolderPath ?? activeRootPath ?? null;
+			if (id.startsWith('open-recent-')) {
+				const index = Number.parseInt(id.slice('open-recent-'.length), 10);
+				const recent = recentRoots[index];
+				if (recent) {
+					void openRecent(recent);
+				}
+				return;
+			}
 
 			switch (id) {
 				case 'new-file':
@@ -61,6 +80,9 @@ export function useAppMenuActions({
 					return;
 				case 'open-folder':
 					void openFolderAsRoot();
+					return;
+				case 'preferences':
+					onOpenPreferences();
 					return;
 				case 'save':
 					void saveOpenFile();
@@ -130,6 +152,9 @@ export function useAppMenuActions({
 			openFile,
 			openFilePath,
 			openFolderAsRoot,
+			openRecent,
+			onOpenPreferences,
+			recentRoots,
 			saveOpenFile,
 			selectedFolderPath,
 			setBarMerged,
@@ -154,8 +179,9 @@ export function useAppMenuActions({
 			barMerged,
 			theme,
 			mode,
+			recentRoots,
 		}),
-		[barMerged, dirty, explorerHidden, mode, openFile, outlinePanelVisible, theme]
+		[barMerged, dirty, explorerHidden, mode, openFile, outlinePanelVisible, recentRoots, theme]
 	);
 
 	return { handleMenuAction, menuState };

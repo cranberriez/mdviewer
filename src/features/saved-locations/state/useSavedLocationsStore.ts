@@ -21,6 +21,7 @@ function resolveRecentsUpdater(current: RecentItem[], updater: RecentsUpdater) {
 }
 
 interface SavedLocationsState {
+	homeLocation?: Entry;
 	locationIcons: Record<string, string>;
 	onboardingCompleted: boolean;
 	pinnedLocations: Entry[];
@@ -32,6 +33,7 @@ interface SavedLocationsState {
 interface SavedLocationsActions {
 	hydrate: (configuration: Partial<AppConfigurationState>) => void;
 	setOnboardingCompleted: (onboardingCompleted: boolean) => void;
+	setHomeLocation: (homeLocation: Entry) => void;
 	setRecents: (updater: RecentsUpdater) => void;
 	setUserName: (userName: string) => void;
 	applyLocationIcon: (location: Entry, iconName: string) => void;
@@ -111,6 +113,7 @@ function unpinLocationInState(
 
 export const useSavedLocationsStore = create<SavedLocationsStore>()((set) => ({
 	locationIcons: {},
+	homeLocation: undefined,
 	onboardingCompleted: false,
 	pinnedLocations: [],
 	recents: [],
@@ -119,6 +122,7 @@ export const useSavedLocationsStore = create<SavedLocationsStore>()((set) => ({
 
 	hydrate: (configuration) =>
 		set({
+			homeLocation: configuration.homeLocation,
 			locationIcons: configuration.locationIcons ?? {},
 			onboardingCompleted: configuration.onboardingCompleted ?? false,
 			pinnedLocations: configuration.pinnedLocations ?? [],
@@ -127,6 +131,7 @@ export const useSavedLocationsStore = create<SavedLocationsStore>()((set) => ({
 			userName: configuration.userName ?? '',
 		}),
 	setOnboardingCompleted: (onboardingCompleted) => set({ onboardingCompleted }),
+	setHomeLocation: (homeLocation) => set({ homeLocation }),
 	setRecents: (updater) =>
 		set((state) => ({ recents: resolveRecentsUpdater(state.recents, updater) })),
 	setUserName: (userName) => set({ userName }),
@@ -177,6 +182,7 @@ export const useSavedLocationsStore = create<SavedLocationsStore>()((set) => ({
 }));
 
 export const selectSavedConfiguration = (state: SavedLocationsStore) => ({
+	homeLocation: state.homeLocation,
 	pinnedLocations: state.pinnedLocations,
 	removedDefaultPaths: state.removedDefaultPaths,
 	locationIcons: state.locationIcons,

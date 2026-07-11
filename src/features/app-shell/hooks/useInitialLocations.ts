@@ -9,12 +9,14 @@ interface UseInitialLocationsOptions {
 	initialConfiguration: Partial<AppConfigurationState>;
 	initialSession: AppSessionState;
 	loadFolder: (path: string, options?: { quiet?: boolean; force?: boolean }) => Promise<void>;
+	openFileAtPath: (path: string, options?: { skipRecent?: boolean }) => Promise<void>;
 }
 
 export function useInitialLocations({
 	initialConfiguration,
 	initialSession,
 	loadFolder,
+	openFileAtPath,
 }: UseInitialLocationsOptions) {
 	const setActiveRoot = useExplorerStore((state) => state.setActiveRoot);
 	const setDefaultLocs = useExplorerStore((state) => state.setDefaultLocs);
@@ -27,10 +29,13 @@ export function useInitialLocations({
 
 		async function loadLocations() {
 			try {
-				const defaults = await defaultLocations();
+				const systemDefaults = await defaultLocations();
 				if (cancelled) {
 					return;
 				}
+				const defaults = initialConfiguration.homeLocation
+					? [initialConfiguration.homeLocation, ...systemDefaults.slice(1)]
+					: systemDefaults;
 
 				setDefaultLocs(defaults);
 				const restorable = [...defaults, ...(initialConfiguration.pinnedLocations ?? [])];
@@ -64,6 +69,10 @@ export function useInitialLocations({
 							.filter((path) => path !== first.path)
 							.map((path) => loadFolder(path, { quiet: true }))
 					);
+				}
+
+				if (initialSession.openFilePath) {
+					await openFileAtPath(initialSession.openFilePath, { skipRecent: true });
 				}
 			} catch (cause) {
 				if (!cancelled) {

@@ -97,6 +97,38 @@ jobs:
       - name: Check release version
         run: pnpm check:release-version ${{ steps.meta.outputs.tag }}
 
+      - name: Resolve release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.meta.outputs.tag }}"
+          VERSION="${TAG#v}"
+          VERSION="${VERSION%%-*}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          CHANGELOG="changelogs/${MAJOR}.${MINOR}.md"
+
+          if [[ ! -f "$CHANGELOG" ]]; then
+            echo "::error::Missing release changelog: $CHANGELOG"
+            exit 1
+          fi
+
+          {
+            echo "body<<EOF_RELEASE_BODY"
+            cat "$CHANGELOG"
+            echo
+            echo "## Downloads"
+            echo
+            echo "Windows installer for MDViewer."
+            echo
+            echo "Every asset below is built by GitHub Actions from this tagged commit."
+            echo "You can verify it yourself:"
+            echo '  - SHA-256 checksums: `checksums.txt`'
+            echo '  - Build provenance:  `gh attestation verify <installer> --repo ${{ github.repository }}`'
+            echo '  - SBOM (CycloneDX):  `*-sbom.cdx.json`'
+            echo "EOF_RELEASE_BODY"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and publish Tauri release
         id: tauri
         uses: tauri-apps/tauri-action@v1
@@ -106,14 +138,7 @@ jobs:
           tauriScript: pnpm tauri
           tagName: ${{ steps.meta.outputs.tag }}
           releaseName: MDViewer ${{ steps.meta.outputs.tag }}
-          releaseBody: |
-            Windows installer for MDViewer.
-
-            Every asset below is built by GitHub Actions from this tagged commit.
-            You can verify it yourself:
-              - SHA-256 checksums: `checksums.txt`
-              - Build provenance:  `gh attestation verify <installer> --repo ${{ github.repository }}`
-              - SBOM (CycloneDX):  `*-sbom.cdx.json`
+          releaseBody: ${{ steps.notes.outputs.body }}
           generateReleaseNotes: true
           releaseDraft: false
           prerelease: ${{ steps.meta.outputs.prerelease }}

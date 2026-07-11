@@ -1,4 +1,123 @@
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use tauri::{Emitter, Manager, State};
+
+struct PendingOpenPath(Mutex<Option<String>>);
+
+fn supported_open_path_arg(args: &[String], cwd: &str) -> Option<String> {
+    args.iter().skip(1).find_map(|argument| {
+        let raw = PathBuf::from(argument);
+        let path = if raw.is_absolute() {
+            raw
+        } else {
+            Path::new(cwd).join(raw)
+        };
+        let supported_file = path.is_file() && supported_entry_kind(&path, false).is_some();
+        if path.is_dir() || supported_file {
+            Some(path.display().to_string())
+        } else {
+            None
+        }
+    })
+}
+
+#[tauri::command]
+fn take_pending_open_path(state: State<'_, PendingOpenPath>) -> Option<String> {
+    state.0.lock().ok()?.take()
+}
+
+#[cfg(windows)]
+fn registry_command() -> std::process::Command {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    let mut command = std::process::Command::new("reg.exe");
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
+#[cfg(windows)]
+fn run_registry_command(arguments: &[&str]) -> Result<(), String> {
+    let output = registry_command()
+        .args(arguments)
+        .output()
+        .map_err(|error| error.to_string())?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(if message.is_empty() {
+        format!("Registry command failed with {}", output.status)
+    } else {
+        message
+    })
+}
+
+#[cfg(windows)]
+fn add_shell_verb(key: &str, label: &str, executable: &Path) -> Result<(), String> {
+    let icon = executable.display().to_string();
+    let launch_command = format!("\"{}\" \"%1\"", executable.display());
+    let command_key = format!("{key}\\command");
+
+    run_registry_command(&["add", key, "/ve", "/d", label, "/f"])?;
+    run_registry_command(&["add", key, "/v", "Icon", "/d", &icon, "/f"])?;
+    run_registry_command(&["add", &command_key, "/ve", "/d", &launch_command, "/f"])
+}
+
+#[cfg(windows)]
+fn remove_shell_verb(key: &str) -> Result<(), String> {
+    let exists = registry_command()
+        .args(["query", key])
+        .status()
+        .map_err(|error| error.to_string())?;
+    if !exists.success() {
+        return Ok(());
+    }
+
+    run_registry_command(&["delete", key, "/f"])
+}
+
+#[tauri::command]
+fn configure_shell_integration(markdown_files: bool, folders: bool) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        const MARKDOWN_KEYS: [&str; 2] = [
+            r"HKCU\Software\Classes\SystemFileAssociations\.md\shell\MDViewer",
+            r"HKCU\Software\Classes\SystemFileAssociations\.markdown\shell\MDViewer",
+        ];
+        const FOLDER_KEY: &str =
+            r"HKCU\Software\Classes\Directory\shell\MDViewer";
+        let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+
+        for key in MARKDOWN_KEYS {
+            if markdown_files {
+                add_shell_verb(key, "Open with MDViewer", &executable)?;
+            } else {
+                remove_shell_verb(key)?;
+            }
+        }
+
+        if folders {
+            add_shell_verb(FOLDER_KEY, "Open folder in MDViewer", &executable)?;
+        } else {
+            remove_shell_verb(FOLDER_KEY)?;
+        }
+
+        return Ok(());
+    }
+
+    #[cfg(not(windows))]
+    {
+        if markdown_files || folders {
+            Err("Explorer context-menu integration is currently available on Windows only"
+                .to_string())
+        } else {
+            Ok(())
+        }
+    }
+}
 
 #[derive(serde::Serialize)]
 struct Entry {
@@ -26,7 +145,7 @@ struct SearchResponse {
 
 const MAX_SEARCH_MATCHES: usize = 500;
 
-fn entry_kind(path: &Path, is_dir: bool) -> Option<&'static str> {
+fn supported_entry_kind(path: &Path, is_dir: bool) -> Option<&'static str> {
     if is_dir {
         return Some("folder");
     }
@@ -42,10 +161,42 @@ fn entry_kind(path: &Path, is_dir: bool) -> Option<&'static str> {
     }
 }
 
-fn path_to_entry(path: PathBuf) -> Option<Entry> {
+fn entry_kind(path: &Path, is_dir: bool, show_non_text_files: bool) -> Option<&'static str> {
+    supported_entry_kind(path, is_dir).or_else(|| {
+        if show_non_text_files && !is_dir {
+            Some("unsupported")
+        } else {
+            None
+        }
+    })
+}
+
+#[cfg(windows)]
+fn is_hidden(path: &Path, metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
+    metadata.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
+        || path
+            .file_name()
+            .and_then(|file_name| file_name.to_str())
+            .is_some_and(|name| name.starts_with('.'))
+}
+
+#[cfg(not(windows))]
+fn is_hidden(path: &Path, _metadata: &std::fs::Metadata) -> bool {
+    path.file_name()
+        .and_then(|file_name| file_name.to_str())
+        .is_some_and(|name| name.starts_with('.'))
+}
+
+fn path_to_entry(path: PathBuf, show_hidden: bool, show_non_text_files: bool) -> Option<Entry> {
     let metadata = std::fs::metadata(&path).ok()?;
+    if !show_hidden && is_hidden(&path, &metadata) {
+        return None;
+    }
     let is_dir = metadata.is_dir();
-    let kind = entry_kind(&path, is_dir)?;
+    let kind = entry_kind(&path, is_dir, show_non_text_files)?;
     let name = path
         .file_name()
         .and_then(|file_name| file_name.to_str())
@@ -95,12 +246,18 @@ fn default_locations() -> Vec<Entry> {
 }
 
 #[tauri::command]
-fn read_dir(path: String) -> Result<Vec<Entry>, String> {
+fn read_dir(
+    path: String,
+    show_hidden: Option<bool>,
+    show_non_text_files: Option<bool>,
+) -> Result<Vec<Entry>, String> {
     let mut entries = Vec::new();
+    let show_hidden = show_hidden.unwrap_or(false);
+    let show_non_text_files = show_non_text_files.unwrap_or(false);
 
     for item in std::fs::read_dir(path).map_err(|error| error.to_string())? {
         let item = item.map_err(|error| error.to_string())?;
-        if let Some(entry) = path_to_entry(item.path()) {
+        if let Some(entry) = path_to_entry(item.path(), show_hidden, show_non_text_files) {
             entries.push(entry);
         }
     }
@@ -163,7 +320,7 @@ fn search_folder(
             continue;
         };
         let is_dir = metadata.is_dir();
-        if entry_kind(&path, is_dir).is_some() {
+        if supported_entry_kind(&path, is_dir).is_some() {
             entries.push((path, is_dir));
         }
     }
@@ -551,9 +708,50 @@ fn folder_entry(path: String) -> Result<Entry, String> {
     })
 }
 
+#[tauri::command]
+fn entry_for_path(path: String) -> Result<Entry, String> {
+    let target = Path::new(&path);
+    let metadata = std::fs::metadata(target).map_err(|error| error.to_string())?;
+    let is_dir = metadata.is_dir();
+    let kind = supported_entry_kind(target, is_dir)
+        .ok_or_else(|| format!("\"{}\" is not a supported file or folder", path))?;
+
+    Ok(Entry {
+        name: display_name(target),
+        path: target.display().to_string(),
+        is_dir,
+        kind: kind.to_string(),
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let initial_args: Vec<String> = std::env::args().collect();
+    let initial_cwd = std::env::current_dir()
+        .unwrap_or_default()
+        .display()
+        .to_string();
+    let pending_open_path = supported_open_path_arg(&initial_args, &initial_cwd);
+    let builder =
+        tauri::Builder::default().manage(PendingOpenPath(Mutex::new(pending_open_path)));
+
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+        if let Some(path) = supported_open_path_arg(&args, &cwd) {
+            if let Ok(mut pending) = app.state::<PendingOpenPath>().0.lock() {
+                *pending = Some(path);
+            }
+            let _ = app.emit("open-path-requested", ());
+        }
+
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.unminimize();
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }));
+
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_drag::init())
@@ -572,7 +770,10 @@ pub fn run() {
             shift_pressed,
             reveal_in_explorer,
             folder_entry,
-            resolve_link_path
+            entry_for_path,
+            resolve_link_path,
+            take_pending_open_path,
+            configure_shell_integration,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
