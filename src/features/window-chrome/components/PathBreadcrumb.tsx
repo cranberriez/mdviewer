@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Clock3, FileText, Folder, FolderOpen } from 'lucide-react';
-import {
-	usePathSuggestions,
-	type PathSuggestion,
-	type PathSuggestionMode,
-} from '../hooks/usePathSuggestions';
+import { FileText, Folder, FolderOpen, FolderUp } from 'lucide-react';
+import { usePathSuggestions, type PathSuggestion } from '../hooks/usePathSuggestions';
 
 interface PathBreadcrumbProps {
 	currentPath?: string;
@@ -36,18 +32,14 @@ export function PathBreadcrumb({
 	const [draft, setDraft] = useState(currentPath ?? '');
 	const [error, setError] = useState<string | null>(null);
 	const [navigating, setNavigating] = useState(false);
-	const [suggestionMode, setSuggestionMode] = useState<PathSuggestionMode>('recent');
 	const [activeSuggestion, setActiveSuggestion] = useState(-1);
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const PathIcon = currentPathKind === 'file' ? FileText : Folder;
-	const {
-		loading,
-		suggestions,
-		suggestionMode: resolvedSuggestionMode,
-	} = usePathSuggestions({
+	const { loading, suggestions } = usePathSuggestions({
+		currentPath,
+		currentPathKind,
 		draft,
 		enabled: editing,
-		mode: suggestionMode,
 	});
 
 	useEffect(() => {
@@ -77,7 +69,6 @@ export function PathBreadcrumb({
 		}
 		setDraft(currentPath);
 		setError(null);
-		setSuggestionMode('recent');
 		setActiveSuggestion(-1);
 		setEditing(true);
 	}
@@ -92,10 +83,37 @@ export function PathBreadcrumb({
 		setEditing(false);
 	}
 
-	function completeSuggestion(suggestion: PathSuggestion) {
+	async function navigateToPath(path: string) {
+		if (navigating) {
+			return;
+		}
+		if (path === currentPath) {
+			setEditing(false);
+			return;
+		}
+
+		setDraft(path);
+		setError(null);
+		setActiveSuggestion(-1);
+		setNavigating(true);
+		try {
+			await onNavigate(path);
+			setEditing(false);
+		} catch {
+			setError('That file or folder could not be opened.');
+			inputRef.current?.focus();
+		} finally {
+			setNavigating(false);
+		}
+	}
+
+	function selectSuggestion(suggestion: PathSuggestion) {
+		if (suggestion.kind === 'file') {
+			void navigateToPath(suggestion.path);
+			return;
+		}
 		setDraft(suggestion.path);
 		setError(null);
-		setSuggestionMode('nearby');
 		setActiveSuggestion(-1);
 		window.requestAnimationFrame(() => {
 			const input = inputRef.current;
@@ -109,30 +127,12 @@ export function PathBreadcrumb({
 
 	async function handleSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (navigating) {
-			return;
-		}
 		const path = submittedPath(draft);
 		if (!path) {
 			setError('Enter a file or folder path.');
 			return;
 		}
-		if (path === currentPath) {
-			setEditing(false);
-			return;
-		}
-
-		setError(null);
-		setNavigating(true);
-		try {
-			await onNavigate(path);
-			setEditing(false);
-		} catch {
-			setError('That file or folder could not be opened.');
-			inputRef.current?.focus();
-		} finally {
-			setNavigating(false);
-		}
+		await navigateToPath(path);
 	}
 
 	function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -150,7 +150,7 @@ export function PathBreadcrumb({
 			event.preventDefault();
 			const suggestion = suggestions[activeSuggestion];
 			if (suggestion) {
-				completeSuggestion(suggestion);
+				selectSuggestion(suggestion);
 			}
 			return;
 		}
@@ -161,10 +161,10 @@ export function PathBreadcrumb({
 	}
 
 	function suggestionIcon(suggestion: PathSuggestion) {
-		if (suggestion.kind === 'recent') {
-			return Clock3;
+		if (suggestion.kind === 'parent') {
+			return FolderUp;
 		}
-		if (suggestion.kind === 'base') {
+		if (suggestion.kind === 'current') {
 			return FolderOpen;
 		}
 		return suggestion.kind === 'file' ? FileText : Folder;
@@ -204,7 +204,6 @@ export function PathBreadcrumb({
 					onChange={(event) => {
 						setDraft(event.target.value);
 						setError(null);
-						setSuggestionMode('nearby');
 						setActiveSuggestion(-1);
 					}}
 					onKeyDown={handleKeyDown}
@@ -218,14 +217,10 @@ export function PathBreadcrumb({
 						id="titlebar-path-suggestions"
 						className="titlebar-path-suggestions"
 						role="listbox"
-						aria-label={resolvedSuggestionMode === 'recent' ? 'Recent folders' : 'Nearby paths'}
+						aria-label="Path options"
 					>
-						{resolvedSuggestionMode === 'recent' ? (
-							<div className="titlebar-path-suggestions-label">Recent folders</div>
-						) : null}
-						{loading ? (
-							<div className="titlebar-path-suggestions-empty">Finding nearest folder...</div>
-						) : suggestions.length > 0 ? (
+						<div className="titlebar-path-suggestions-label">Folder structure</div>
+						{suggestions.length > 0 ? (
 							suggestions.map((suggestion, index) => {
 								const SuggestionIcon = suggestionIcon(suggestion);
 								return (
@@ -235,26 +230,26 @@ export function PathBreadcrumb({
 										type="button"
 										className={`titlebar-path-suggestion ${
 											activeSuggestion === index ? 'active' : ''
-										} ${suggestion.kind === 'base' ? 'context' : ''}`}
+										} ${suggestion.kind === 'current' ? 'context' : ''}`}
 										role="option"
 										aria-selected={activeSuggestion === index}
 										title={suggestion.path}
+										disabled={navigating}
 										onPointerDown={(event) => event.preventDefault()}
 										onPointerEnter={() => setActiveSuggestion(index)}
-										onClick={() => completeSuggestion(suggestion)}
+										onClick={() => selectSuggestion(suggestion)}
 									>
 										<SuggestionIcon size={14} aria-hidden />
 										<span className="titlebar-path-suggestion-label">{suggestion.label}</span>
 									</button>
 								);
 							})
-						) : (
-							<div className="titlebar-path-suggestions-empty">
-								{resolvedSuggestionMode === 'recent'
-									? 'No recent folders yet.'
-									: 'No existing folder found.'}
-							</div>
-						)}
+						) : !loading ? (
+							<div className="titlebar-path-suggestions-empty">No existing folder found.</div>
+						) : null}
+						{loading ? (
+							<div className="titlebar-path-suggestions-empty">Finding nearest folder...</div>
+						) : null}
 					</div>
 				)}
 			</form>

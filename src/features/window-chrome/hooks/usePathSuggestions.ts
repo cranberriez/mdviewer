@@ -1,26 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import { folderEntry, readFolder } from '../../files/api/filesApi';
-import { recentItemKind } from '../../../shared/state/persistence';
 import type { Entry } from '../../../shared/types/files';
-import { useSavedLocationsStore } from '../../saved-locations/state/useSavedLocationsStore';
-
-export type PathSuggestionMode = 'recent' | 'nearby';
 
 export interface PathSuggestion {
 	id: string;
-	kind: 'base' | 'file' | 'folder' | 'recent';
+	kind: 'current' | 'file' | 'folder' | 'parent';
 	label: string;
 	path: string;
 }
 
 interface UsePathSuggestionsOptions {
+	currentPath?: string;
+	currentPathKind: 'file' | 'folder';
 	draft: string;
 	enabled: boolean;
-	mode: PathSuggestionMode;
 }
 
-const MAX_RECENT_SUGGESTIONS = 8;
-const MAX_NEARBY_SUGGESTIONS = 9;
+const MAX_NEARBY_FOLDER_SUGGESTIONS = 10;
+const MAX_NEARBY_FILE_SUGGESTIONS = 10;
 const SUGGESTION_DELAY_MS = 100;
 
 function unquotePath(value: string) {
@@ -61,21 +58,20 @@ function typedFragment(draft: string, basePath: string) {
 
 function nearbyEntries(entries: Entry[], fragment: string) {
 	const query = fragment.toLowerCase();
-	return [...entries]
-		.sort((left, right) => {
-			if (left.is_dir !== right.is_dir) {
-				return left.is_dir ? -1 : 1;
+	const ranked = [...entries].sort((left, right) => {
+		if (query) {
+			const leftMatches = left.name.toLowerCase().startsWith(query);
+			const rightMatches = right.name.toLowerCase().startsWith(query);
+			if (leftMatches !== rightMatches) {
+				return leftMatches ? -1 : 1;
 			}
-			if (query) {
-				const leftMatches = left.name.toLowerCase().startsWith(query);
-				const rightMatches = right.name.toLowerCase().startsWith(query);
-				if (leftMatches !== rightMatches) {
-					return leftMatches ? -1 : 1;
-				}
-			}
-			return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
-		})
-		.slice(0, MAX_NEARBY_SUGGESTIONS);
+		}
+		return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+	});
+	return [
+		...ranked.filter((entry) => entry.is_dir).slice(0, MAX_NEARBY_FOLDER_SUGGESTIONS),
+		...ranked.filter((entry) => !entry.is_dir).slice(0, MAX_NEARBY_FILE_SUGGESTIONS),
+	];
 }
 
 async function resolveNearbySuggestions(draft: string) {
@@ -86,6 +82,7 @@ async function resolveNearbySuggestions(draft: string) {
 		visited.add(candidate.toLowerCase());
 		try {
 			const base = await folderEntry(candidate);
+			const parentDirectory = parentCandidate(base.path);
 			let entries: Entry[] = [];
 			try {
 				entries = await readFolder(base.path);
@@ -95,9 +92,19 @@ async function resolveNearbySuggestions(draft: string) {
 			}
 			const fragment = typedFragment(draft, base.path);
 			return [
+				...(parentDirectory
+					? [
+							{
+								id: `parent:${parentDirectory}`,
+								kind: 'parent' as const,
+								label: '..',
+								path: parentDirectory,
+							},
+						]
+					: []),
 				{
-					id: `base:${base.path}`,
-					kind: 'base' as const,
+					id: `current:${base.path}`,
+					kind: 'current' as const,
 					label: base.path,
 					path: base.path,
 				},
@@ -116,32 +123,53 @@ async function resolveNearbySuggestions(draft: string) {
 	return [];
 }
 
-export function usePathSuggestions({ draft, enabled, mode }: UsePathSuggestionsOptions) {
-	const recents = useSavedLocationsStore((state) => state.recents);
-	const recentSuggestions = useMemo<PathSuggestion[]>(
-		() =>
-			recents
-				.filter((item) => recentItemKind(item) === 'root')
-				.slice(0, MAX_RECENT_SUGGESTIONS)
-				.map((item) => ({
-					id: `recent:${item.path}`,
-					kind: 'recent',
-					label: item.name,
-					path: item.path,
-				})),
-		[recents]
-	);
+export function usePathSuggestions({
+	currentPath,
+	currentPathKind,
+	draft,
+	enabled,
+}: UsePathSuggestionsOptions) {
+	const contextSuggestions = useMemo<PathSuggestion[]>(() => {
+		if (!currentPath) {
+			return [];
+		}
+		const currentDirectory =
+			currentPathKind === 'folder' ? currentPath : parentCandidate(currentPath);
+		if (!currentDirectory) {
+			return [];
+		}
+		const parentDirectory = parentCandidate(currentDirectory);
+		return [
+			...(parentDirectory
+				? [
+						{
+							id: `parent:${parentDirectory}`,
+							kind: 'parent' as const,
+							label: '..',
+							path: parentDirectory,
+						},
+					]
+				: []),
+			{
+				id: `current:${currentDirectory}`,
+				kind: 'current',
+				label: currentDirectory,
+				path: currentDirectory,
+			},
+		];
+	}, [currentPath, currentPathKind]);
 	const [nearbySuggestions, setNearbySuggestions] = useState<PathSuggestion[]>([]);
 	const [loading, setLoading] = useState(false);
 
 	useEffect(() => {
-		if (!enabled || mode === 'recent' || !unquotePath(draft)) {
+		if (!enabled || !unquotePath(draft)) {
 			setNearbySuggestions([]);
 			setLoading(false);
 			return;
 		}
 
 		let cancelled = false;
+		setNearbySuggestions([]);
 		setLoading(true);
 		const timeout = window.setTimeout(() => {
 			void resolveNearbySuggestions(draft).then((suggestions) => {
@@ -157,12 +185,10 @@ export function usePathSuggestions({ draft, enabled, mode }: UsePathSuggestionsO
 			cancelled = true;
 			window.clearTimeout(timeout);
 		};
-	}, [draft, enabled, mode]);
+	}, [draft, enabled]);
 
-	const showRecents = mode === 'recent' || !unquotePath(draft);
 	return {
-		loading: showRecents ? false : loading,
-		suggestions: showRecents ? recentSuggestions : nearbySuggestions,
-		suggestionMode: showRecents ? ('recent' as const) : ('nearby' as const),
+		loading,
+		suggestions: nearbySuggestions.length > 0 ? nearbySuggestions : contextSuggestions,
 	};
 }
