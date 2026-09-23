@@ -32,7 +32,7 @@
 		"highlight.js": "^11.11.1",
 		"lexical": "^0.46.0",
 		"lucide-react": "^1.23.0",
-		"markdown-it": "^14.3.0",
+		"markdown-it": "^15.0.2",
 		"markdown-it-task-lists": "^2.1.1",
 		"react": "^19.2.7",
 		"react-dom": "^19.2.7",
